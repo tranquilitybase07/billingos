@@ -1,0 +1,16 @@
+# Supabase Configuration
+# This is a placeholder file
+#
+# To initialize Supabase:
+# 1. Install Supabase CLI: https://supabase.com/docs/guides/cli
+# 2. Run: supabase init
+# 3. Run: supabase link --project-ref your-project-ref
+# 4. This file will be auto-generated with your project configuration
+#
+# For local development:
+# - supabase start (starts local Postgres + APIs)
+# - supabase db reset (reset database)
+# - supabase gen types typescript --local > packages/shared/types/database.ts
+
+[project]
+# Project configuration will be added when you run: supabase init

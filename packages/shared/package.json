@@ -1,0 +1,8 @@
+{
+  "name": "@shared/types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./types/database.ts",
+  "types": "./types/database.ts",
+  "description": "Shared TypeScript types generated from Supabase schema"
+}
