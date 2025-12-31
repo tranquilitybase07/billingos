@@ -1,0 +1,11 @@
+{
+  "name": "@shared/types",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared TypeScript types for BillingOS monorepo",
+  "main": "database.ts",
+  "types": "database.ts",
+  "exports": {
+    "./database": "./database.ts"
+  }
+}
