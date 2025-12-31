@@ -1,67 +1,30 @@
-'use client';
+import { redirect } from 'next/navigation'
+import { apiServer } from '@/lib/api/server'
+import type { Organization } from '@/lib/api/types'
 
-import { useAuth } from '@/providers/AuthProvider';
-import Button from '@/components/atoms/Button';
-import { useRouter } from 'next/navigation';
+/**
+ * Dashboard entry point - Server Component
+ * Follows Polar's pattern: check if user has organizations and redirect accordingly
+ */
+export default async function DashboardPage() {
+  console.log('[Dashboard] Page component executing...')
 
-export default function DashboardPage() {
-  const { user, loading, signOut } = useAuth();
-  const router = useRouter();
+  const organizations = await apiServer.get<Organization[]>('/organizations')
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
+  console.log('[Dashboard] Fetched organizations:', {
+    count: organizations?.length,
+    organizations: organizations?.map(org => ({ id: org.id, slug: org.slug, name: org.name }))
+  })
+
+  // No organizations? Redirect to create page
+  if (!organizations || organizations.length === 0) {
+    console.log('[Dashboard] No organizations found, redirecting to /dashboard/create')
+    redirect('/dashboard/create')
   }
 
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              BillingOS Dashboard
-            </h1>
-            <Button onClick={signOut} variant="secondary">
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 border border-gray-200 dark:border-gray-800">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Welcome to BillingOS!
-          </h2>
-          <div className="space-y-2">
-            <p className="text-gray-600 dark:text-gray-400">
-              <strong>Email:</strong> {user.email}
-            </p>
-            <p className="text-gray-600 dark:text-gray-400">
-              <strong>User ID:</strong> {user.id}
-            </p>
-            <p className="text-gray-600 dark:text-gray-400">
-              <strong>Email Verified:</strong>{' '}
-              {user.email_confirmed_at ? 'Yes' : 'No'}
-            </p>
-            <p className="text-gray-600 dark:text-gray-400">
-              <strong>Created At:</strong>{' '}
-              {new Date(user.created_at).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  // Has organizations? Redirect to first one
+  // TODO: Implement cookie-based "last visited org" tracking like Polar
+  const targetSlug = organizations[0].slug
+  console.log(`[Dashboard] User has ${organizations.length} org(s), redirecting to: /dashboard/${targetSlug}`)
+  redirect(`/dashboard/${targetSlug}`)
 }

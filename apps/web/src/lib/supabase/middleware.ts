@@ -37,7 +37,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes logic
+  // Protected routes logic - Following Polar's pattern: middleware only validates auth
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
                      request.nextUrl.pathname.startsWith('/signup') ||
                      request.nextUrl.pathname.startsWith('/auth');
@@ -51,7 +51,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    // Redirect to dashboard if already logged in and trying to access auth pages
+    // User is authenticated but on auth page - redirect to dashboard
+    // Let the dashboard page component handle organization routing
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

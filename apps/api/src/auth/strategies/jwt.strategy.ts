@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { passportJwtSecret } from 'jwks-rsa';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { User } from '../../user/entities/user.entity';
 
@@ -20,17 +21,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private supabaseService: SupabaseService,
   ) {
-    const jwtSecret = configService.get<string>('SUPABASE_JWT_SECRET');
-    if (!jwtSecret) {
-      throw new Error(
-        'SUPABASE_JWT_SECRET is not defined in environment variables',
-      );
+    const supabaseUrl = configService.get<string>('SUPABASE_URL');
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL is not defined in environment variables');
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKeyProvider: passportJwtSecret({
+        cache: true,
+        rateLimit: true,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
+      }),
+      audience: 'authenticated',
+      issuer: `${supabaseUrl}/auth/v1`,
+      algorithms: ['HS256', 'RS256', 'ES256'],
     });
   }
 
