@@ -1,5 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
-import { apiServer } from '@/lib/api/server'
+import { getOrganizationBySlugOrNotFound, getOrganizationBySlug } from '@/lib/organization'
+import { getUserOrganizations } from '@/lib/user'
+import { OrganizationProvider } from '@/providers/OrganizationProvider'
 import type { Organization } from '@/lib/api/types'
 
 interface OrganizationLayoutProps {
@@ -19,57 +21,38 @@ export default async function OrganizationLayout({
   params,
 }: OrganizationLayoutProps) {
   const { organization: orgSlug } = await params
-  console.log('[Organization Layout] Starting for slug:', orgSlug)
 
   try {
-    // Fetch user's organizations
-    console.log('[Organization Layout] Fetching organizations from API...')
-    let userOrganizations = await apiServer.get<Organization[]>('/organizations')
+    // Fetch organization by slug
+    const organization = await getOrganizationBySlugOrNotFound(orgSlug)
 
-    console.log('[Organization Layout] First fetch - User organizations:', {
-      count: userOrganizations?.length,
-      organizations: userOrganizations?.map(org => ({ id: org.id, slug: org.slug, name: org.name }))
-    })
-
-    // Find organization by slug
-    let organization = userOrganizations.find((org) => org.slug === orgSlug)
-
-    console.log('[Organization Layout] First pass - Found organization:', organization ? { id: organization.id, slug: organization.slug, name: organization.name } : null)
+    // Fetch user's organizations for switcher
+    let userOrganizations = await getUserOrganizations()
 
     // Handle race condition: new org might not be in cached list yet
     // This matches Polar's dual-pass verification pattern
-    if (!organization) {
-      console.log('[Organization Layout] Organization not found in first pass, waiting 500ms for DB sync...')
-      // Wait a moment for database to sync
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Try fetching again (bypassing cache)
-      console.log('[Organization Layout] Second fetch attempt...')
-      userOrganizations = await apiServer.get<Organization[]>('/organizations')
-      organization = userOrganizations.find((org) => org.slug === orgSlug)
-
-      console.log('[Organization Layout] Second pass - Found organization:', organization ? { id: organization.id, slug: organization.slug, name: organization.name } : null)
+    if (!userOrganizations.some((org) => org.id === organization.id)) {
+      // Wait a moment for database to sync, then bypass cache
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      userOrganizations = await getUserOrganizations(true) // Bypass cache
     }
 
-    // If organization still not found, either doesn't exist or user isn't a member
-    if (!organization) {
-      console.log('[Organization Layout] Organization still not found after dual-pass, calling notFound()')
-      notFound()
+    // If user is not a member, redirect
+    if (!userOrganizations.some((org) => org.id === organization.id)) {
+      redirect('/dashboard')
     }
 
-    // User is a verified member - render children
-    console.log('[Organization Layout] User verified as member, rendering children')
-    // TODO: Wrap in OrganizationContextProvider like Polar does
-    return <>{children}</>
+    // Wrap children in OrganizationProvider for client components
+    return (
+      <OrganizationProvider
+        organization={organization}
+        organizations={userOrganizations}
+      >
+        {children}
+      </OrganizationProvider>
+    )
   } catch (error) {
-    console.error('[Organization Layout] ERROR caught:', {
-      error,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      type: error?.constructor?.name
-    })
-    // On error, redirect back to dashboard
-    console.log('[Organization Layout] Redirecting to /dashboard due to error')
+    console.error('[Organization Layout] Error:', error)
     redirect('/dashboard')
   }
 }

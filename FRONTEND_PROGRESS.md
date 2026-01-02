@@ -33,39 +33,44 @@
   - User types
   - All DTOs
 
+## ✅ Completed (Phase 2 - React Query Hooks)
+
+### React Query Hooks Implementation
+
+**hooks/queries/organization.ts**:
+- ✅ `useListOrganizations()` - Fetch all user organizations
+- ✅ `useOrganization(id)` - Fetch single organization
+- ✅ `useCreateOrganization()` - Create new organization
+- ✅ `useUpdateOrganization(id)` - Update organization details
+- ✅ `useSubmitBusinessDetails(id)` - Submit Stripe KYC details
+- ✅ `usePaymentStatus(id)` - Check payment setup status
+- ✅ `useDeleteOrganization(id)` - Delete organization
+- ✅ `useListMembers(orgId)` - List team members
+- ✅ `useInviteMember(orgId)` - Invite new member
+- ✅ `useRemoveMember(orgId)` - Remove team member
+- ✅ `useLeaveOrganization(orgId)` - Leave organization as member
+
+**hooks/queries/account.ts**:
+- ✅ `useAccount(id)` - Fetch Stripe Connect account
+- ✅ `useCreateAccount()` - Create Stripe Connect account
+- ✅ `useGetOnboardingLink(accountId)` - Get Stripe onboarding link
+- ✅ `useGetDashboardLink(accountId)` - Get Stripe dashboard link
+- ✅ `useSyncAccount(accountId)` - Sync account status from Stripe
+
+## ✅ Completed (Phase 5 - Organization Creation)
+
+### Organization Creation Flow
+
+**app/dashboard/create/page.tsx**:
+- ✅ Organization creation form with validation
+- ✅ Name input with auto-slug generation
+- ✅ Email input (optional)
+- ✅ Slug customization and availability check
+- ✅ Form validation (Zod)
+- ✅ Loading states and error handling
+- ✅ Redirect to new organization after creation
+
 ## 📝 Next Steps (Remaining Implementation)
-
-### Phase 2: React Query Hooks (Estimated: 2-3 hours)
-
-Create hooks in `hooks/queries/`:
-
-**organization.ts**:
-```typescript
-- useListOrganizations()
-- useOrganization(id)
-- useCreateOrganization()
-- useUpdateOrganization()
-- useSubmitBusinessDetails()
-- useGetPaymentStatus()
-- useDeleteOrganization()
-```
-
-**member.ts**:
-```typescript
-- useListMembers(orgId)
-- useInviteMember(orgId)
-- useRemoveMember(orgId)
-- useLeaveOrganization(orgId)
-```
-
-**account.ts**:
-```typescript
-- useCreateAccount()
-- useGetAccount(id)
-- useGetOnboardingLink(id)
-- useGetDashboardLink(id)
-- useSyncAccount(id)
-```
 
 ### Phase 3: Utilities (Estimated: 1-2 hours)
 
@@ -343,10 +348,10 @@ Follow the plan above, copying components from Polar and adapting to billingOS a
 Use this document to track completion:
 
 - [x] Phase 1: Foundation
-- [ ] Phase 2: React Query Hooks
+- [x] Phase 2: React Query Hooks
 - [ ] Phase 3: Utilities
-- [ ] Phase 4: Dashboard Layout
-- [ ] Phase 5: Organization Creation
+- [ ] Phase 4: Dashboard Layout (IN PROGRESS - Following Polar architecture)
+- [x] Phase 5: Organization Creation
 - [ ] Phase 6: Finance/Account Setup
 - [ ] Phase 7: Team Management
 - [ ] Phase 8: Context Providers

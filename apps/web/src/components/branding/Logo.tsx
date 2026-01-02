@@ -3,7 +3,7 @@ interface LogoProps {
   className?: string;
 }
 
-export default function Logo({ size = 60, className = '' }: LogoProps) {
+export function Logo({ size = 60, className = '' }: LogoProps) {
   return (
     <div className={`flex items-center justify-center ${className}`}>
       <svg
@@ -34,3 +34,5 @@ export default function Logo({ size = 60, className = '' }: LogoProps) {
     </div>
   );
 }
+
+export default Logo;
