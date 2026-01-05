@@ -1,17 +1,93 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StripeService } from './stripe.service';
 
 @Injectable()
 export class StripeWebhookService {
   private readonly logger = new Logger(StripeWebhookService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly stripeService: StripeService,
+  ) {}
 
   /**
    * Handle incoming Stripe webhook events
    */
   async handleEvent(event: Stripe.Event): Promise<void> {
+    // Log event type and livemode
+    this.logger.log(
+      `Processing webhook event: ${event.type} (livemode: ${event.livemode}, id: ${event.id})`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+
+    // Check for duplicate events (idempotency)
+    const { data: existingEvent } = await supabase
+      .from('webhook_events')
+      .select('id, status')
+      .eq('event_id', event.id)
+      .single();
+
+    if (existingEvent) {
+      this.logger.warn(
+        `Duplicate webhook event ${event.id} - already ${existingEvent.status}. Skipping.`,
+      );
+      return;
+    }
+
+    // Store webhook event for idempotency and audit trail
+    const { error: insertError } = await supabase
+      .from('webhook_events')
+      .insert({
+        event_id: event.id,
+        event_type: event.type,
+        livemode: event.livemode,
+        status: 'pending',
+        payload: event as any,
+        api_version: event.api_version,
+        account_id: event.account || null,
+      });
+
+    if (insertError) {
+      this.logger.error(
+        `Failed to store webhook event ${event.id}:`,
+        insertError,
+      );
+      // Continue processing even if storage fails (non-critical)
+    }
+
+    try {
+      await this.processEvent(event);
+
+      // Mark event as processed
+      await supabase
+        .from('webhook_events')
+        .update({
+          status: 'processed',
+          processed_at: new Date().toISOString(),
+        })
+        .eq('event_id', event.id);
+    } catch (error) {
+      // Mark event as failed
+      await supabase
+        .from('webhook_events')
+        .update({
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : String(error),
+          retry_count: 1,
+        })
+        .eq('event_id', event.id);
+
+      throw error; // Re-throw to return 500 to Stripe for retry
+    }
+  }
+
+  /**
+   * Process the webhook event based on type
+   */
+  private async processEvent(event: Stripe.Event): Promise<void> {
     switch (event.type) {
       case 'account.updated':
         await this.handleAccountUpdated(event.data.object);
@@ -23,11 +99,27 @@ export class StripeWebhookService {
         await this.handleAccountUpdated(event.account as string);
         break;
 
+      case 'account.application.deauthorized':
+        await this.handleAccountDeauthorized(event.account as string);
+        break;
+
       case 'identity.verification_session.verified':
       case 'identity.verification_session.requires_input':
       case 'identity.verification_session.canceled':
       case 'identity.verification_session.processing':
         await this.handleIdentityVerificationUpdated(event.data.object);
+        break;
+
+      case 'payout.failed':
+        this.handlePayoutFailed(event.data.object);
+        break;
+
+      case 'payout.paid':
+        this.handlePayoutPaid(event.data.object);
+        break;
+
+      case 'payout.updated':
+        this.handlePayoutUpdated(event.data.object);
         break;
 
       default:
@@ -44,26 +136,24 @@ export class StripeWebhookService {
   ): Promise<void> {
     try {
       let stripeAccountId: string;
+      let account: Stripe.Account;
 
       if (typeof accountOrId === 'string') {
+        // External account events pass account ID as string
         stripeAccountId = accountOrId;
+        this.logger.log(
+          `Fetching full account details for ${stripeAccountId} from Stripe`,
+        );
+        account = await this.stripeService.getConnectAccount(stripeAccountId);
       } else {
-        stripeAccountId = accountOrId.id;
+        // Regular account.updated event has full object
+        account = accountOrId;
+        stripeAccountId = account.id;
       }
 
       this.logger.log(`Syncing account status for ${stripeAccountId}`);
 
       const supabase = this.supabaseService.getClient();
-
-      // Get full account details if we only have ID
-      let account: Stripe.Account;
-      if (typeof accountOrId === 'string') {
-        // We would need to fetch from Stripe, but for webhook we should have the object
-        this.logger.warn('Received account ID instead of object in webhook');
-        return;
-      } else {
-        account = accountOrId;
-      }
 
       // Update account in database
       const { data, error } = await supabase
@@ -93,9 +183,19 @@ export class StripeWebhookService {
 
       this.logger.log(`Account ${stripeAccountId} synced successfully`);
 
-      // Update organization status if account is fully enabled
-      if (data && account.charges_enabled && account.payouts_enabled) {
-        await this.updateOrganizationStatus(data.id, 'active');
+      // Update organization status based on account state
+      if (data) {
+        if (account.charges_enabled && account.payouts_enabled) {
+          // Fully enabled - mark as active
+          await this.updateOrganizationStatus(data.id, 'active', true);
+        } else if (account.details_submitted) {
+          // Details submitted but not fully enabled yet
+          await this.updateOrganizationStatus(
+            data.id,
+            'onboarding_started',
+            false,
+          );
+        }
       }
     } catch (error) {
       this.logger.error('Error handling account.updated:', error);
@@ -160,29 +260,146 @@ export class StripeWebhookService {
   }
 
   /**
+   * Handle account.application.deauthorized webhook
+   * When a connected account disconnects from the platform
+   */
+  private async handleAccountDeauthorized(accountId: string): Promise<void> {
+    try {
+      this.logger.warn(
+        `Account deauthorized: ${accountId} - disconnecting from platform`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update account status to blocked
+      const { data, error } = await supabase
+        .from('accounts')
+        .update({
+          status: 'blocked',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_id', accountId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        this.logger.error(
+          `Failed to update deauthorized account ${accountId}:`,
+          error,
+        );
+        return;
+      }
+
+      // Update organization status to blocked
+      await this.updateOrganizationStatus(data.id, 'blocked', false);
+
+      this.logger.log(`Account ${accountId} marked as deauthorized/blocked`);
+    } catch (error) {
+      this.logger.error(
+        'Error handling account.application.deauthorized:',
+        error,
+      );
+    }
+  }
+
+  /**
+   * Handle payout.failed webhook
+   * When a scheduled payout fails
+   */
+  private handlePayoutFailed(payout: Stripe.Payout): void {
+    try {
+      this.logger.error(
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
+        `Payout failed: ${payout.id} for account ${payout.destination} - ${payout.failure_message || 'Unknown error'}`,
+      );
+
+      // const supabase = this.supabaseService.getClient();
+
+      // Get account by Stripe account ID (payout.destination can be bank account ID or account ID)
+      // For Connect accounts, we need to track which account this payout belongs to
+      // This will be enhanced when we add a payouts table
+
+      // For now, just log the failure
+      // TODO: Create payouts table to track payout status
+      this.logger.warn(
+        `Payout tracking table not yet implemented. Failed payout: ${payout.id}`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling payout.failed:', error);
+    }
+  }
+
+  /**
+   * Handle payout.paid webhook
+   * When a payout is successfully transferred
+   */
+  private handlePayoutPaid(payout: Stripe.Payout): void {
+    try {
+      this.logger.log(
+        `Payout paid: ${payout.id} for ${payout.amount} ${payout.currency}`,
+      );
+
+      // TODO: Create payouts table to track payout status
+      // For now, just log successful payouts
+      this.logger.warn(
+        `Payout tracking table not yet implemented. Paid payout: ${payout.id}`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling payout.paid:', error);
+    }
+  }
+
+  /**
+   * Handle payout.updated webhook
+   * When payout status changes
+   */
+  private handlePayoutUpdated(payout: Stripe.Payout): void {
+    try {
+      this.logger.log(
+        `Payout updated: ${payout.id} - status: ${payout.status}`,
+      );
+
+      // TODO: Create payouts table to track payout status changes
+      this.logger.warn(
+        `Payout tracking table not yet implemented. Updated payout: ${payout.id}`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling payout.updated:', error);
+    }
+  }
+
+  /**
    * Update organization status based on account readiness
    */
   private async updateOrganizationStatus(
     accountId: string,
     status: string,
+    setOnboardedAt: boolean = false,
   ): Promise<void> {
     try {
       const supabase = this.supabaseService.getClient();
 
+      const updateData: any = {
+        status,
+        status_updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Set onboarded_at when account becomes active
+      if (setOnboardedAt && status === 'active') {
+        updateData.onboarded_at = new Date().toISOString();
+      }
+
       const { error } = await supabase
         .from('organizations')
-        .update({
-          status,
-          status_updated_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('account_id', accountId);
 
       if (error) {
         this.logger.error(`Failed to update organization status:`, error);
       } else {
         this.logger.log(
-          `Organization status updated to ${status} for account ${accountId}`,
+          `Organization status updated to ${status} for account ${accountId}${setOnboardedAt ? ' (onboarded)' : ''}`,
         );
       }
     } catch (error) {

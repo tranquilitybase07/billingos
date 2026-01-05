@@ -15,14 +15,24 @@ export const accountKeys = {
   all: ['accounts'] as const,
   details: () => [...accountKeys.all, 'detail'] as const,
   detail: (id: string) => [...accountKeys.details(), id] as const,
+  byOrganization: (orgId: string) => [...accountKeys.all, 'organization', orgId] as const,
 }
 
-// Get Account
+// Get Account by ID
 export function useAccount(id: string | null | undefined) {
   return useQuery({
     queryKey: accountKeys.detail(id || ''),
     queryFn: () => api.get<Account>(`/accounts/${id}`),
     enabled: !!id,
+  })
+}
+
+// Get Account by Organization ID
+export function useAccountByOrganization(organizationId: string | null | undefined) {
+  return useQuery({
+    queryKey: accountKeys.byOrganization(organizationId || ''),
+    queryFn: () => api.get<Account | null>(`/accounts/organization/${organizationId}`),
+    enabled: !!organizationId,
   })
 }
 

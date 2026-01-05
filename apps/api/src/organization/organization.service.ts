@@ -535,7 +535,7 @@ export class OrganizationService {
         : account.is_payouts_enabled
           ? 'active'
           : 'onboarding',
-      is_details_submitted: account?.is_details_submitted,
+      is_details_submitted: !!org.details_submitted_at, // Check organization's business details submission
       is_charges_enabled: account?.is_charges_enabled,
       is_payouts_enabled: account?.is_payouts_enabled,
     };

@@ -1,17 +1,25 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber } from 'class-validator';
 
 export class SubmitBusinessDetailsDto {
   @IsString()
-  @IsNotEmpty()
-  about: string;
+  @IsOptional()
+  business_name?: string;
 
   @IsString()
-  @IsNotEmpty()
-  product_description: string;
+  @IsOptional()
+  country?: string;
 
   @IsString()
-  @IsNotEmpty()
-  intended_use: string;
+  @IsOptional()
+  about?: string;
+
+  @IsString()
+  @IsOptional()
+  product_description?: string;
+
+  @IsString()
+  @IsOptional()
+  intended_use?: string;
 
   @IsString()
   @IsOptional()

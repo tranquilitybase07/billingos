@@ -7,8 +7,9 @@ import {
   useSubmitBusinessDetails,
 } from '@/hooks/queries/organization'
 import {
-  useAccount,
+  useAccountByOrganization,
   useCreateAccount,
+  useGetOnboardingLink,
 } from '@/hooks/queries/account'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,13 +32,14 @@ export default function FinanceAccountPage() {
   })
 
   const { data: paymentStatus, isLoading: isLoadingStatus } = usePaymentStatus(organization.id)
-  const { data: account, isLoading: isLoadingAccount } = useAccount(organization.id)
+  const { data: account, isLoading: isLoadingAccount } = useAccountByOrganization(organization.id)
   const submitBusinessDetails = useSubmitBusinessDetails(organization.id)
   const createAccount = useCreateAccount()
 
   const isPaymentReady = paymentStatus?.payment_ready ?? false
   const hasBusinessDetails = paymentStatus?.is_details_submitted ?? false
   const hasAccount = !!account
+  const isAccountFullyOnboarded = account?.is_charges_enabled && account?.is_payouts_enabled
 
   const handleSubmitBusinessDetails = async () => {
     try {
@@ -63,14 +65,15 @@ export default function FinanceAccountPage() {
         country: businessDetails.country,
       })
 
-      // Get onboarding link and redirect
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/${newAccount.id}/onboarding-link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      const { url } = await response.json()
+      // Get onboarding link using authenticated API
+      const { api } = await import('@/lib/api/client')
+
+      // Let backend generate the URLs automatically (it knows the org slug)
+      const { url } = await api.post<{ url: string }>(
+        `/accounts/${newAccount.id}/onboarding-link`,
+        {}
+      )
+
       window.location.href = url
     } catch (error) {
       toast({
@@ -85,13 +88,15 @@ export default function FinanceAccountPage() {
     if (!account) return
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/${account.id}/onboarding-link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      const { url } = await response.json()
+      // Get onboarding link using authenticated API
+      const { api } = await import('@/lib/api/client')
+
+      // Let backend generate the URLs automatically (it knows the org slug)
+      const { url } = await api.post<{ url: string }>(
+        `/accounts/${account.id}/onboarding-link`,
+        {}
+      )
+
       window.location.href = url
     } catch (error) {
       toast({
@@ -247,10 +252,26 @@ export default function FinanceAccountPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Status</span>
-                  <span className="capitalize">{account.is_details_submitted ? 'Active' : 'Pending'}</span>
+                  <span className="capitalize">
+                    {isAccountFullyOnboarded ? (
+                      <span className="text-green-600">Active</span>
+                    ) : account.is_details_submitted ? (
+                      <span className="text-yellow-600">Pending Verification</span>
+                    ) : (
+                      <span className="text-gray-600">Pending</span>
+                    )}
+                  </span>
                 </div>
+                {isAccountFullyOnboarded && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Capabilities</span>
+                    <span className="text-xs text-green-600">
+                      ✓ Charges & Payouts Enabled
+                    </span>
+                  </div>
+                )}
               </div>
-              {!isPaymentReady && (
+              {!isAccountFullyOnboarded && (
                 <Button onClick={handleContinueOnboarding}>
                   Continue Onboarding
                   <ExternalLink className="ml-2 h-4 w-4" />

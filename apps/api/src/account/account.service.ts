@@ -83,6 +83,12 @@ export class AccountService {
           business_type: stripeAccount.business_type || createDto.business_type,
           status: 'onboarding_started',
           data: stripeAccount as any,
+          // Platform fees: 0.6% + $0.10 (on top of Stripe's 2.9% + $0.30)
+          // Merchant absorbs all fees - if product is $100, merchant receives $96.10
+          platform_fee_percent:
+            this.configService.get<number>('PLATFORM_FEE_PERCENT') || 60, // 0.6% in basis points
+          platform_fee_fixed:
+            this.configService.get<number>('PLATFORM_FEE_FIXED') || 10, // $0.10 in cents
         })
         .select()
         .single();
@@ -174,6 +180,60 @@ export class AccountService {
       } else {
         throw new ForbiddenException('You do not have access to this account');
       }
+    }
+
+    return account;
+  }
+
+  /**
+   * Get account by organization ID
+   */
+  async findByOrganization(
+    organizationId: string,
+    userId: string,
+  ): Promise<Account | null> {
+    const supabase = this.supabaseService.getClient();
+
+    // First verify user is member of organization
+    const { data: membership } = await supabase
+      .from('user_organizations')
+      .select('user_id')
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this organization');
+    }
+
+    // Get organization with account_id
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (orgError || !org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    // If organization has no account, return null
+    if (!org.account_id) {
+      return null;
+    }
+
+    // Get the account
+    const { data: account, error } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', org.account_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error || !account) {
+      throw new NotFoundException('Account not found');
     }
 
     return account;

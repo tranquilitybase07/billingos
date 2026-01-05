@@ -38,6 +38,17 @@ export class AccountController {
   }
 
   /**
+   * Get account by organization ID
+   */
+  @Get('organization/:organizationId')
+  findByOrganization(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.accountService.findByOrganization(organizationId, user.id);
+  }
+
+  /**
    * Get Stripe onboarding link
    */
   @Post(':id/onboarding-link')
