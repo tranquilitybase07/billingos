@@ -1,0 +1,69 @@
+###############################################
+# ENVIRONMENT VARIABLES
+###############################################
+
+@baseUrl = http://localhost:3001
+@frontendUrl = http://localhost:3000
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM1MDA2LCJpYXQiOjE3Njc5MzE0MDYsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.oQ5rOMiNvJ7IwD3X6Msrsvmv09NwYhpRhk-dS2SmNwLYEISev6uVSn_GQ9VvEdGrsKMrzjCN6g6SB4IYg_k_YQ
+@contentType = application/json
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+@accountId = YOUR_ACCOUNT_ID_HERE
+
+###############################################
+# STRIPE CONNECT ACCOUNT ENDPOINTS
+###############################################
+
+### Create Stripe Connect Account
+# @name createAccount
+POST {{baseUrl}}/accounts
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}"
+}
+
+###
+
+### Get Account by ID
+# @name getAccount
+GET {{baseUrl}}/accounts/{{accountId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### Get Account by Organization ID
+# @name getAccountByOrganization
+GET {{baseUrl}}/accounts/organization/{{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# STRIPE ONBOARDING & DASHBOARD
+###############################################
+
+### Get Stripe Onboarding Link
+# @name getOnboardingLink
+POST {{baseUrl}}/accounts/{{accountId}}/onboarding-link
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "return_url": "{{frontendUrl}}/dashboard/{{organizationId}}/finance/account?onboarding=success",
+  "refresh_url": "{{frontendUrl}}/dashboard/{{organizationId}}/finance/account?onboarding=refresh"
+}
+
+###
+
+### Get Stripe Dashboard Login Link
+# @name getDashboardLink
+POST {{baseUrl}}/accounts/{{accountId}}/dashboard-link
+Authorization: Bearer {{authToken}}
+
+###
+
+### Sync Account from Stripe
+# @name syncAccount
+POST {{baseUrl}}/accounts/{{accountId}}/sync
+Authorization: Bearer {{authToken}}

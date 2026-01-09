@@ -1,0 +1,289 @@
+###############################################
+# ENVIRONMENT VARIABLES
+###############################################
+
+@baseUrl = http://localhost:3001
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM4Njk0LCJpYXQiOjE3Njc5MzUwOTQsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4nn9ITS2zpmOa1sGBzauGix2-cTIplRoCBWuaE1oGl7Ip2EpCmEv3eZU41fKWnbt3akwCsyyTTgI6vCc0eP10A
+@contentType = application/json
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+
+# Replace these after creating features (from features.http)
+@featureApiCalls = 3208548a-4b6d-4849-8bdc-8cbe1db86ace
+@featurePremiumSupport = 3030cfd7-6efe-4fcc-ab7b-60322d3b4b58
+@featureProjectsLimit = YOUR_PROJECTS_LIMIT_FEATURE_ID
+@featureTeamMembers = YOUR_TEAM_MEMBERS_FEATURE_ID
+@featureCustomDomain = YOUR_CUSTOM_DOMAIN_FEATURE_ID
+
+# Replace after creating products
+@productIdFree = YOUR_FREE_PRODUCT_ID
+@productIdStarter = YOUR_STARTER_PRODUCT_ID
+@productIdPro = YOUR_PRO_PRODUCT_ID
+
+###############################################
+# PRODUCTS CRUD ENDPOINTS
+###############################################
+
+### 1. Create Product - Free Plan
+# @name createProductFree
+POST {{baseUrl}}/products
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "Free Plan",
+  "description": "Try BillingOS for free - Perfect for testing",
+  "recurring_interval": "month",
+  "recurring_interval_count": 1,
+  "trial_days": 0,
+  "prices": [
+    {
+      "amount_type": "free",
+      "price_currency": "usd"
+    }
+  ],
+  "features": [
+    {
+      "feature_id": "{{featureApiCalls}}",
+      "display_order": 1,
+      "config": {
+        "limit": 100
+      }
+    },
+    {
+      "feature_id": "{{featurePremiumSupport}}",
+      "display_order": 2,
+      "config": {
+        "limit": 1
+      }
+    }
+  ]
+}
+
+###
+
+### 2. Create Product - Starter Plan
+# @name createProductStarter
+POST {{baseUrl}}/products
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "Starter Plan",
+  "description": "Perfect for individuals and small teams",
+  "recurring_interval": "month",
+  "recurring_interval_count": 1,
+  "trial_days": 14,
+  "prices": [
+    {
+      "amount_type": "fixed",
+      "price_amount": 1900,
+      "price_currency": "usd"
+    }
+  ],
+  "features": [
+    {
+      "feature_id": "{{featureApiCalls}}",
+      "display_order": 1,
+      "config": {
+        "limit": 1000
+      }
+    },
+    {
+      "feature_id": "{{featureProjectsLimit}}",
+      "display_order": 2,
+      "config": {
+        "limit": 10
+      }
+    },
+    {
+      "feature_id": "{{featureTeamMembers}}",
+      "display_order": 3,
+      "config": {
+        "limit": 3
+      }
+    }
+  ]
+}
+
+###
+
+### 3. Create Product - Pro Plan (Monthly & Yearly)
+# @name createProductPro
+POST {{baseUrl}}/products
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "Pro Plan",
+  "description": "Professional features for growing teams",
+  "recurring_interval": "month",
+  "recurring_interval_count": 1,
+  "trial_days": 14,
+  "prices": [
+    {
+      "amount_type": "fixed",
+      "price_amount": 4900,
+      "price_currency": "usd"
+    },
+    {
+      "amount_type": "fixed",
+      "price_amount": 49000,
+      "price_currency": "usd",
+      "recurring_interval": "year"
+    }
+  ],
+  "features": [
+    {
+      "feature_id": "{{featureApiCalls}}",
+      "display_order": 1,
+      "config": {
+        "limit": 10000
+      }
+    },
+    {
+      "feature_id": "{{featurePremiumSupport}}",
+      "display_order": 2
+    },
+    {
+      "feature_id": "{{featureProjectsLimit}}",
+      "display_order": 3,
+      "config": {
+        "limit": 50
+      }
+    },
+    {
+      "feature_id": "{{featureTeamMembers}}",
+      "display_order": 4,
+      "config": {
+        "limit": 10
+      }
+    },
+    {
+      "feature_id": "{{featureCustomDomain}}",
+      "display_order": 5
+    }
+  ]
+}
+
+###
+
+### 4. Create Product - Enterprise Plan
+# @name createProductEnterprise
+POST {{baseUrl}}/products
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "Enterprise Plan",
+  "description": "Custom solutions for large organizations",
+  "recurring_interval": "month",
+  "recurring_interval_count": 1,
+  "trial_days": 30,
+  "prices": [
+    {
+      "amount_type": "fixed",
+      "price_amount": 29900,
+      "price_currency": "usd"
+    }
+  ],
+  "features": [
+    {
+      "feature_id": "{{featureApiCalls}}",
+      "display_order": 1,
+      "config": {
+        "limit": 100000
+      }
+    },
+    {
+      "feature_id": "{{featurePremiumSupport}}",
+      "display_order": 2
+    },
+    {
+      "feature_id": "{{featureProjectsLimit}}",
+      "display_order": 3,
+      "config": {
+        "limit": 999
+      }
+    },
+    {
+      "feature_id": "{{featureTeamMembers}}",
+      "display_order": 4,
+      "config": {
+        "limit": 100
+      }
+    },
+    {
+      "feature_id": "{{featureCustomDomain}}",
+      "display_order": 5
+    }
+  ]
+}
+
+###
+
+### 5. List All Products (Simple)
+# @name listProducts
+GET {{baseUrl}}/products?organization_id={{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 6. List Products with Features and Prices (Pricing Table Format)
+# @name listProductsWithDetails
+GET {{baseUrl}}/products?organization_id={{organizationId}}&include_features=true&include_prices=true
+Authorization: Bearer {{authToken}}
+
+###
+
+### 7. Get Single Product
+# @name getProduct
+GET {{baseUrl}}/products/{{productIdPro}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 8. Update Product
+# @name updateProduct
+PATCH {{baseUrl}}/products/{{productIdStarter}}
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Starter Plan - Limited Time Offer",
+  "description": "Perfect for individuals and small teams - Now with 50% more features!",
+  "trial_days": 30
+}
+
+###
+
+### 9. Archive Product (Soft Delete)
+# @name archiveProduct
+DELETE {{baseUrl}}/products/{{productIdFree}}
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# TEST SCENARIOS
+###############################################
+
+### SCENARIO 1: Complete Product Setup
+# 1. First, create all features in features.http (requests 1-5)
+# 2. Copy feature IDs to variables above
+# 3. Create Free, Starter, Pro plans (requests 1-3)
+# 4. View pricing table (request #6)
+
+### SCENARIO 2: Feature Configuration Override
+# Notice how the same feature (api_calls_limit) has different limits:
+# - Free: 100 calls
+# - Starter: 1,000 calls
+# - Pro: 10,000 calls
+# - Enterprise: 100,000 calls
+
+### SCENARIO 3: Multiple Price Points
+# Pro Plan has both monthly ($49) and yearly ($490 = $40.83/mo) pricing
+# This allows customers to choose billing frequency

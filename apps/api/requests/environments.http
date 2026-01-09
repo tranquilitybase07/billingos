@@ -1,0 +1,19 @@
+### Environment Variables
+### This file contains shared variables used across all request files
+
+### Local Development
+@baseUrl = http://localhost:3001
+@frontendUrl = http://localhost:3000
+
+### Common Headers
+@contentType = application/json
+
+### Auth Token (Replace with actual JWT token after login)
+### To get token: Login via frontend, open browser DevTools > Application > Local Storage > find auth token
+@authToken = jY1NjMwNTU1NTcxNjY3OTEwNyIsInVzZXJfaWQiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJpZGVudGl0eV9kYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJwcm92aWRlciI6Imdvb2dsZSIsImxhc3Rfc2lnbl9pbl9hdCI6IjIwMjYtMDEtMDVUMTk6NTg6NDAuNzIyNTM4WiIsImNyZWF0ZWRfYXQiOiIyMDI2LTAxLTA1VDE5OjU4OjQwLjcyMjU4N1oiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wMS0wNVQxOTo1ODo0MC43MjI1ODdaIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20ifV0sImNyZWF0ZWRfYXQiOiIyMDI2LTAxLTA1VDE5OjU4OjQwLjcwNjY1NFoiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wMS0wOVQwNDowMzoyNi40MTcwNzRaIiwiaXNfYW5vbnltb3VzIjpmYWxzZX19
+
+### Organization ID (Replace after creating organization)
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+
+### Account ID (Replace after creating Stripe account)
+@accountId = YOUR_ACCOUNT_ID_HERE

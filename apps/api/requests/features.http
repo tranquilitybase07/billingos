@@ -1,0 +1,268 @@
+###############################################
+# ENVIRONMENT VARIABLES
+###############################################
+
+@baseUrl = http://localhost:3001
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM1MDA2LCJpYXQiOjE3Njc5MzE0MDYsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.oQ5rOMiNvJ7IwD3X6Msrsvmv09NwYhpRhk-dS2SmNwLYEISev6uVSn_GQ9VvEdGrsKMrzjCN6g6SB4IYg_k_YQ
+@contentType = application/json
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+
+# Replace these after creating features
+@featureId1 = 3208548a-4b6d-4849-8bdc-8cbe1db86ace
+@featureId2 = 3030cfd7-6efe-4fcc-ab7b-60322d3b4b58
+@featureId3 = YOUR_FEATURE_ID_3_HERE
+@customerId = YOUR_CUSTOMER_ID_HERE
+
+###############################################
+# FEATURES CRUD ENDPOINTS
+###############################################
+
+### 1. Create Feature - API Calls Limit (Usage Quota)
+# @name createFeatureApiCalls
+POST {{baseUrl}}/features
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "api_calls_limit",
+  "title": "API Calls per Month",
+  "description": "Track and limit API usage",
+  "type": "usage_quota",
+  "properties": {
+    "limit": 1000,
+    "period": "month",
+    "unit": "calls"
+  }
+}
+
+###
+
+### 2. Create Feature - Premium Support (Boolean Flag)
+# @name createFeaturePremiumSupport
+POST {{baseUrl}}/features
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "premium_support",
+  "title": "Premium Support Access",
+  "description": "24/7 premium support via email and chat",
+  "type": "boolean_flag",
+  "properties": {}
+}
+
+###
+
+### 3. Create Feature - Projects Limit (Numeric Limit)
+# @name createFeatureProjectsLimit
+POST {{baseUrl}}/features
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "projects_limit",
+  "title": "Maximum Projects",
+  "description": "Number of projects you can create",
+  "type": "numeric_limit",
+  "properties": {
+    "limit": 10,
+    "unit": "projects"
+  }
+}
+
+###
+
+### 4. Create Feature - Team Members (Numeric Limit)
+# @name createFeatureTeamMembers
+POST {{baseUrl}}/features
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "team_members",
+  "title": "Team Members",
+  "description": "Maximum team members allowed",
+  "type": "numeric_limit",
+  "properties": {
+    "limit": 5,
+    "unit": "members"
+  }
+}
+
+###
+
+### 5. Create Feature - Custom Domain (Boolean Flag)
+# @name createFeatureCustomDomain
+POST {{baseUrl}}/features
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "organization_id": "{{organizationId}}",
+  "name": "custom_domain",
+  "title": "Custom Domain",
+  "description": "Use your own custom domain",
+  "type": "boolean_flag",
+  "properties": {}
+}
+
+###
+
+### 6. List All Features
+# @name listFeatures
+GET {{baseUrl}}/features?organization_id={{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 7. Get Feature by ID
+# @name getFeature
+GET {{baseUrl}}/features/{{featureId1}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 8. Update Feature
+# @name updateFeature
+PATCH {{baseUrl}}/features/{{featureId1}}
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "title": "API Calls per Month (Updated)",
+  "description": "Track and limit API usage with enhanced analytics",
+  "properties": {
+    "limit": 2000,
+    "period": "month",
+    "unit": "calls"
+  }
+}
+
+###
+
+### 9. Delete Feature (Soft Delete)
+# @name deleteFeature
+DELETE {{baseUrl}}/features/{{featureId1}}
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# FEATURE ACCESS & USAGE TRACKING (SDK ENDPOINTS)
+###############################################
+
+### 10. Check Feature Access - Has Access
+# @name checkFeatureAccess
+GET {{baseUrl}}/features/check?customer_id={{customerId}}&feature_name=api_calls_limit
+Authorization: Bearer {{authToken}}
+
+###
+
+### 11. Check Feature Access - Boolean Flag
+# @name checkBooleanFeature
+GET {{baseUrl}}/features/check?customer_id={{customerId}}&feature_name=premium_support
+Authorization: Bearer {{authToken}}
+
+###
+
+### 12. Track Usage - First Call
+# @name trackUsageFirst
+POST {{baseUrl}}/features/track-usage
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "feature_name": "api_calls_limit",
+  "units": 1
+}
+
+###
+
+### 13. Track Usage - Multiple Units
+# @name trackUsageMultiple
+POST {{baseUrl}}/features/track-usage
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "feature_name": "api_calls_limit",
+  "units": 10
+}
+
+###
+
+### 14. Track Usage - Large Batch
+# @name trackUsageBatch
+POST {{baseUrl}}/features/track-usage
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "feature_name": "api_calls_limit",
+  "units": 100
+}
+
+###
+
+### 15. Track Usage - With Idempotency Key
+# @name trackUsageIdempotent
+POST {{baseUrl}}/features/track-usage
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "feature_name": "api_calls_limit",
+  "units": 5,
+  "idempotency_key": "unique-key-12345"
+}
+
+###
+
+### 16. Track Usage - Try to Exceed Limit (Should Fail)
+# Note: Run this after consuming most of the quota
+# @name trackUsageExceedLimit
+POST {{baseUrl}}/features/track-usage
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "feature_name": "api_calls_limit",
+  "units": 999999
+}
+
+###
+
+###############################################
+# TEST SCENARIOS
+###############################################
+
+### SCENARIO 1: Create all features for a complete product
+# Run requests 1-5 in order, copy the IDs to variables above
+
+### SCENARIO 2: Check feature access flow
+# 1. Create subscription with features
+# 2. Run request #10 to check access
+# 3. Run request #12 to track usage
+# 4. Run request #10 again to see updated usage
+
+### SCENARIO 3: Test quota enforcement
+# 1. Create subscription with 100 call limit
+# 2. Track 99 units
+# 3. Check remaining (should be 1)
+# 4. Try to track 2 units (should fail)
+# 5. Track exactly 1 unit (should succeed)
+# 6. Try to track any more (should fail)
+
+### SCENARIO 4: Test idempotency
+# 1. Run request #15 with unique key
+# 2. Run request #15 again with same key
+# 3. Verify usage only increased once

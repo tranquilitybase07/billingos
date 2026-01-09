@@ -193,4 +193,159 @@ export class StripeService {
   ): Promise<Stripe.Customer> {
     return await this.stripe.customers.update(customerId, params);
   }
+
+  /**
+   * Create a product in Stripe Connect account
+   */
+  async createProduct(
+    params: Stripe.ProductCreateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Product> {
+    this.logger.log(
+      `Creating Stripe product: ${params.name} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.products.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Update a product in Stripe Connect account
+   */
+  async updateProduct(
+    productId: string,
+    params: Stripe.ProductUpdateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Product> {
+    this.logger.log(
+      `Updating Stripe product: ${productId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.products.update(productId, params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Delete a product in Stripe Connect account
+   */
+  async deleteProduct(
+    productId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.DeletedProduct> {
+    this.logger.log(
+      `Deleting Stripe product: ${productId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.products.del(productId, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Create a price in Stripe Connect account
+   */
+  async createPrice(
+    params: Stripe.PriceCreateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Price> {
+    this.logger.log(
+      `Creating Stripe price for product ${params.product} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.prices.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Get price from Stripe Connect account
+   */
+  async getPrice(
+    priceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Price> {
+    return await this.stripe.prices.retrieve(priceId, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Create a subscription in Stripe Connect account
+   */
+  async createSubscription(
+    params: Stripe.SubscriptionCreateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Creating Stripe subscription for customer ${params.customer} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Get subscription from Stripe Connect account
+   */
+  async getSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription> {
+    return await this.stripe.subscriptions.retrieve(subscriptionId, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Cancel a subscription in Stripe Connect account
+   */
+  async cancelSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+    cancelAtPeriodEnd: boolean = true,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Canceling Stripe subscription: ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    if (cancelAtPeriodEnd) {
+      return await this.stripe.subscriptions.update(
+        subscriptionId,
+        {
+          cancel_at_period_end: true,
+        },
+        {
+          stripeAccount: stripeAccountId,
+        },
+      );
+    } else {
+      return await this.stripe.subscriptions.cancel(
+        subscriptionId,
+        {},
+        {
+          stripeAccount: stripeAccountId,
+        },
+      );
+    }
+  }
+
+  /**
+   * Update a subscription in Stripe Connect account
+   */
+  async updateSubscription(
+    subscriptionId: string,
+    params: Stripe.SubscriptionUpdateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Updating Stripe subscription: ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.update(subscriptionId, params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
 }

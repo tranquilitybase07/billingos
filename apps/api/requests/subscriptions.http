@@ -1,0 +1,292 @@
+###############################################
+# ENVIRONMENT VARIABLES
+###############################################
+
+@baseUrl = http://localhost:3001
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM4Njk0LCJpYXQiOjE3Njc5MzUwOTQsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4nn9ITS2zpmOa1sGBzauGix2-cTIplRoCBWuaE1oGl7Ip2EpCmEv3eZU41fKWnbt3akwCsyyTTgI6vCc0eP10A
+@contentType = application/json
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+
+# TODO: Replace these with actual IDs from your database
+# To get these:
+# 1. Create a customer first (you need a Customers API endpoint or manually insert via SQL)
+# 2. Create products and prices using products.http
+# 3. Copy the IDs here
+
+@customerId = b57a6ed2-de2a-4160-99d8-b9134da12d67
+@productIdStarter = YOUR_STARTER_PRODUCT_ID
+@productIdPro = c8e130bf-9686-47d2-856e-e92ec747d372
+@priceIdStarterMonthly = YOUR_STARTER_PRICE_ID
+@priceIdProMonthly = f6afe51b-f328-44b8-a6cb-86c2fc8e3fd2
+@priceIdProYearly = YOUR_PRO_YEARLY_PRICE_ID
+@subscriptionId = YOUR_SUBSCRIPTION_ID_HERE
+
+###############################################
+# SUBSCRIPTIONS CRUD ENDPOINTS
+###############################################
+
+### 1. Create Subscription - Starter Plan (with trial)
+# @name createSubscriptionStarter
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdStarter}}",
+  "price_id": "{{priceIdStarterMonthly}}"
+}
+
+###
+
+### 2. Create Subscription - Pro Plan Monthly
+# @name createSubscriptionProMonthly
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdPro}}",
+  "price_id": "{{priceIdProMonthly}}"
+}
+
+###
+
+### 3. Create Subscription - Pro Plan Yearly
+# @name createSubscriptionProYearly
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdPro}}",
+  "price_id": "{{priceIdProYearly}}"
+}
+
+###
+
+### 4. Get Subscription by ID (with granted features)
+# @name getSubscription
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 5. List All Subscriptions for Organization
+# @name listSubscriptionsOrg
+GET {{baseUrl}}/subscriptions?organization_id={{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 6. List Subscriptions for Specific Customer
+# @name listSubscriptionsCustomer
+GET {{baseUrl}}/subscriptions?organization_id={{organizationId}}&customer_id={{customerId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# SUBSCRIPTION CANCELLATION
+###############################################
+
+### 7. Cancel Subscription - At Period End (Keep Features Until End)
+# @name cancelAtPeriodEnd
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/cancel
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "cancel_at_period_end": true
+}
+
+###
+
+### 8. Cancel Subscription - Immediately (Revoke Features Now)
+# @name cancelImmediately
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/cancel
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "cancel_at_period_end": false
+}
+
+###
+
+###############################################
+# COMPLETE TEST FLOW
+###############################################
+
+### FLOW 1: Create and Verify Subscription with Features
+
+# Step 1: Create subscription (Request #1 or #2)
+# Expected: Subscription created with status "active" or "trialing"
+
+# Step 2: Get subscription details (Request #4)
+# Expected: See granted_features array with all features from the product
+
+# Step 3: Check feature access (Use features.http - Request #10)
+# Expected: has_access = true, see usage limits
+
+# Step 4: Track usage (Use features.http - Request #12)
+# Expected: Usage incremented
+
+# Step 5: Check feature again
+# Expected: consumed_units increased, remaining_units decreased
+
+###
+
+### FLOW 2: Subscription Upgrade Flow
+
+# Step 1: Create Starter subscription
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdStarter}}",
+  "price_id": "{{priceIdStarterMonthly}}"
+}
+
+# Step 2: Check features (should have 1,000 API calls)
+
+# Step 3: Cancel Starter immediately
+POST {{baseUrl}}/subscriptions/STARTER_SUB_ID/cancel
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "cancel_at_period_end": false
+}
+
+# Step 4: Create Pro subscription
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdPro}}",
+  "price_id": "{{priceIdProMonthly}}"
+}
+
+# Step 5: Check features again (should now have 10,000 API calls + premium support)
+
+###
+
+### FLOW 3: Trial Period Testing
+
+# Step 1: Create subscription with trial (Starter or Pro - both have 14-day trial)
+# Expected: trial_start and trial_end dates set, status = "trialing"
+
+# Step 2: Verify subscription status
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{authToken}}
+
+# Expected Response:
+# {
+#   "status": "trialing",
+#   "trial_start": "2026-01-09T...",
+#   "trial_end": "2026-01-23T...",
+#   "current_period_start": "2026-01-09T...",
+#   "current_period_end": "2026-02-09T...",
+#   "granted_features": [...]
+# }
+
+###
+
+### FLOW 4: Cancel at Period End vs Immediate
+
+# Scenario A: Cancel at Period End (Graceful)
+# Step 1: Create subscription
+# Step 2: Cancel with cancel_at_period_end: true
+# Step 3: Check features (should still work until period_end)
+# Step 4: Wait until period_end (or simulate webhook)
+# Step 5: Check features (should be revoked)
+
+# Scenario B: Cancel Immediately (Instant)
+# Step 1: Create subscription
+# Step 2: Cancel with cancel_at_period_end: false
+# Step 3: Check features (should be immediately revoked)
+
+###
+
+###############################################
+# EDGE CASES & ERROR SCENARIOS
+###############################################
+
+### ERROR 1: Create subscription with non-existent customer
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "00000000-0000-0000-0000-000000000000",
+  "product_id": "{{productIdStarter}}",
+  "price_id": "{{priceIdStarterMonthly}}"
+}
+# Expected: 404 Customer not found
+
+###
+
+### ERROR 2: Create subscription with non-existent product
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "00000000-0000-0000-0000-000000000000",
+  "price_id": "{{priceIdStarterMonthly}}"
+}
+# Expected: 404 Product not found
+
+###
+
+### ERROR 3: Create subscription with mismatched price
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "customer_id": "{{customerId}}",
+  "product_id": "{{productIdStarter}}",
+  "price_id": "{{priceIdProMonthly}}"
+}
+# Expected: 404 Price not found (price doesn't belong to product)
+
+###
+
+###############################################
+# NOTES FOR TESTING
+###############################################
+
+# PREREQUISITE: Create a Customer
+# You need to create a customer first. Currently there's no customer API endpoint shown.
+# You can either:
+# 1. Create a Customers API endpoint (POST /customers)
+# 2. Manually insert via SQL:
+#
+# INSERT INTO customers (organization_id, email, name, stripe_customer_id)
+# VALUES (
+#   'a0596c99-9f33-4394-a7cd-b2339601c1ce',
+#   'test@example.com',
+#   'Test Customer',
+#   'cus_test_123'
+# );
+
+# TESTING WITH STRIPE
+# For real Stripe integration:
+# 1. Make sure you have Stripe API keys in .env
+# 2. Create real Stripe customer first
+# 3. Use Stripe test cards: pm_card_visa, pm_card_mastercard
+# 4. Use Stripe CLI for webhook testing:
+#    stripe listen --forward-to localhost:3001/stripe/webhooks
+
+# TESTING WITHOUT STRIPE (Free Plan)
+# Free plans don't create Stripe subscriptions, so they work without Stripe setup
+# Just make sure the product has amount_type: "free"

@@ -20,6 +20,12 @@ async function getAuthToken(): Promise<string | null> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
+
+  // Log token for testing
+  if (session?.access_token) {
+    console.log('🔑 AUTH TOKEN:', session.access_token)
+  }
+
   return session?.access_token ?? null
 }
 

@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from './stripe.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -10,6 +11,8 @@ export class StripeWebhookService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    @Inject(forwardRef(() => SubscriptionsService))
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   /**
@@ -120,6 +123,28 @@ export class StripeWebhookService {
 
       case 'payout.updated':
         this.handlePayoutUpdated(event.data.object);
+        break;
+
+      // Subscription events
+      case 'customer.subscription.created':
+        await this.handleSubscriptionCreated(event.data.object);
+        break;
+
+      case 'customer.subscription.updated':
+        await this.handleSubscriptionUpdated(event.data.object);
+        break;
+
+      case 'customer.subscription.deleted':
+        await this.handleSubscriptionDeleted(event.data.object);
+        break;
+
+      // Invoice events
+      case 'invoice.payment_succeeded':
+        await this.handleInvoicePaymentSucceeded(event.data.object);
+        break;
+
+      case 'invoice.payment_failed':
+        await this.handleInvoicePaymentFailed(event.data.object);
         break;
 
       default:
@@ -404,6 +429,234 @@ export class StripeWebhookService {
       }
     } catch (error) {
       this.logger.error('Error updating organization status:', error);
+    }
+  }
+
+  /**
+   * Handle customer.subscription.created webhook
+   * Cache subscription in database (may already be there from API)
+   */
+  private async handleSubscriptionCreated(
+    subscription: Stripe.Subscription,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `Subscription created: ${subscription.id} for customer ${subscription.customer}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Check if subscription already exists (created via API)
+      const { data: existing } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('stripe_subscription_id', subscription.id)
+        .single();
+
+      if (existing) {
+        this.logger.log(
+          `Subscription ${subscription.id} already exists in database`,
+        );
+        return;
+      }
+
+      // Subscription was created outside our API (e.g., Stripe Dashboard)
+      // For now, just log it. In production, you might want to create it in DB
+      this.logger.warn(
+        `Subscription ${subscription.id} was created outside the API - not automatically synced`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling subscription.created:', error);
+    }
+  }
+
+  /**
+   * Handle customer.subscription.updated webhook
+   * Sync subscription status and check for period changes
+   */
+  private async handleSubscriptionUpdated(
+    subscription: Stripe.Subscription,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `Subscription updated: ${subscription.id} - status: ${subscription.status}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Get existing subscription
+      const { data: existing, error: fetchError } = await supabase
+        .from('subscriptions')
+        .select('id, current_period_start, current_period_end')
+        .eq('stripe_subscription_id', subscription.id)
+        .single();
+
+      if (fetchError || !existing) {
+        this.logger.warn(
+          `Subscription ${subscription.id} not found in database`,
+        );
+        return;
+      }
+
+      // Check if billing period changed (renewal)
+      const subData = subscription as any;
+      const newPeriodStart = new Date(subData.current_period_start * 1000);
+      const existingPeriodStart = new Date(existing.current_period_start);
+
+      const periodChanged = newPeriodStart.getTime() !== existingPeriodStart.getTime();
+
+      // Update subscription in database
+      const { error: updateError } = await supabase
+        .from('subscriptions')
+        .update({
+          status: subscription.status,
+          current_period_start: newPeriodStart.toISOString(),
+          current_period_end: new Date(subData.current_period_end * 1000).toISOString(),
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          canceled_at: subscription.canceled_at
+            ? new Date(subscription.canceled_at * 1000).toISOString()
+            : null,
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        this.logger.error(
+          `Failed to update subscription ${subscription.id}:`,
+          updateError,
+        );
+        return;
+      }
+
+      // If period changed, create new usage records
+      if (periodChanged) {
+        this.logger.log(
+          `Billing period changed for subscription ${subscription.id} - creating new usage records`,
+        );
+
+        await this.subscriptionsService.handleRenewal(
+          existing.id,
+          newPeriodStart,
+          new Date(subData.current_period_end * 1000),
+        );
+      }
+
+      this.logger.log(`Subscription ${subscription.id} updated successfully`);
+    } catch (error) {
+      this.logger.error('Error handling subscription.updated:', error);
+    }
+  }
+
+  /**
+   * Handle customer.subscription.deleted webhook
+   * Mark subscription as canceled and revoke features
+   */
+  private async handleSubscriptionDeleted(
+    subscription: Stripe.Subscription,
+  ): Promise<void> {
+    try {
+      this.logger.log(`Subscription deleted: ${subscription.id}`);
+
+      const supabase = this.supabaseService.getClient();
+
+      // Get subscription ID
+      const { data: existing, error: fetchError } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('stripe_subscription_id', subscription.id)
+        .single();
+
+      if (fetchError || !existing) {
+        this.logger.warn(
+          `Subscription ${subscription.id} not found in database`,
+        );
+        return;
+      }
+
+      // Update subscription status
+      await supabase
+        .from('subscriptions')
+        .update({
+          status: 'canceled',
+          canceled_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      // Revoke all feature grants
+      await supabase
+        .from('feature_grants')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('subscription_id', existing.id)
+        .is('revoked_at', null);
+
+      this.logger.log(
+        `Subscription ${subscription.id} canceled and features revoked`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling subscription.deleted:', error);
+    }
+  }
+
+  /**
+   * Handle invoice.payment_succeeded webhook
+   * Update subscription status to active
+   */
+  private async handleInvoicePaymentSucceeded(
+    invoice: Stripe.Invoice,
+  ): Promise<void> {
+    try {
+      const invoiceData = invoice as any;
+      if (!invoiceData.subscription) return;
+
+      this.logger.log(
+        `Invoice payment succeeded: ${invoice.id} for subscription ${invoiceData.subscription}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update subscription status to active
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'active' })
+        .eq('stripe_subscription_id', invoiceData.subscription);
+
+      this.logger.log(
+        `Subscription ${invoiceData.subscription} marked as active`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling invoice.payment_succeeded:', error);
+    }
+  }
+
+  /**
+   * Handle invoice.payment_failed webhook
+   * Update subscription status to past_due
+   */
+  private async handleInvoicePaymentFailed(
+    invoice: Stripe.Invoice,
+  ): Promise<void> {
+    try {
+      const invoiceData = invoice as any;
+      if (!invoiceData.subscription) return;
+
+      this.logger.warn(
+        `Invoice payment failed: ${invoice.id} for subscription ${invoiceData.subscription}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update subscription status to past_due
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'past_due' })
+        .eq('stripe_subscription_id', invoiceData.subscription);
+
+      this.logger.log(
+        `Subscription ${invoiceData.subscription} marked as past_due`,
+      );
+
+      // TODO: Notify customer about failed payment
+    } catch (error) {
+      this.logger.error('Error handling invoice.payment_failed:', error);
     }
   }
 }

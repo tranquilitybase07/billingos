@@ -1,0 +1,120 @@
+###############################################
+# ENVIRONMENT VARIABLES
+###############################################
+
+@baseUrl = http://localhost:3001
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM1MDA2LCJpYXQiOjE3Njc5MzE0MDYsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.oQ5rOMiNvJ7IwD3X6Msrsvmv09NwYhpRhk-dS2SmNwLYEISev6uVSn_GQ9VvEdGrsKMrzjCN6g6SB4IYg_k_YQ
+@contentType = application/json
+@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+
+###############################################
+# ORGANIZATION ENDPOINTS
+###############################################
+
+### Create Organization
+# @name createOrganization
+POST {{baseUrl}}/organizations
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "My Awesome Company",
+  "slug": "my-awesome-company"
+}
+
+### Get All Organizations (for current user)
+# @name getAllOrganizations
+GET {{baseUrl}}/organizations
+Authorization: Bearer {{authToken}}
+
+
+### Get Organization by ID
+# @name getOrganization
+GET {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### Update Organization
+# @name updateOrganization
+PATCH {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Updated Company Name",
+  "slug": "updated-company-slug"
+}
+
+###
+
+### Delete Organization (Soft Delete)
+# @name deleteOrganization
+DELETE {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# BUSINESS DETAILS & ONBOARDING
+###############################################
+
+### Submit Business Details
+# @name submitBusinessDetails
+POST {{baseUrl}}/organizations/{{organizationId}}/business-details
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "business_name": "My Awesome Company LLC",
+  "business_type": "company",
+  "country": "US",
+  "state": "CA",
+  "city": "San Francisco",
+  "address_line1": "123 Market St",
+  "postal_code": "94103"
+}
+
+###
+
+### Get Payment Setup Status
+# @name getPaymentStatus
+GET {{baseUrl}}/organizations/{{organizationId}}/payment-status
+Authorization: Bearer {{authToken}}
+
+###
+
+###############################################
+# TEAM MEMBER MANAGEMENT
+###############################################
+
+### Get Organization Members
+# @name getMembers
+GET {{baseUrl}}/organizations/{{organizationId}}/members
+Authorization: Bearer {{authToken}}
+
+###
+
+### Invite Member to Organization
+# @name inviteMember
+POST {{baseUrl}}/organizations/{{organizationId}}/members/invite
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "email": "newmember@example.com"
+}
+
+###
+
+### Remove Member from Organization (Admin Only)
+# @name removeMember
+DELETE {{baseUrl}}/organizations/{{organizationId}}/members/USER_ID_HERE
+Authorization: Bearer {{authToken}}
+
+###
+
+### Leave Organization (Non-Admin)
+# @name leaveOrganization
+DELETE {{baseUrl}}/organizations/{{organizationId}}/members/leave
+Authorization: Bearer {{authToken}}

@@ -8,6 +8,9 @@ import { UserModule } from './user/user.module';
 import { StripeModule } from './stripe/stripe.module';
 import { OrganizationModule } from './organization/organization.module';
 import { AccountModule } from './account/account.module';
+import { ProductsModule } from './products/products.module';
+import { FeaturesModule } from './features/features.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { AccountModule } from './account/account.module';
     StripeModule,
     OrganizationModule,
     AccountModule,
+    ProductsModule,
+    FeaturesModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

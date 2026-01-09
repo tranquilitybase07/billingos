@@ -21,6 +21,8 @@ export default function MagicLinkForm({ returnTo = '/dashboard' }: MagicLinkForm
     e.preventDefault();
     setLoading(true);
 
+    console.log('Sending magic link to:', email, `${window.location.origin}/auth/callback?returnTo=${encodeURIComponent(returnTo)}`);
+
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
