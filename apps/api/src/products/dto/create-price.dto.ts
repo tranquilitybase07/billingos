@@ -13,6 +13,13 @@ export enum PriceAmountType {
   FREE = 'free',
 }
 
+export enum RecurringInterval {
+  DAY = 'day',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
+
 export class CreatePriceDto {
   @IsEnum(PriceAmountType)
   @IsNotEmpty()
@@ -27,4 +34,15 @@ export class CreatePriceDto {
   @IsString()
   @IsOptional()
   price_currency?: string = 'usd'; // ISO currency code
+
+  // Optional: Override product-level recurring_interval for this specific price
+  // Useful for offering both monthly and yearly options for the same product
+  @IsEnum(RecurringInterval)
+  @IsOptional()
+  recurring_interval?: RecurringInterval;
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  recurring_interval_count?: number;
 }

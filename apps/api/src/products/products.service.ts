@@ -96,14 +96,22 @@ export class ProductsService {
       }> = [];
       for (const priceDto of createDto.prices) {
         if (priceDto.amount_type === PriceAmountType.FIXED) {
+          // Use price-level recurring_interval if provided, otherwise use product-level
+          const recurringInterval =
+            priceDto.recurring_interval || createDto.recurring_interval;
+          const recurringIntervalCount =
+            priceDto.recurring_interval_count ||
+            createDto.recurring_interval_count ||
+            1;
+
           const stripePrice = await this.stripeService.createPrice(
             {
               product: stripeProduct.id,
               currency: priceDto.price_currency || 'usd',
               unit_amount: priceDto.price_amount,
               recurring: {
-                interval: createDto.recurring_interval,
-                interval_count: createDto.recurring_interval_count || 1,
+                interval: recurringInterval,
+                interval_count: recurringIntervalCount,
               },
             },
             account.stripe_id,
@@ -181,14 +189,14 @@ export class ProductsService {
         priceRecords.push(priceRecord);
       }
 
-      // Insert feature links
+      // Insert feature links and attach to Stripe Product
       const featureLinks: any[] = [];
       if (createDto.features && createDto.features.length > 0) {
         for (const featureDto of createDto.features) {
           // Verify feature exists and belongs to organization
           const { data: feature } = await supabase
             .from('features')
-            .select('id')
+            .select('id, stripe_feature_id')
             .eq('id', featureDto.feature_id)
             .eq('organization_id', createDto.organization_id)
             .single();
@@ -199,6 +207,7 @@ export class ProductsService {
             );
           }
 
+          // Create local link first
           const { data: link, error: linkError } = await supabase
             .from('product_features')
             .insert({
@@ -206,6 +215,7 @@ export class ProductsService {
               feature_id: featureDto.feature_id,
               display_order: featureDto.display_order,
               config: featureDto.config || {},
+              stripe_synced: false, // Will be updated after Stripe sync
             })
             .select()
             .single();
@@ -213,6 +223,45 @@ export class ProductsService {
           if (linkError || !link) {
             this.logger.error('Failed to link feature:', linkError);
             throw new Error('Failed to link feature');
+          }
+
+          // Attach feature to Stripe Product (if feature is synced with Stripe)
+          if (feature.stripe_feature_id) {
+            try {
+              // Returns ProductFeature object with ID
+              const productFeature =
+                await this.stripeService.attachFeatureToProduct({
+                  productId: stripeProduct.id,
+                  featureId: feature.stripe_feature_id,
+                  stripeAccountId: account.stripe_id,
+                });
+
+              // Mark as synced in local DB and store ProductFeature ID
+              await supabase
+                .from('product_features')
+                .update({
+                  stripe_synced: true,
+                  stripe_synced_at: new Date().toISOString(),
+                  stripe_product_feature_id: productFeature.id,
+                })
+                .eq('product_id', product.id)
+                .eq('feature_id', featureDto.feature_id);
+
+              this.logger.log(
+                `Attached feature ${feature.stripe_feature_id} to Stripe Product ${stripeProduct.id} (ProductFeature: ${productFeature.id})`,
+              );
+            } catch (error) {
+              this.logger.error(
+                `Failed to attach feature ${feature.stripe_feature_id} to Stripe Product:`,
+                error,
+              );
+              // Don't fail the whole operation, but log it
+              // The feature link is created locally, just not synced to Stripe
+            }
+          } else {
+            this.logger.warn(
+              `Feature ${featureDto.feature_id} is not synced to Stripe yet, skipping Stripe attachment`,
+            );
           }
 
           featureLinks.push(link);

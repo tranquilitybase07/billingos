@@ -194,6 +194,28 @@ export class SubscriptionsService {
         `Subscription created: ${subscription.id} with ${grantedFeatures.length} features`,
       );
 
+      // 9. Sync Active Entitlements from Stripe (if subscription was created in Stripe)
+      if (stripeSubscription) {
+        try {
+          await this.syncActiveEntitlementsFromStripe(
+            subscription.id,
+            customer.id,
+            customer.stripe_customer_id,
+            account.stripe_id,
+          );
+          this.logger.log(
+            `Synced Active Entitlements from Stripe for subscription ${subscription.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to sync Active Entitlements from Stripe:`,
+            error,
+          );
+          // Don't fail the subscription creation if Stripe sync fails
+          // The feature grants are already created locally
+        }
+      }
+
       // TODO: Invalidate Redis cache for customer
 
       // Return subscription with granted features
@@ -559,5 +581,131 @@ export class SubscriptionsService {
     }
 
     this.logger.log(`Subscription renewed: ${subscriptionId}`);
+  }
+
+  /**
+   * Sync Active Entitlements from Stripe to local database
+   * This fetches the customer's active entitlements from Stripe and updates feature_grants
+   */
+  private async syncActiveEntitlementsFromStripe(
+    subscriptionId: string,
+    customerId: string,
+    stripeCustomerId: string,
+    stripeAccountId: string,
+  ) {
+    const supabase = this.supabaseService.getClient();
+
+    try {
+      // Fetch Active Entitlements from Stripe
+      const activeEntitlements =
+        await this.stripeService.syncActiveEntitlementsFromSubscription({
+          subscriptionId, // This is actually the Stripe subscription ID in context
+          customerId: stripeCustomerId,
+          stripeAccountId,
+        });
+
+      if (!activeEntitlements || activeEntitlements.length === 0) {
+        this.logger.warn(
+          `No Active Entitlements found in Stripe for customer ${stripeCustomerId}`,
+        );
+        return;
+      }
+
+      this.logger.log(
+        `Found ${activeEntitlements.length} Active Entitlements in Stripe`,
+      );
+
+      // Update each feature_grant with the corresponding Active Entitlement ID
+      for (const entitlement of activeEntitlements) {
+        // Get the feature lookup_key from the Stripe Feature
+        const stripeFeature =
+          typeof entitlement.feature === 'string' ? null : entitlement.feature;
+
+        if (!stripeFeature || !stripeFeature.lookup_key) {
+          this.logger.warn(
+            `Active Entitlement ${entitlement.id} has no feature lookup_key`,
+          );
+          continue;
+        }
+
+        // Find the corresponding local feature by stripe_feature_id
+        const { data: localFeature } = await supabase
+          .from('features')
+          .select('id')
+          .eq('stripe_feature_id', stripeFeature.id)
+          .single();
+
+        if (!localFeature) {
+          this.logger.warn(
+            `No local feature found for Stripe Feature ${stripeFeature.id} (${stripeFeature.lookup_key})`,
+          );
+          continue;
+        }
+
+        // Find the feature_grant for this subscription and feature
+        const { data: grant } = await supabase
+          .from('feature_grants')
+          .select('id')
+          .eq('subscription_id', subscriptionId)
+          .eq('customer_id', customerId)
+          .eq('feature_id', localFeature.id)
+          .is('revoked_at', null)
+          .single();
+
+        if (!grant) {
+          this.logger.warn(
+            `No feature_grant found for feature ${localFeature.id} on subscription ${subscriptionId}`,
+          );
+          continue;
+        }
+
+        // Update the feature_grant with Stripe Active Entitlement ID
+        const { error: updateError } = await supabase
+          .from('feature_grants')
+          .update({
+            stripe_active_entitlement_id: entitlement.id,
+            stripe_synced_at: new Date().toISOString(),
+            stripe_sync_status: 'synced',
+          })
+          .eq('id', grant.id);
+
+        if (updateError) {
+          this.logger.error(
+            `Failed to update feature_grant ${grant.id} with Active Entitlement ${entitlement.id}:`,
+            updateError,
+          );
+        } else {
+          this.logger.log(
+            `Synced Active Entitlement ${entitlement.id} to feature_grant ${grant.id}`,
+          );
+        }
+
+        // Log sync event
+        const { data: customerData } = await supabase
+          .from('customers')
+          .select('organization_id')
+          .eq('id', customerId)
+          .single();
+
+        if (customerData?.organization_id) {
+          await supabase.from('stripe_sync_events').insert({
+            organization_id: customerData.organization_id,
+            entity_type: 'feature_grant',
+            entity_id: grant.id,
+            stripe_object_id: entitlement.id,
+            operation: 'create',
+            status: updateError ? 'failure' : 'success',
+            error_message: updateError?.message,
+            triggered_by: 'api',
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error syncing Active Entitlements from Stripe:`,
+        error,
+      );
+      throw error;
+    }
   }
 }

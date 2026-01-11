@@ -5,8 +5,11 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
 import { CreateFeatureDto, FeatureType } from './dto/create-feature.dto';
 import { UpdateFeatureDto } from './dto/update-feature.dto';
@@ -18,7 +21,71 @@ export class FeaturesService {
   // TODO: Inject Redis client when available
   // private redisClient: Redis;
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    @Inject(forwardRef(() => StripeService))
+    private readonly stripeService: StripeService,
+  ) {}
+
+  /**
+   * Get Stripe account ID for an organization
+   * Returns null if organization doesn't have a Stripe account yet
+   */
+  private async getStripeAccountId(
+    organizationId: string,
+  ): Promise<string | null> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: org, error } = await supabase
+      .from('organizations')
+      .select(
+        `
+        account_id,
+        accounts (
+          stripe_id
+        )
+      `,
+      )
+      .eq('id', organizationId)
+      .single();
+
+    if (error || !org) {
+      this.logger.warn(
+        `Failed to get organization ${organizationId}: ${error?.message}`,
+      );
+      return null;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+    return org.accounts?.stripe_id || null;
+  }
+
+  /**
+   * Log a Stripe sync event
+   */
+  private async logSyncEvent(params: {
+    organizationId: string;
+    entityType: 'feature' | 'feature_grant' | 'product_feature';
+    entityId: string;
+    stripeObjectId: string | null;
+    operation: 'create' | 'update' | 'delete' | 'backfill' | 'webhook';
+    status: 'success' | 'failure' | 'partial';
+    errorMessage?: string;
+    triggeredBy?: string;
+  }) {
+    const supabase = this.supabaseService.getClient();
+
+    await supabase.from('stripe_sync_events').insert({
+      organization_id: params.organizationId,
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      stripe_object_id: params.stripeObjectId,
+      operation: params.operation,
+      status: params.status,
+      error_message: params.errorMessage,
+      triggered_by: params.triggeredBy || 'api',
+    });
+  }
 
   /**
    * Create a new feature
@@ -53,7 +120,48 @@ export class FeaturesService {
       );
     }
 
-    // Create feature
+    // Get Stripe account ID for this organization
+    const stripeAccountId = await this.getStripeAccountId(
+      createDto.organization_id,
+    );
+
+    let stripeFeatureId: string | null = null;
+    let stripeSyncStatus: 'pending' | 'synced' | 'failed' = 'pending';
+
+    // Create feature in Stripe first (if account exists)
+    if (stripeAccountId) {
+      try {
+        const stripeFeature = await this.stripeService.createEntitlementFeature(
+          {
+            name: createDto.title,
+            lookupKey: createDto.name,
+            metadata: {
+              local_feature_id: 'pending', // Will update after DB insert
+              type: createDto.type,
+              ...(createDto.metadata || {}),
+            },
+            stripeAccountId,
+          },
+        );
+
+        stripeFeatureId = stripeFeature.id;
+        stripeSyncStatus = 'synced';
+
+        this.logger.log(
+          `Created Stripe Feature: ${stripeFeatureId} for ${createDto.name}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to create Stripe Feature for ${createDto.name}:`,
+          error,
+        );
+        stripeSyncStatus = 'failed';
+        // Continue with local creation even if Stripe fails
+        // We'll sync later via backfill script
+      }
+    }
+
+    // Create feature in local database
     const { data: feature, error } = await supabase
       .from('features')
       .insert({
@@ -64,16 +172,72 @@ export class FeaturesService {
         type: createDto.type,
         properties: createDto.properties || {},
         metadata: createDto.metadata || {},
+        stripe_feature_id: stripeFeatureId,
+        stripe_synced_at: stripeFeatureId ? new Date().toISOString() : null,
+        stripe_sync_status: stripeSyncStatus,
       })
       .select()
       .single();
 
     if (error || !feature) {
       this.logger.error('Failed to create feature:', error);
+
+      // Rollback Stripe feature if DB insert failed
+      if (stripeFeatureId && stripeAccountId) {
+        try {
+          await this.stripeService.archiveEntitlementFeature(
+            stripeFeatureId,
+            stripeAccountId,
+          );
+          this.logger.log(`Rolled back Stripe Feature: ${stripeFeatureId}`);
+        } catch (rollbackError) {
+          this.logger.error(
+            `Failed to rollback Stripe Feature ${stripeFeatureId}:`,
+            rollbackError,
+          );
+        }
+      }
+
       throw new BadRequestException('Failed to create feature');
     }
 
-    this.logger.log(`Feature created: ${feature.id} (${feature.name})`);
+    // Update Stripe feature metadata with local feature ID
+    if (stripeFeatureId && stripeAccountId) {
+      try {
+        await this.stripeService.updateEntitlementFeature(stripeFeatureId, {
+          metadata: {
+            local_feature_id: feature.id,
+            type: createDto.type,
+            ...(createDto.metadata || {}),
+          },
+          stripeAccountId,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Failed to update Stripe Feature metadata for ${stripeFeatureId}:`,
+          error,
+        );
+        // Non-critical, don't fail the operation
+      }
+    }
+
+    // Log sync event
+    await this.logSyncEvent({
+      organizationId: createDto.organization_id,
+      entityType: 'feature',
+      entityId: feature.id,
+      stripeObjectId: stripeFeatureId,
+      operation: 'create',
+      status: stripeSyncStatus === 'synced' ? 'success' : 'failure',
+      errorMessage:
+        stripeSyncStatus === 'failed'
+          ? 'Failed to create Stripe Feature'
+          : undefined,
+    });
+
+    this.logger.log(
+      `Feature created: ${feature.id} (${feature.name}) - Stripe sync: ${stripeSyncStatus}`,
+    );
 
     return feature;
   }
@@ -149,16 +313,65 @@ export class FeaturesService {
     const supabase = this.supabaseService.getClient();
 
     // Verify feature exists and user has access
-    await this.findOne(id, userId);
+    const feature = await this.findOne(id, userId);
+
+    // Get Stripe account ID
+    const stripeAccountId = await this.getStripeAccountId(
+      feature.organization_id,
+    );
+
+    let stripeSyncStatus: 'synced' | 'failed' | null = null;
+
+    // Update in Stripe if feature is synced
+    if (feature.stripe_feature_id && stripeAccountId) {
+      try {
+        const existingMetadata =
+          (feature.metadata as Record<string, any>) || {};
+        const newMetadata = updateDto.metadata || {};
+
+        await this.stripeService.updateEntitlementFeature(
+          feature.stripe_feature_id,
+          {
+            name: updateDto.title,
+            metadata: {
+              local_feature_id: id,
+              type: feature.type,
+              ...existingMetadata,
+              ...newMetadata,
+            },
+            stripeAccountId,
+          },
+        );
+
+        stripeSyncStatus = 'synced';
+        this.logger.log(`Updated Stripe Feature: ${feature.stripe_feature_id}`);
+      } catch (error) {
+        this.logger.error(
+          `Failed to update Stripe Feature ${feature.stripe_feature_id}:`,
+          error,
+        );
+        stripeSyncStatus = 'failed';
+        // Continue with local update even if Stripe fails
+      }
+    }
+
+    // Update in local database
+    const updateData: any = {
+      title: updateDto.title,
+      description: updateDto.description,
+      properties: updateDto.properties,
+      metadata: updateDto.metadata,
+    };
+
+    if (stripeSyncStatus) {
+      updateData.stripe_sync_status = stripeSyncStatus;
+      updateData.stripe_synced_at =
+        stripeSyncStatus === 'synced' ? new Date().toISOString() : undefined;
+    }
 
     const { data: updated, error } = await supabase
       .from('features')
-      .update({
-        title: updateDto.title,
-        description: updateDto.description,
-        properties: updateDto.properties,
-        metadata: updateDto.metadata,
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
@@ -167,7 +380,25 @@ export class FeaturesService {
       throw new BadRequestException('Failed to update feature');
     }
 
-    this.logger.log(`Feature updated: ${id}`);
+    // Log sync event if Stripe update was attempted
+    if (stripeSyncStatus) {
+      await this.logSyncEvent({
+        organizationId: feature.organization_id,
+        entityType: 'feature',
+        entityId: id,
+        stripeObjectId: feature.stripe_feature_id,
+        operation: 'update',
+        status: stripeSyncStatus === 'synced' ? 'success' : 'failure',
+        errorMessage:
+          stripeSyncStatus === 'failed'
+            ? 'Failed to update Stripe Feature'
+            : undefined,
+      });
+    }
+
+    this.logger.log(
+      `Feature updated: ${id} - Stripe sync: ${stripeSyncStatus || 'not synced'}`,
+    );
 
     // TODO: Invalidate Redis cache for this feature
     // await this.invalidateFeatureCache(updated.organization_id, updated.name);
@@ -183,7 +414,6 @@ export class FeaturesService {
 
     // Verify feature exists and user has access
     const feature = await this.findOne(id, userId);
-    console.log(feature);
 
     // Check if feature is used in any products
     const { data: productFeatures } = await supabase
@@ -198,13 +428,61 @@ export class FeaturesService {
       );
     }
 
+    // Get Stripe account ID
+    const stripeAccountId = await this.getStripeAccountId(
+      feature.organization_id,
+    );
+
+    let stripeSyncStatus: 'synced' | 'failed' | null = null;
+
+    // Archive in Stripe if feature is synced (Stripe doesn't support hard delete)
+    if (feature.stripe_feature_id && stripeAccountId) {
+      try {
+        await this.stripeService.archiveEntitlementFeature(
+          feature.stripe_feature_id,
+          stripeAccountId,
+        );
+
+        stripeSyncStatus = 'synced';
+        this.logger.log(
+          `Archived Stripe Feature: ${feature.stripe_feature_id}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to archive Stripe Feature ${feature.stripe_feature_id}:`,
+          error,
+        );
+        stripeSyncStatus = 'failed';
+        // Continue with local delete even if Stripe fails
+      }
+    }
+
+    // Delete from local database
     const { error } = await supabase.from('features').delete().eq('id', id);
 
     if (error) {
       throw new BadRequestException('Failed to delete feature');
     }
 
-    this.logger.log(`Feature deleted: ${id}`);
+    // Log sync event if Stripe operation was attempted
+    if (stripeSyncStatus) {
+      await this.logSyncEvent({
+        organizationId: feature.organization_id,
+        entityType: 'feature',
+        entityId: id,
+        stripeObjectId: feature.stripe_feature_id,
+        operation: 'delete',
+        status: stripeSyncStatus === 'synced' ? 'success' : 'failure',
+        errorMessage:
+          stripeSyncStatus === 'failed'
+            ? 'Failed to archive Stripe Feature'
+            : undefined,
+      });
+    }
+
+    this.logger.log(
+      `Feature deleted: ${id} - Stripe sync: ${stripeSyncStatus || 'not synced'}`,
+    );
 
     return { success: true };
   }

@@ -1,16 +1,33 @@
 ###############################################
+# STRIPE ENTITLEMENTS INTEGRATION - PRODUCTS
+###############################################
+#
+# Products attach features to Stripe Products:
+# - When creating a product, features are attached to Stripe Product
+# - Features stored in Stripe Product metadata as JSON array
+# - Local tracking: product_features.stripe_synced, stripe_synced_at
+# - Only features with stripe_feature_id are synced to Stripe
+#
+# Flow:
+# 1. Create Product in Stripe
+# 2. Create Product in local DB with stripe_product_id
+# 3. Link features locally (product_features table)
+# 4. Attach features to Stripe Product via metadata
+# 5. Mark as synced with stripe_synced_at timestamp
+#
+###############################################
 # ENVIRONMENT VARIABLES
 ###############################################
 
 @baseUrl = http://localhost:3001
-@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM4Njk0LCJpYXQiOjE3Njc5MzUwOTQsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4nn9ITS2zpmOa1sGBzauGix2-cTIplRoCBWuaE1oGl7Ip2EpCmEv3eZU41fKWnbt3akwCsyyTTgI6vCc0eP10A
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZWMxNjIzMC1lMGZkLTQ4MzctODFkNi01MGUwYzcyZDIwNWEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY4MTA2NzYzLCJpYXQiOjE3NjgxMDMxNjMsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY4MDE5MTIzfV0sInNlc3Npb25faWQiOiJjNDA5ZTAzMC0zYzU2LTQyZTUtYjY1OS01Y2EwZWQ3M2NiZWIiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4JSUfUE9HQe7HEzshuLOqj9_6RR10fAVD9RJ11HsvJeHLYalwTvkdAG3DM0bQhPh7QedbBhLP1EDF3Jy7dBqFA
 @contentType = application/json
-@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
+@organizationId = 7eff31f5-6697-4764-9e6d-6239a7e0888e
 
 # Replace these after creating features (from features.http)
-@featureApiCalls = 3208548a-4b6d-4849-8bdc-8cbe1db86ace
-@featurePremiumSupport = 3030cfd7-6efe-4fcc-ab7b-60322d3b4b58
-@featureProjectsLimit = YOUR_PROJECTS_LIMIT_FEATURE_ID
+@featureApiCalls = e3ee9b72-c23d-4fb4-ba60-82ed43f15b6a
+@featurePremiumSupport = 3dacbd7c-8b43-4c98-be0e-4dbaf2fd167e
+@featureProjectsLimit =703f9727-852f-4621-aebb-64e6ab664da6
 @featureTeamMembers = YOUR_TEAM_MEMBERS_FEATURE_ID
 @featureCustomDomain = YOUR_CUSTOM_DOMAIN_FEATURE_ID
 
@@ -91,14 +108,7 @@ Content-Type: {{contentType}}
       }
     },
     {
-      "feature_id": "{{featureProjectsLimit}}",
-      "display_order": 2,
-      "config": {
-        "limit": 10
-      }
-    },
-    {
-      "feature_id": "{{featureTeamMembers}}",
+      "feature_id": "{{featurePremiumSupport}}",
       "display_order": 3,
       "config": {
         "limit": 3
@@ -188,6 +198,12 @@ Content-Type: {{contentType}}
       "amount_type": "fixed",
       "price_amount": 29900,
       "price_currency": "usd"
+    },
+    {
+      "amount_type": "fixed",
+      "price_amount": 49000,
+      "price_currency": "usd",
+      "recurring_interval": "year"
     }
   ],
   "features": [
@@ -208,17 +224,6 @@ Content-Type: {{contentType}}
       "config": {
         "limit": 999
       }
-    },
-    {
-      "feature_id": "{{featureTeamMembers}}",
-      "display_order": 4,
-      "config": {
-        "limit": 100
-      }
-    },
-    {
-      "feature_id": "{{featureCustomDomain}}",
-      "display_order": 5
     }
   ]
 }

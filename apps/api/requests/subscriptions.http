@@ -1,23 +1,41 @@
 ###############################################
+# STRIPE ENTITLEMENTS - SUBSCRIPTIONS
+###############################################
+#
+# Subscriptions sync Active Entitlements with Stripe:
+# - After creating subscription, feature_grants are created locally
+# - Active Entitlements are fetched from Stripe for the subscription
+# - feature_grants updated with stripe_active_entitlement_id
+# - Sync status tracked: stripe_synced_at, stripe_sync_status
+#
+# Webhook events keep entitlements in sync:
+# - entitlements.active_entitlement.created -> creates feature_grant
+# - entitlements.active_entitlement.updated -> updates feature_grant
+# - entitlements.active_entitlement.deleted -> revokes feature_grant
+#
+# Database views for monitoring:
+# - feature_grants_needing_sync: Grants not synced with Stripe
+# - stripe_sync_health: Overall sync health dashboard
+#
+###############################################
 # ENVIRONMENT VARIABLES
 ###############################################
 
 @baseUrl = http://localhost:3001
-@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlYmRhMzM0Yi0wMDU2LTRlNTQtYjYyMy1mYTQ0MDgyNWM0YTAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY3OTM4Njk0LCJpYXQiOjE3Njc5MzUwOTQsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY3NjQzMTIxfV0sInNlc3Npb25faWQiOiI3NGIxNWM3OS02MjE4LTRkNjUtYjVhYy1mODUzNmExZWU1ODgiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4nn9ITS2zpmOa1sGBzauGix2-cTIplRoCBWuaE1oGl7Ip2EpCmEv3eZU41fKWnbt3akwCsyyTTgI6vCc0eP10A
+@authToken = eyJhbGciOiJFUzI1NiIsImtpZCI6IjE0MmZmYzAxLTliMWMtNDIwZS1hZmY2LTQ5MzVjMWZlMjVjMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3h5aHJ4b2lmd3l1dmhoZmFyaW1pLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZWMxNjIzMC1lMGZkLTQ4MzctODFkNi01MGUwYzcyZDIwNWEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY4MTA2NzYzLCJpYXQiOjE3NjgxMDMxNjMsImVtYWlsIjoiYW5rdXNoazI1MDdAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJnb29nbGUiLCJwcm92aWRlcnMiOlsiZ29vZ2xlIl19LCJ1c2VyX21ldGFkYXRhIjp7ImF2YXRhcl91cmwiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKb0hPOW1jaklBYTRZUjQ0VXg0WjlSeEV2b3puOGZGYmdIcWxRd2NYM1RZOHFCel9vPXM5Ni1jIiwiZW1haWwiOiJhbmt1c2hrMjUwN0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQW5rdXNoIEt1bWFyIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkFua3VzaCBLdW1hciIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pvSE85bWNqSUFhNFlSNDRVeDRaOVJ4RXZvem44ZkZiZ0hxbFF3Y1gzVFk4cUJ6X289czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyIsInN1YiI6IjEwMjY1NjMwNTU1NTcxNjY3OTEwNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY4MDE5MTIzfV0sInNlc3Npb25faWQiOiJjNDA5ZTAzMC0zYzU2LTQyZTUtYjY1OS01Y2EwZWQ3M2NiZWIiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4JSUfUE9HQe7HEzshuLOqj9_6RR10fAVD9RJ11HsvJeHLYalwTvkdAG3DM0bQhPh7QedbBhLP1EDF3Jy7dBqFA
 @contentType = application/json
-@organizationId = a0596c99-9f33-4394-a7cd-b2339601c1ce
-
+@organizationId = 7eff31f5-6697-4764-9e6d-6239a7e0888e
 # TODO: Replace these with actual IDs from your database
 # To get these:
 # 1. Create a customer first (you need a Customers API endpoint or manually insert via SQL)
 # 2. Create products and prices using products.http
 # 3. Copy the IDs here
 
-@customerId = b57a6ed2-de2a-4160-99d8-b9134da12d67
+@customerId = 51df66ff-ef4d-4651-9d22-04cbc7d71c5a
 @productIdStarter = YOUR_STARTER_PRODUCT_ID
-@productIdPro = c8e130bf-9686-47d2-856e-e92ec747d372
+@productIdPro = 0fef21fc-7e54-40a9-b26b-6c6015fd8a84
 @priceIdStarterMonthly = YOUR_STARTER_PRICE_ID
-@priceIdProMonthly = f6afe51b-f328-44b8-a6cb-86c2fc8e3fd2
+@priceIdProMonthly = c3c1586b-cd17-4f8d-bc48-9340a5d53a13
 @priceIdProYearly = YOUR_PRO_YEARLY_PRICE_ID
 @subscriptionId = YOUR_SUBSCRIPTION_ID_HERE
 

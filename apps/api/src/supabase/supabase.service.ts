@@ -29,13 +29,6 @@ export class SupabaseService {
     return this.supabase;
   }
 
-  // Database query builder with proper typing
-  from<T extends keyof Database['public']['Tables']>(
-    table: T,
-  ): ReturnType<SupabaseClient<Database>['from']> {
-    return this.supabase.from(table);
-  }
-
   // Auth methods
   async getUserFromToken(token: string) {
     return this.supabase.auth.getUser(token);

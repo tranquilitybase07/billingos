@@ -141,6 +141,9 @@ export type Database = {
           id: string
           properties: Json | null
           revoked_at: string | null
+          stripe_active_entitlement_id: string | null
+          stripe_sync_status: string | null
+          stripe_synced_at: string | null
           subscription_id: string
           updated_at: string | null
         }
@@ -152,6 +155,9 @@ export type Database = {
           id?: string
           properties?: Json | null
           revoked_at?: string | null
+          stripe_active_entitlement_id?: string | null
+          stripe_sync_status?: string | null
+          stripe_synced_at?: string | null
           subscription_id: string
           updated_at?: string | null
         }
@@ -163,6 +169,9 @@ export type Database = {
           id?: string
           properties?: Json | null
           revoked_at?: string | null
+          stripe_active_entitlement_id?: string | null
+          stripe_sync_status?: string | null
+          stripe_synced_at?: string | null
           subscription_id?: string
           updated_at?: string | null
         }
@@ -179,6 +188,13 @@ export type Database = {
             columns: ["feature_id"]
             isOneToOne: false
             referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_grants_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_needing_sync"
             referencedColumns: ["id"]
           },
           {
@@ -199,6 +215,9 @@ export type Database = {
           name: string
           organization_id: string
           properties: Json | null
+          stripe_feature_id: string | null
+          stripe_sync_status: string | null
+          stripe_synced_at: string | null
           title: string
           type: string
           updated_at: string | null
@@ -211,6 +230,9 @@ export type Database = {
           name: string
           organization_id: string
           properties?: Json | null
+          stripe_feature_id?: string | null
+          stripe_sync_status?: string | null
+          stripe_synced_at?: string | null
           title: string
           type: string
           updated_at?: string | null
@@ -223,6 +245,9 @@ export type Database = {
           name?: string
           organization_id?: string
           properties?: Json | null
+          stripe_feature_id?: string | null
+          stripe_sync_status?: string | null
+          stripe_synced_at?: string | null
           title?: string
           type?: string
           updated_at?: string | null
@@ -342,6 +367,8 @@ export type Database = {
           display_order: number
           feature_id: string
           product_id: string
+          stripe_synced: boolean | null
+          stripe_synced_at: string | null
         }
         Insert: {
           config?: Json | null
@@ -349,6 +376,8 @@ export type Database = {
           display_order: number
           feature_id: string
           product_id: string
+          stripe_synced?: boolean | null
+          stripe_synced_at?: string | null
         }
         Update: {
           config?: Json | null
@@ -356,6 +385,8 @@ export type Database = {
           display_order?: number
           feature_id?: string
           product_id?: string
+          stripe_synced?: boolean | null
+          stripe_synced_at?: string | null
         }
         Relationships: [
           {
@@ -363,6 +394,13 @@ export type Database = {
             columns: ["feature_id"]
             isOneToOne: false
             referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_needing_sync"
             referencedColumns: ["id"]
           },
           {
@@ -464,6 +502,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_sync_events: {
+        Row: {
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          operation: string
+          organization_id: string
+          request_payload: Json | null
+          response_payload: Json | null
+          retry_count: number | null
+          status: string
+          stripe_object_id: string | null
+          triggered_at: string | null
+          triggered_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          operation: string
+          organization_id: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          retry_count?: number | null
+          status: string
+          stripe_object_id?: string | null
+          triggered_at?: string | null
+          triggered_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          operation?: string
+          organization_id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          retry_count?: number | null
+          status?: string
+          stripe_object_id?: string | null
+          triggered_at?: string | null
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_sync_events_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -606,6 +706,13 @@ export type Database = {
             columns: ["feature_id"]
             isOneToOne: false
             referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_records_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_needing_sync"
             referencedColumns: ["id"]
           },
           {
@@ -771,7 +878,122 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      feature_grants_needing_sync: {
+        Row: {
+          customer_id: string | null
+          feature_id: string | null
+          granted_at: string | null
+          id: string | null
+          organization_id: string | null
+          revoked_at: string | null
+          stripe_active_entitlement_id: string | null
+          stripe_customer_id: string | null
+          stripe_feature_id: string | null
+          stripe_sync_status: string | null
+          subscription_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_grants_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_grants_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_grants_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_needing_sync"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_grants_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      features_needing_sync: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+          organization_id: string | null
+          stripe_feature_id: string | null
+          stripe_sync_status: string | null
+          title: string | null
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          organization_id?: string | null
+          stripe_feature_id?: string | null
+          stripe_sync_status?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          organization_id?: string | null
+          stripe_feature_id?: string | null
+          stripe_sync_status?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "features_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_sync_health: {
+        Row: {
+          features_failed: number | null
+          features_synced: number | null
+          grants_failed: number | null
+          grants_synced: number | null
+          last_failure_at: string | null
+          last_sync_at: string | null
+          organization_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_sync_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_organization_admin: {
@@ -781,6 +1003,27 @@ export type Database = {
       is_organization_member: {
         Args: { org_id: string; user_id: string }
         Returns: boolean
+      }
+      log_stripe_sync_event: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_error_message?: string
+          p_operation: string
+          p_organization_id: string
+          p_status: string
+          p_stripe_object_id: string
+          p_triggered_by?: string
+        }
+        Returns: string
+      }
+      mark_feature_grant_synced: {
+        Args: { p_grant_id: string; p_stripe_entitlement_id: string }
+        Returns: undefined
+      }
+      mark_feature_synced: {
+        Args: { p_feature_id: string; p_stripe_feature_id: string }
+        Returns: undefined
       }
     }
     Enums: {

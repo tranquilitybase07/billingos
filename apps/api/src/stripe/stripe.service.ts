@@ -348,4 +348,293 @@ export class StripeService {
       stripeAccount: stripeAccountId,
     });
   }
+
+  // ================================================
+  // STRIPE ENTITLEMENTS API METHODS
+  // ================================================
+
+  /**
+   * Create an Entitlements Feature in Stripe
+   * https://docs.stripe.com/api/entitlements/feature/create
+   */
+  async createEntitlementFeature(params: {
+    name: string;
+    lookupKey: string;
+    metadata?: Stripe.MetadataParam;
+    stripeAccountId: string;
+  }): Promise<Stripe.Entitlements.Feature> {
+    this.logger.log(
+      `Creating Stripe Entitlement Feature: ${params.name} with lookup_key: ${params.lookupKey}`,
+    );
+
+    return await this.stripe.entitlements.features.create(
+      {
+        name: params.name,
+        lookup_key: params.lookupKey,
+        metadata: params.metadata,
+      },
+      {
+        stripeAccount: params.stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Retrieve an Entitlements Feature from Stripe
+   * https://docs.stripe.com/api/entitlements/feature/retrieve
+   */
+  async getEntitlementFeature(
+    featureId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Entitlements.Feature> {
+    return await this.stripe.entitlements.features.retrieve(featureId, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * List all Entitlements Features in Stripe Connect account
+   * https://docs.stripe.com/api/entitlements/feature/list
+   */
+  async listEntitlementFeatures(
+    stripeAccountId: string,
+    limit: number = 100,
+  ): Promise<Stripe.ApiList<Stripe.Entitlements.Feature>> {
+    return await this.stripe.entitlements.features.list(
+      { limit },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Update an Entitlements Feature in Stripe
+   * https://docs.stripe.com/api/entitlements/feature/update
+   */
+  async updateEntitlementFeature(
+    featureId: string,
+    params: {
+      name?: string;
+      metadata?: Stripe.MetadataParam;
+      stripeAccountId: string;
+    },
+  ): Promise<Stripe.Entitlements.Feature> {
+    this.logger.log(`Updating Stripe Entitlement Feature: ${featureId}`);
+
+    const updateParams: Stripe.Entitlements.FeatureUpdateParams = {};
+    if (params.name) updateParams.name = params.name;
+    if (params.metadata) updateParams.metadata = params.metadata;
+
+    return await this.stripe.entitlements.features.update(
+      featureId,
+      updateParams,
+      {
+        stripeAccount: params.stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Archive an Entitlements Feature in Stripe (soft delete)
+   * Features cannot be deleted, only archived
+   * https://docs.stripe.com/api/entitlements/feature/update
+   */
+  async archiveEntitlementFeature(
+    featureId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Entitlements.Feature> {
+    this.logger.log(`Archiving Stripe Entitlement Feature: ${featureId}`);
+
+    return await this.stripe.entitlements.features.update(
+      featureId,
+      {
+        active: false,
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Attach a Feature to a Stripe Product
+   * This creates the link between a product and its features
+   * Note: We use product metadata to track linked features since
+   * Stripe doesn't have a direct product-feature association in the API
+   * https://docs.stripe.com/api/products/update
+   */
+  /**
+   * Attach a Feature to a Stripe Product using the Product Features API
+   * This creates a proper product_feature link that Stripe uses to generate Active Entitlements
+   * https://docs.stripe.com/api/product-feature/attach
+   */
+  async attachFeatureToProduct(params: {
+    productId: string;
+    featureId: string;
+    stripeAccountId: string;
+  }): Promise<Stripe.ProductFeature> {
+    this.logger.log(
+      `Attaching Feature ${params.featureId} to Product ${params.productId} via Product Features API`,
+    );
+
+    // Use the correct API endpoint: POST /v1/products/{id}/features
+    return await this.stripe.products.createFeature(
+      params.productId,
+      {
+        entitlement_feature: params.featureId,
+      },
+      {
+        stripeAccount: params.stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * List all features attached to a product
+   * https://docs.stripe.com/api/product-feature/list
+   */
+  async listProductFeatures(
+    productId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.ApiList<Stripe.ProductFeature>> {
+    this.logger.log(`Listing features for product: ${productId}`);
+
+    return await this.stripe.products.listFeatures(
+      productId,
+      {},
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Detach a feature from a product
+   * https://docs.stripe.com/api/product-feature/detach
+   */
+  async detachFeatureFromProduct(
+    productId: string,
+    productFeatureId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.DeletedProductFeature> {
+    this.logger.log(
+      `Detaching ProductFeature ${productFeatureId} from Product ${productId}`,
+    );
+
+    return await this.stripe.products.deleteFeature(
+      productId,
+      productFeatureId,
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * List Active Entitlements for a customer
+   * Shows what features a customer currently has access to
+   * https://docs.stripe.com/api/entitlements/active_entitlement/list
+   */
+  async listActiveEntitlements(params: {
+    customerId: string;
+    stripeAccountId: string;
+    limit?: number;
+  }): Promise<Stripe.ApiList<Stripe.Entitlements.ActiveEntitlement>> {
+    this.logger.log(
+      `Listing Active Entitlements for customer: ${params.customerId}`,
+    );
+
+    return await this.stripe.entitlements.activeEntitlements.list(
+      {
+        customer: params.customerId,
+        limit: params.limit || 100,
+      },
+      {
+        stripeAccount: params.stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Get a specific Active Entitlement
+   * https://docs.stripe.com/api/entitlements/active_entitlement/retrieve
+   */
+  async getActiveEntitlement(
+    entitlementId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Entitlements.ActiveEntitlement> {
+    return await this.stripe.entitlements.activeEntitlements.retrieve(
+      entitlementId,
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
+   * Check if a customer has access to a specific feature
+   * This is a convenience method that lists active entitlements and checks for the feature
+   */
+  async hasFeatureAccess(params: {
+    customerId: string;
+    featureLookupKey: string;
+    stripeAccountId: string;
+  }): Promise<boolean> {
+    try {
+      const entitlements = await this.listActiveEntitlements({
+        customerId: params.customerId,
+        stripeAccountId: params.stripeAccountId,
+        limit: 100,
+      });
+
+      return entitlements.data.some(
+        (entitlement) =>
+          entitlement.feature &&
+          typeof entitlement.feature !== 'string' &&
+          entitlement.feature.lookup_key === params.featureLookupKey,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error checking feature access for customer ${params.customerId}: ${error.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Sync Active Entitlements from a Subscription
+   * After creating/updating a subscription, this fetches the resulting active entitlements
+   * Stripe automatically creates active entitlements based on the product's features
+   */
+  async syncActiveEntitlementsFromSubscription(params: {
+    subscriptionId: string;
+    customerId: string;
+    stripeAccountId: string;
+  }): Promise<Stripe.Entitlements.ActiveEntitlement[]> {
+    this.logger.log(
+      `Syncing Active Entitlements from subscription: ${params.subscriptionId}`,
+    );
+
+    // Retrieve the subscription to ensure it's active
+    const subscription = await this.getSubscription(
+      params.subscriptionId,
+      params.stripeAccountId,
+    );
+
+    if (!['active', 'trialing'].includes(subscription.status)) {
+      this.logger.warn(
+        `Subscription ${params.subscriptionId} is not active (status: ${subscription.status})`,
+      );
+      return [];
+    }
+
+    // List all active entitlements for the customer
+    const entitlements = await this.listActiveEntitlements({
+      customerId: params.customerId,
+      stripeAccountId: params.stripeAccountId,
+    });
+
+    return entitlements.data;
+  }
 }
