@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { apiServer } from '@/lib/api/server'
+import { apiServer, APIError } from '@/lib/api/server'
 import type { Organization } from '@/lib/api/types'
 
 /**
@@ -9,22 +9,29 @@ import type { Organization } from '@/lib/api/types'
 export default async function DashboardPage() {
   console.log('[Dashboard] Page component executing...')
 
-  const organizations = await apiServer.get<Organization[]>('/organizations')
+  try {
+    const organizations = await apiServer.get<Organization[]>('/organizations')
 
-  console.log('[Dashboard] Fetched organizations:', {
-    count: organizations?.length,
-    organizations: organizations?.map(org => ({ id: org.id, slug: org.slug, name: org.name }))
-  })
+    console.log('[Dashboard] Fetched organizations:', {
+      count: organizations?.length,
+      organizations: organizations?.map(org => ({ id: org.id, slug: org.slug, name: org.name }))
+    })
 
-  // No organizations? Redirect to create page
-  if (!organizations || organizations.length === 0) {
-    console.log('[Dashboard] No organizations found, redirecting to /dashboard/create')
+    // No organizations? Redirect to create page
+    if (!organizations || organizations.length === 0) {
+      console.log('[Dashboard] No organizations found, redirecting to /dashboard/create')
+      redirect('/dashboard/create')
+    }
+
+    // Has organizations? Redirect to first one
+    // TODO: Implement cookie-based "last visited org" tracking like Polar
+    const targetSlug = organizations[0].slug
+    console.log(`[Dashboard] User has ${organizations.length} org(s), redirecting to: /dashboard/${targetSlug}`)
+    redirect(`/dashboard/${targetSlug}`)
+  } catch (error) {
+    // If backend is not running or endpoint doesn't exist, redirect to create page
+    // This allows frontend development without backend
+    console.log('[Dashboard] API error, redirecting to create page:', error instanceof APIError ? error.message : 'Unknown error')
     redirect('/dashboard/create')
   }
-
-  // Has organizations? Redirect to first one
-  // TODO: Implement cookie-based "last visited org" tracking like Polar
-  const targetSlug = organizations[0].slug
-  console.log(`[Dashboard] User has ${organizations.length} org(s), redirecting to: /dashboard/${targetSlug}`)
-  redirect(`/dashboard/${targetSlug}`)
 }
