@@ -23,17 +23,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ChevronDown, Plus, Building2 } from 'lucide-react'
+import { ChevronDown, Plus, Building2, LogOut } from 'lucide-react'
 import { Logo } from '@/components/branding/Logo'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useGeneralRoutes, useOrganizationRoutes } from '@/components/Dashboard/navigation'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 export const DashboardSidebar = () => {
   const { organization, organizations } = useOrganization()
   const { state } = useSidebar()
   const router = useRouter()
   const isCollapsed = state === 'collapsed'
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   const generalRoutes = useGeneralRoutes(organization)
   const organizationRoutes = useOrganizationRoutes(organization)
@@ -155,6 +163,14 @@ export const DashboardSidebar = () => {
                 >
                   <Plus className="h-4 w-4" />
                   <span>Create Organization</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 text-destructive focus:text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

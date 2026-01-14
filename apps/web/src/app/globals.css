@@ -87,6 +87,10 @@
   --color-polar-900: hsl(233, 5%, 6.5%);
   --color-polar-950: hsl(233, 5%, 3%);
 
+  /* Base Colors */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
   /* shadcn/ui Color Aliases */
   --color-border: var(--border);
   --color-input: var(--input);
@@ -107,6 +111,14 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
   /* Custom Border Radius */
   --radius-lg: var(--radius);
@@ -142,11 +154,17 @@
     --background: var(--color-gray-50);
     --foreground: var(--color-gray-900);
 
-    --card: white;
+    --card: var(--color-white);
     --card-foreground: var(--color-gray-900);
 
-    --popover: white;
+    --popover: var(--color-white);
     --popover-foreground: hsl(224 71.4% 4.1%);
+
+    --sidebar-background: var(--color-gray-100);
+    --sidebar-foreground: var(--color-gray-900);
+    --sidebar-primary: var(--color-blue);
+    --sidebar-primary-foreground: var(--color-gray-50);
+    --sidebar-border: var(--color-gray-300);
 
     --primary: var(--color-blue);
     --primary-foreground: var(--color-gray-50);
@@ -158,7 +176,7 @@
     --muted-foreground: var(--color-gray-500);
 
     --accent: var(--color-blue);
-    --accent-foreground: white;
+    --accent-foreground: var(--color-white);
 
     --destructive: var(--color-red-500);
     --destructive-foreground: var(--color-red-600);
@@ -184,6 +202,12 @@
 
     --popover: var(--color-polar-900);
     --popover-foreground: var(--color-polar-50);
+
+    --sidebar-background: var(--color-polar-950);
+    --sidebar-foreground: var(--color-polar-50);
+    --sidebar-primary: var(--color-blue);
+    --sidebar-primary-foreground: var(--color-polar-50);
+    --sidebar-border: var(--color-polar-700);
 
     --primary: var(--color-blue);
     --primary-foreground: var(--color-polar-50);
@@ -229,5 +253,57 @@
 
   body {
     color: var(--foreground);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  img[src$='#gh-dark-mode-only'],
+  img[src$='#only-dark'] {
+    display: none;
+  }
+}
+
+/* Polar Background Gradient */
+
+#polar-bg-gradient {
+  height: 100vh;
+  width: 100vw;
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    #fcf0ec 0%,
+    rgba(252, 240, 236, 0) 100%
+  );
+  background-size: 1344px 1284px;
+  background-position-y: -405px;
+  background-position-x: -405px;
+  background-repeat: no-repeat;
+
+  pointer-events: none;
+
+  --token-de3bbe02-efef-4dfe-a362-f6d5715de8ac: rgb(209, 223, 242);
+  --token-58f5305f-65b1-4075-86f8-f9ee69a3e917: #fefdf9;
+  --token-ec1cd941-31b3-45e1-ad4c-e85325e1620f: rgb(70, 103, 202);
+  --token-8c1bdbf3-9c17-469a-9d0d-53b702bebc4c: rgb(114, 115, 116);
+  --token-6d46fd94-9194-4d41-ac1f-b299fb0439bf: #303f78;
+  --token-7ea07a0f-ce97-4e5e-8a32-a0ab2739dff4: rgb(70, 103, 202);
+  --token-60634839-9e8c-4342-af21-7bacb8b78d0e: rgb(165, 194, 235);
+  --framer-aspect-ratio-supported: auto;
+  box-sizing: border-box;
+  -webkit-font-smoothing: inherit;
+  mix-blend-mode: multiply;
+  overflow: hidden;
+}
+
+@media (max-width: 420px) {
+  #polar-bg-gradient {
+    left: calc(22.883597883597908% - 500px);
+    height: 140vh;
+    width: 200vw;
   }
 }

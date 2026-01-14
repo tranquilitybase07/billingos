@@ -58,12 +58,12 @@ export const DashboardBody = ({
   const pageTitle = title ?? currentSubRoute?.title ?? currentRoute?.title
 
   return (
-    <div className="flex h-full w-full flex-row gap-4 p-4 md:p-6">
+    <div className="flex h-full w-full flex-row gap-4 p-4 md:p-6 bg-white md:bg-gray-100 dark:bg-transparent md:dark:bg-polar-950">
       {/* Main content */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div
           className={cn(
-            'flex h-full w-full flex-col rounded-lg border bg-card shadow-sm',
+            'flex h-full w-full flex-col rounded-lg border bg-card dark:bg-polar-900 dark:border-polar-800 shadow-sm',
             wrapperClassName,
             !wide && 'mx-auto max-w-7xl',
           )}
@@ -92,7 +92,7 @@ export const DashboardBody = ({
       {contextView && (
         <motion.div
           className={cn(
-            'hidden w-full flex-col rounded-lg border bg-card shadow-sm md:flex md:max-w-xs xl:max-w-sm',
+            'hidden w-full flex-col rounded-lg border bg-card dark:bg-polar-900 dark:border-polar-800 shadow-sm md:flex md:max-w-xs xl:max-w-sm',
             contextViewClassName,
           )}
           initial={{ opacity: 0, x: 20 }}
