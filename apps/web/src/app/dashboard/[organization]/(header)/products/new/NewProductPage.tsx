@@ -5,21 +5,19 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import { useOrganization } from '@/providers/OrganizationProvider'
+import { useProductForm } from '@/hooks/useProductForm'
+import { useCreateProduct } from '@/hooks/queries/products'
+import { useFeatures } from '@/hooks/queries/features'
+import { PricingEngineSection } from '@/components/Products/PricingEngineSection'
+import { FeatureSelector } from '@/components/Products/FeatureSelector'
+import { LivePreviewCard } from '@/components/Products/LivePreviewCard'
 
 interface NewProductPageProps {
   organizationSlug: string
@@ -28,59 +26,69 @@ interface NewProductPageProps {
 export default function NewProductPage({ organizationSlug }: NewProductPageProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { organization } = useOrganization()
 
-  // Form state
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [priceAmount, setPriceAmount] = useState('')
-  const [priceCurrency, setPriceCurrency] = useState('usd')
-  const [recurringInterval, setRecurringInterval] = useState<string>('one_time')
-  const [isRecurring, setIsRecurring] = useState(false)
+  // Form state management
+  const form = useProductForm(organization.id)
+
+  // Fetch available features
+  const { data: features = [], isLoading: isFeaturesLoading } = useFeatures(organization.id)
+
+  // Create product mutation
+  const createProduct = useCreateProduct()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
 
-    // TODO: Replace with actual API call to create product
+    if (!form.isValid()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      })
+      return
+    }
+
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const payload = form.buildPayload()
+      const product = await createProduct.mutateAsync(payload)
 
       toast({
         title: 'Product Created',
-        description: `Product "${name}" was created successfully`,
+        description: `Product "${form.name}" was created successfully and published to Stripe`,
       })
 
       router.push(`/dashboard/${organizationSlug}/products`)
-    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to create product',
+        description: error?.message || 'Failed to create product',
         variant: 'destructive',
       })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
   return (
-    <DashboardBody>
-      <div className="mx-auto w-full max-w-4xl space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Link href={`/dashboard/${organizationSlug}/products`}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Create Product</h1>
-            <p className="text-muted-foreground">
-              Create a new product to sell to your customers
-            </p>
-          </div>
+    <DashboardBody title='Create Product' wide>
+      {/* Header */}
+      {/* <div className="mb-6 flex items-center gap-4">
+        <Link href={`/dashboard/${organizationSlug}/products`}>
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold tracking-tight">Create Product</h1>
+          <p className="text-muted-foreground">
+            Configure your product and see a live preview
+          </p>
         </div>
+      </div> */}
 
+      {/* Split View: 70/30 Layout */}
+      <div className="grid grid-cols-2 gap-8">
+        {/* Left Column: Configuration Forms (70%) */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
           <Card>
@@ -96,8 +104,8 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 <Input
                   id="name"
                   placeholder="Premium Subscription"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={form.name}
+                  onChange={(e) => form.setName(e.target.value)}
                   required
                 />
               </div>
@@ -106,151 +114,98 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  placeholder="Describe your product..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Perfect for growing teams who need advanced features and priority support."
+                  value={form.description}
+                  onChange={(e) => form.setDescription(e.target.value)}
                   rows={4}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Markdown formatting is supported
+                  This will be shown to customers on the pricing page
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Pricing */}
+          {/* Pricing Engine */}
           <Card>
             <CardHeader>
-              <CardTitle>Pricing</CardTitle>
-              <CardDescription>
-                Set the price for your product
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="recurring"
-                  checked={isRecurring}
-                  onCheckedChange={(checked) => {
-                    setIsRecurring(checked === true)
-                    if (!checked) {
-                      setRecurringInterval('one_time')
-                    } else {
-                      setRecurringInterval('month')
-                    }
-                  }}
-                />
-                <div className="space-y-0.5">
-                  <Label htmlFor="recurring" className="cursor-pointer">
-                    Recurring Product
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Charge customers on a recurring basis
-                  </p>
-                </div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <CardTitle>Pricing Engine</CardTitle>
               </div>
-
-              <Separator />
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price Amount *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    placeholder="29.99"
-                    value={priceAmount}
-                    onChange={(e) => setPriceAmount(e.target.value)}
-                    step="0.01"
-                    min="0"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select value={priceCurrency} onValueChange={setPriceCurrency}>
-                    <SelectTrigger id="currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="usd">USD - US Dollar</SelectItem>
-                      <SelectItem value="eur">EUR - Euro</SelectItem>
-                      <SelectItem value="gbp">GBP - British Pound</SelectItem>
-                      <SelectItem value="cad">CAD - Canadian Dollar</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {isRecurring && (
-                <div className="space-y-2">
-                  <Label htmlFor="interval">Billing Interval</Label>
-                  <Select
-                    value={recurringInterval}
-                    onValueChange={setRecurringInterval}
-                  >
-                    <SelectTrigger id="interval">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="day">Daily</SelectItem>
-                      <SelectItem value="week">Weekly</SelectItem>
-                      <SelectItem value="month">Monthly</SelectItem>
-                      <SelectItem value="year">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Media (Placeholder) */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Media</CardTitle>
               <CardDescription>
-                Add images or files to your product
+                Configure pricing, billing intervals, and free trials
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25">
-                <p className="text-sm text-muted-foreground">
-                  Media upload coming soon
-                </p>
-              </div>
+              <PricingEngineSection
+                prices={form.prices}
+                onPricesChange={form.setPrices}
+                trialDays={form.trialDays}
+                onTrialDaysChange={form.setTrialDays}
+                currency={form.currency}
+                onCurrencyChange={form.setCurrency}
+              />
             </CardContent>
           </Card>
 
-          {/* Benefits (Placeholder) */}
+          {/* Features & Entitlements */}
           <Card>
             <CardHeader>
-              <CardTitle>Benefits</CardTitle>
+              <CardTitle>Features & Entitlements</CardTitle>
               <CardDescription>
-                Select benefits that come with this product
+                Select features included in this product and configure limits
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-32 items-center justify-center rounded-lg border border-muted">
-                <p className="text-sm text-muted-foreground">
-                  No benefits available. Create benefits first.
-                </p>
-              </div>
+              <FeatureSelector
+                availableFeatures={features}
+                selectedFeatures={form.features}
+                onFeaturesChange={form.setFeatures}
+                isLoading={isFeaturesLoading}
+              />
             </CardContent>
           </Card>
 
           {/* Actions */}
-          <div className="flex items-center justify-between border-t pt-6">
+          <div className="flex items-center justify-between rounded-lg border-t bg-muted/30 p-6">
             <Link href={`/dashboard/${organizationSlug}/products`}>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={createProduct.isPending}>
                 Cancel
               </Button>
             </Link>
-            <Button type="submit" disabled={isSubmitting || !name || !priceAmount}>
-              {isSubmitting ? 'Creating...' : 'Create Product'}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={createProduct.isPending || !form.isValid()}
+              className="min-w-48"
+            >
+              {createProduct.isPending ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Publish to Stripe
+                </>
+              )}
             </Button>
           </div>
         </form>
+
+        {/* Right Column: Live Preview (30%) */}
+        <div className="hidden xl:block">
+          <LivePreviewCard
+            productName={form.name}
+            description={form.description}
+            prices={form.prices}
+            features={form.features}
+            currency={form.currency}
+            trialDays={form.trialDays}
+          />
+        </div>
       </div>
     </DashboardBody>
   )

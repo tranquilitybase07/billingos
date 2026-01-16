@@ -48,7 +48,7 @@ export const DashboardSidebar = () => {
   const dashboardRoutes = [...generalRoutes, ...organizationRoutes]
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
+    <Sidebar className="dark:bg-black" variant="inset" collapsible="icon">
       {/* Header with logo and collapse trigger */}
       <SidebarHeader className="border-sidebar-border flex flex-row items-center justify-between border-b px-4 py-3">
         <Link href={`/dashboard/${organization.slug}`} className="flex items-center gap-2">
