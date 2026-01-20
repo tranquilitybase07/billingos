@@ -80,7 +80,7 @@ const Paginator = ({
         // If the pageItem is a DOT, render the DOTS unicode character
         if (typeof pageNumber !== 'number') {
           return (
-            <div className="dark:text-polar-400 text-gray-400" key={idx}>
+            <div className="text-muted-foreground" key={idx}>
               &#8230;
             </div>
           )

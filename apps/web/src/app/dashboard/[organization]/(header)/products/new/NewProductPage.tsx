@@ -87,7 +87,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
       </div> */}
 
       {/* Split View: 70/30 Layout */}
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-[60%_40%] gap-8">
         {/* Left Column: Configuration Forms (70%) */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
@@ -130,7 +130,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
+
                 <CardTitle>Pricing Engine</CardTitle>
               </div>
               <CardDescription>

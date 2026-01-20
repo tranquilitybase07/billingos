@@ -58,7 +58,7 @@ export const DashboardBody = ({
   const pageTitle = title ?? currentSubRoute?.title ?? currentRoute?.title
 
   return (
-    <div className="flex h-full w-full flex-row gap-4 p-4 dark:bg-black">
+    <div className="flex h-full w-full flex-row gap-4 p-4">
       {/* Main content */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div

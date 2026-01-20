@@ -228,7 +228,7 @@ const MoneyInput = (props: Props) => {
       id={id}
       name={name}
       className={twMerge(
-        'dark:placeholder:text-polar-500 block w-full px-4 pl-8 text-base font-normal placeholder:text-gray-400',
+        'block w-full px-4 pl-8 text-base font-normal placeholder:text-muted-foreground',
         props.className ?? '',
       )}
       value={internalValue}

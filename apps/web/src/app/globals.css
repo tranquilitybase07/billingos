@@ -15,8 +15,8 @@
   --shadow-3xl: 0 0 50px rgba(0 0 0 / 0.02), 0 0 50px rgba(0 0 0 / 0.04);
 
   /* Fonts */
-  --font-sans: var(--font-geist-sans), sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* Custom Text Size */
   --text-xxs: 0.65rem;
@@ -74,18 +74,18 @@
   --color-gray-900: oklch(0.21 0.034 264.665);
   --color-gray-950: oklch(0.13 0.028 261.692);
 
-  /* Polar Color Scale (HSL - Custom Dark Mode Palette) */
-  --color-polar-50: hsl(233, 5%, 85%);
-  --color-polar-100: hsl(233, 5%, 79%);
-  --color-polar-200: hsl(233, 5%, 68%);
-  --color-polar-300: hsl(233, 5%, 62%);
-  --color-polar-400: hsl(233, 5%, 52%);
-  --color-polar-500: hsl(233, 5%, 46%);
-  --color-polar-600: hsl(233, 5%, 24%);
-  --color-polar-700: hsl(233, 5%, 12%);
-  --color-polar-800: hsl(233, 5%, 9.5%);
-  --color-polar-900: hsl(233, 5%, 6.5%);
-  --color-polar-950: hsl(233, 5%, 3%);
+  /* BillingOS Color Scale (HSL - Custom Dark Mode Palette) */
+  --color-dark-50: hsl(233, 5%, 85%);
+  --color-dark-100: hsl(233, 5%, 79%);
+  --color-dark-200: hsl(233, 5%, 68%);
+  --color-dark-300: hsl(233, 5%, 62%);
+  --color-dark-400: hsl(233, 5%, 52%);
+  --color-dark-500: hsl(233, 5%, 46%);
+  --color-dark-600: hsl(233, 5%, 24%);
+  --color-dark-700: hsl(233, 5%, 12%);
+  --color-dark-800: hsl(233, 5%, 9.5%);
+  --color-dark-900: hsl(233, 5%, 6.5%);
+  --color-dark-950: hsl(233, 5%, 3%);
 
   /* Base Colors */
   --color-white: #ffffff;
@@ -186,6 +186,27 @@
     --ring: var(--color-gray-200);
     --radius: 0.6rem;
 
+    /* Hover states */
+    --hover: var(--color-gray-200);
+    --hover-foreground: var(--color-gray-900);
+
+    /* Info/Success/Warning states */
+    --info: var(--color-blue-50);
+    --info-foreground: var(--color-blue-500);
+    --info-border: var(--color-blue-100);
+
+    --success: var(--color-green-50);
+    --success-foreground: var(--color-green-600);
+    --success-border: var(--color-green-100);
+
+    --warning: var(--color-gray-50);
+    --warning-foreground: var(--color-gray-600);
+    --warning-border: var(--color-gray-200);
+
+    /* Destructive variants */
+    --destructive-light: var(--color-red-50);
+    --destructive-border: var(--color-red-100);
+
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -194,39 +215,60 @@
   }
 
   :root.dark {
-    --background: var(--color-polar-800);
-    --foreground: var(--color-polar-500);
+    --background: var(--color-dark-800);
+    --foreground: var(--color-dark-500);
 
-    --card: var(--color-polar-800);
-    --card-foreground: var(--color-polar-50);
+    --card: var(--color-dark-800);
+    --card-foreground: var(--color-dark-50);
 
-    --popover: var(--color-polar-900);
-    --popover-foreground: var(--color-polar-50);
+    --popover: var(--color-dark-900);
+    --popover-foreground: var(--color-dark-50);
 
-    --sidebar-background: var(--color-polar-950);
-    --sidebar-foreground: var(--color-polar-50);
+    --sidebar-background: var(--color-dark-950);
+    --sidebar-foreground: var(--color-dark-50);
     --sidebar-primary: var(--color-blue);
-    --sidebar-primary-foreground: var(--color-polar-50);
-    --sidebar-border: var(--color-polar-700);
+    --sidebar-primary-foreground: var(--color-dark-50);
+    --sidebar-border: var(--color-dark-700);
 
     --primary: var(--color-blue);
-    --primary-foreground: var(--color-polar-50);
+    --primary-foreground: var(--color-dark-50);
 
-    --secondary: var(--color-polar-900);
-    --secondary-foreground: var(--color-polar-50);
+    --secondary: var(--color-dark-900);
+    --secondary-foreground: var(--color-dark-50);
 
-    --muted: var(--color-polar-700);
-    --muted-foreground: var(--color-polar-500);
+    --muted: var(--color-dark-700);
+    --muted-foreground: var(--color-dark-500);
 
     --accent: var(--color-blue);
-    --accent-foreground: var(--color-polar-50);
+    --accent-foreground: var(--color-dark-50);
 
     --destructive: var(--color-red-500);
     --destructive-foreground: var(--color-red-500);
 
-    --border: var(--color-polar-700);
-    --input: var(--color-polar-700);
-    --ring: var(--color-polar-700);
+    --border: var(--color-dark-700);
+    --input: var(--color-dark-700);
+    --ring: var(--color-dark-700);
+
+    /* Hover states */
+    --hover: var(--color-dark-700);
+    --hover-foreground: var(--color-dark-50);
+
+    /* Info/Success/Warning states */
+    --info: var(--color-blue-950);
+    --info-foreground: var(--color-blue-400);
+    --info-border: var(--color-blue-900);
+
+    --success: var(--color-green-950);
+    --success-foreground: var(--color-green-400);
+    --success-border: var(--color-green-900);
+
+    --warning: var(--color-dark-950);
+    --warning-foreground: var(--color-dark-400);
+    --warning-border: var(--color-dark-700);
+
+    /* Destructive variants */
+    --destructive-light: var(--color-red-950);
+    --destructive-border: var(--color-red-900);
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -263,9 +305,9 @@
   }
 }
 
-/* Polar Background Gradient */
+/* BillingOS Background Gradient */
 
-#polar-bg-gradient {
+#billingos-bg-gradient {
   height: 100vh;
   width: 100vw;
 
@@ -301,7 +343,7 @@
 }
 
 @media (max-width: 420px) {
-  #polar-bg-gradient {
+  #billingos-bg-gradient {
     left: calc(22.883597883597908% - 500px);
     height: 140vh;
     width: 200vw;

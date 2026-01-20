@@ -92,7 +92,7 @@ export function Combobox<T>({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'dark:bg-polar-800 dark:hover:bg-polar-700 dark:hover:border-polar-700 dark:border-polar-700 flex w-full flex-row justify-between gap-x-2 rounded-xl border border-gray-200 bg-white px-3 font-normal shadow-xs transition-colors hover:border-gray-300 hover:bg-white',
+            'bg-card hover:bg-hover hover:border-border border-input flex w-full flex-row justify-between gap-x-2 rounded-xl border px-3 font-normal shadow-xs transition-colors',
             selectedItem
               ? 'text-foreground hover:text-foreground'
               : 'text-foreground/50 hover:text-foreground/50',

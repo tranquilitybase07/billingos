@@ -32,8 +32,8 @@ export function LivePreviewCard({
   const hasMultiplePrices = prices.length > 1
   const [selectedInterval, setSelectedInterval] = useState<string>(
     prices.find((p) => p.recurring_interval === 'month')?.recurring_interval ||
-      prices[0]?.recurring_interval ||
-      'month'
+    prices[0]?.recurring_interval ||
+    'month'
   )
 
   const currentPrice = prices.find((p) => p.recurring_interval === selectedInterval) || prices[0]
@@ -104,7 +104,7 @@ export function LivePreviewCard({
           {/* Price Display */}
           <div className="space-y-2">
             <div className="flex items-baseline gap-1">
-              <span className="text-5xl font-bold tracking-tight">
+              <span className="text-4xl font-bold tracking-tight">
                 {currency.toUpperCase()} {formatPrice(currentPrice?.price_amount)}
               </span>
               {currentPrice?.recurring_interval && (
