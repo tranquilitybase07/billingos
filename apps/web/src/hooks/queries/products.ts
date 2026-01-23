@@ -51,6 +51,11 @@ export interface UseProductsOptions {
   includeArchived?: boolean
   includeFeatures?: boolean
   includePrices?: boolean
+  query?: string
+  page?: number
+  limit?: number
+  sorting?: string | string[]
+  is_archived?: boolean | null
 }
 
 /**

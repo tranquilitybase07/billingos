@@ -163,6 +163,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 selectedFeatures={form.features}
                 onFeaturesChange={form.setFeatures}
                 isLoading={isFeaturesLoading}
+                organizationId={organization.id}
               />
             </CardContent>
           </Card>

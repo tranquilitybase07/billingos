@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, X, GripVertical, Check } from 'lucide-react'
+import { Plus, X, GripVertical, Check, Sparkles } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -41,8 +41,12 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
+import { CreateFeatureDialog } from '@/components/Features/CreateFeatureDialog'
+import { FeatureTypeIcon } from '@/components/Features/FeatureTypeIcon'
+import type { Feature as FeatureFromAPI } from '@/hooks/queries/features'
 
 export type FeatureType = 'boolean_flag' | 'usage_quota' | 'numeric_limit'
 
@@ -71,6 +75,7 @@ interface FeatureSelectorProps {
   selectedFeatures: SelectedFeature[]
   onFeaturesChange: (features: SelectedFeature[]) => void
   isLoading?: boolean
+  organizationId: string
 }
 
 // Sortable Feature Item Component
@@ -177,8 +182,10 @@ export function FeatureSelector({
   selectedFeatures,
   onFeaturesChange,
   isLoading = false,
+  organizationId,
 }: FeatureSelectorProps) {
   const [open, setOpen] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -199,6 +206,18 @@ export function FeatureSelector({
     }
     onFeaturesChange([...selectedFeatures, newFeature])
     setOpen(false)
+  }
+
+  const handleFeatureCreated = (newFeature: FeatureFromAPI) => {
+    // Auto-add the newly created feature to the selection
+    handleAddFeature({
+      id: newFeature.id,
+      name: newFeature.name,
+      title: newFeature.title,
+      description: newFeature.description,
+      type: newFeature.type,
+    })
+    setCreateDialogOpen(false)
   }
 
   const handleRemoveFeature = (featureId: string) => {
@@ -260,8 +279,45 @@ export function FeatureSelector({
           <Command>
             <CommandInput placeholder="Search features..." />
             <CommandList>
-              <CommandEmpty>No features found.</CommandEmpty>
+              <CommandEmpty>
+                <div className="flex flex-col items-center gap-2 py-6">
+                  <p className="text-sm text-muted-foreground">No features found.</p>
+                  <button
+                    onClick={() => {
+                      setOpen(false)
+                      setCreateDialogOpen(true)
+                    }}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Create a new feature
+                  </button>
+                </div>
+              </CommandEmpty>
               <CommandGroup>
+                {/* Create New Feature Button */}
+                <CommandItem
+                  onSelect={() => {
+                    setOpen(false)
+                    setCreateDialogOpen(true)
+                  }}
+                  className="cursor-pointer"
+                >
+                  <div className="flex w-full items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="font-medium">Create New Feature</div>
+                      <div className="text-xs text-muted-foreground">
+                        Build a custom feature with templates
+                      </div>
+                    </div>
+                  </div>
+                </CommandItem>
+
+                {availableToAdd.length > 0 && <CommandSeparator />}
+
+                {/* Existing Features */}
                 {availableToAdd.map((feature) => (
                   <CommandItem
                     key={feature.id}
@@ -269,15 +325,15 @@ export function FeatureSelector({
                     onSelect={() => handleAddFeature(feature)}
                     className="cursor-pointer"
                   >
-                    <div className="flex flex-col gap-1">
-                      <div className="font-medium">{feature.title}</div>
-                      {feature.description && (
-                        <div className="text-xs text-muted-foreground">
-                          {feature.description}
-                        </div>
-                      )}
-                      <div className="text-xs text-muted-foreground">
-                        Type: {feature.type.replace('_', ' ')}
+                    <div className="flex w-full items-center gap-2">
+                      <FeatureTypeIcon type={feature.type} className="h-8 w-8" />
+                      <div className="flex flex-col gap-1">
+                        <div className="font-medium">{feature.title}</div>
+                        {feature.description && (
+                          <div className="text-xs text-muted-foreground">
+                            {feature.description}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CommandItem>
@@ -322,12 +378,24 @@ export function FeatureSelector({
       )}
 
       {selectedFeatures.length === 0 && (
-        <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed">
-          <p className="text-sm text-muted-foreground">
-            No features added yet. Click "Add Feature" to get started.
-          </p>
+        <div className="flex h-32 flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed">
+          <Sparkles className="h-8 w-8 text-muted-foreground/50" />
+          <div className="text-center">
+            <p className="text-sm font-medium">No features added yet</p>
+            <p className="text-xs text-muted-foreground">
+              Click "Add Feature" to get started
+            </p>
+          </div>
         </div>
       )}
+
+      {/* Create Feature Dialog */}
+      <CreateFeatureDialog
+        organizationId={organizationId}
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onFeatureCreated={handleFeatureCreated}
+      />
     </div>
   )
 }

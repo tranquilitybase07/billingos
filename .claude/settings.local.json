@@ -15,7 +15,10 @@
       "Bash(cat:*)",
       "Bash(ls:*)",
       "Bash(pnpm list:*)",
-      "Bash(npx shadcn@latest add:*)"
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(find:*)",
+      "Bash(xargs:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
