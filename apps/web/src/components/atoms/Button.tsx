@@ -1,9 +1,9 @@
-import { ButtonProps, Button as ShadcnButton } from '@/components/ui/button'
-import { cva } from 'class-variance-authority'
+import { Button as ShadcnButton } from '@/components/ui/button'
+import { cva, type VariantProps } from 'class-variance-authority'
 import React from 'react'
 import { twMerge } from 'tailwind-merge'
 
-const buttonVariants = cva(
+const customButtonVariants = cva(
   'relative font-normal inline-flex items-center cursor-pointer font-medium select-none justify-center rounded-xl text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap',
   {
     variants: {
@@ -36,6 +36,10 @@ const buttonVariants = cva(
   },
 )
 
+type ButtonProps = React.ComponentProps<'button'> & VariantProps<typeof customButtonVariants> & {
+  asChild?: boolean
+}
+
 const Button = ({
   ref,
   className,
@@ -57,7 +61,7 @@ const Button = ({
   return (
     <ShadcnButton
       className={twMerge(
-        buttonVariants({ variant, size, className }),
+        customButtonVariants({ variant, size, className }),
         fullWidth ? 'w-full' : '',
       )}
       ref={ref}
@@ -85,7 +89,7 @@ const Button = ({
   )
 }
 
-Button.displayName = ShadcnButton.displayName
+Button.displayName = 'Button'
 
 export default Button
 
@@ -135,7 +139,7 @@ export const RawButton = ({
 }) => {
   return (
     <ShadcnButton
-      className={twMerge(buttonVariants({ variant, size, className }))}
+      className={twMerge(customButtonVariants({ variant, size, className }))}
       ref={ref}
       {...props}
     >

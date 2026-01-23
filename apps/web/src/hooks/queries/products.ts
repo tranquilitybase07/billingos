@@ -4,14 +4,15 @@ import type { ProductFormData } from '@/hooks/useProductForm'
 
 export interface ProductPrice {
   id: string
-  product_id: string
-  amount_type: 'fixed' | 'free'
+  product_id?: string
+  amount_type: 'fixed' | 'custom' | 'free' | 'metered_unit' | 'seat_based'
+  type: 'one_time' | 'recurring'
   price_amount?: number
-  price_currency: string
-  recurring_interval?: string
+  price_currency?: string
+  recurring_interval?: 'day' | 'week' | 'month' | 'year'
   recurring_interval_count?: number
   stripe_price_id?: string
-  created_at: string
+  created_at?: string
 }
 
 export interface ProductFeature {
@@ -32,19 +33,33 @@ export interface ProductFeature {
 
 export interface Product {
   id: string
-  organization_id: string
+  organization_id?: string
   name: string
   description?: string
-  recurring_interval: string
-  recurring_interval_count: number
-  trial_days: number
+  recurring_interval?: 'day' | 'week' | 'month' | 'year'
+  recurring_interval_count?: number
+  trial_days?: number
   stripe_product_id?: string
   is_archived: boolean
   created_at: string
-  updated_at: string
-  prices?: ProductPrice[]
-  features?: ProductFeature[]
-  metadata?: Record<string, any>
+  updated_at?: string
+  prices: ProductPrice[]
+  features: ProductFeature[]
+  metadata: Record<string, any>
+  medias: Array<{ id: string; public_url: string }>
+  modified_at?: string
+  // For compatibility with utils/product.ts
+  is_recurring?: boolean
+}
+
+export interface PaginatedResponse<T> {
+  items: T[]
+  pagination: {
+    total_count: number
+    page: number
+    page_size: number
+    total_pages: number
+  }
 }
 
 export interface UseProductsOptions {
@@ -72,12 +87,87 @@ export const useProducts = (
 
       const params = new URLSearchParams({
         organization_id: organizationId,
-        include_archived: String(options.includeArchived ?? false),
+        include_archived: String(options.is_archived !== false),
         include_features: String(options.includeFeatures ?? true),
         include_prices: String(options.includePrices ?? true),
       })
 
-      return api.get<Product[]>(`/products?${params.toString()}`)
+      // Backend returns Product[], transform to paginated response for compatibility
+      const products = await api.get<Product[]>(`/products?${params.toString()}`)
+
+      // Ensure all products have required fields with defaults
+      const normalizedProducts = products.map(p => ({
+        ...p,
+        prices: (p.prices ?? []).map(price => ({
+          ...price,
+          type: (price.recurring_interval ? 'recurring' : 'one_time') as 'one_time' | 'recurring',
+        })),
+        features: p.features ?? [],
+        medias: p.medias ?? [],
+        metadata: p.metadata ?? {},
+      }))
+
+      // Apply client-side filtering and pagination since backend doesn't support it yet
+      let filtered = normalizedProducts
+
+      // Filter by archived status
+      if (options.is_archived === false) {
+        filtered = filtered.filter(p => !p.is_archived)
+      } else if (options.is_archived === true) {
+        filtered = filtered.filter(p => p.is_archived)
+      }
+
+      // Filter by search query
+      if (options.query) {
+        const query = options.query.toLowerCase()
+        filtered = filtered.filter(p =>
+          p.name.toLowerCase().includes(query) ||
+          p.description?.toLowerCase().includes(query)
+        )
+      }
+
+      // Apply sorting
+      if (options.sorting) {
+        const sortStr = Array.isArray(options.sorting) ? options.sorting[0] : options.sorting
+        const isDesc = sortStr.startsWith('-')
+        const field = isDesc ? sortStr.slice(1) : sortStr
+
+        filtered.sort((a, b) => {
+          let aVal: any = a[field as keyof Product]
+          let bVal: any = b[field as keyof Product]
+
+          // Handle price_amount sorting (get from first price)
+          if (field === 'price_amount') {
+            aVal = a.prices?.[0]?.price_amount ?? 0
+            bVal = b.prices?.[0]?.price_amount ?? 0
+          }
+
+          if (aVal < bVal) return isDesc ? 1 : -1
+          if (aVal > bVal) return isDesc ? -1 : 1
+          return 0
+        })
+      }
+
+      // Calculate pagination
+      const page = options.page ?? 1
+      const pageSize = options.limit ?? 20
+      const totalCount = filtered.length
+      const totalPages = Math.ceil(totalCount / pageSize)
+      const startIndex = (page - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedItems = filtered.slice(startIndex, endIndex)
+
+      const response: PaginatedResponse<Product> = {
+        items: paginatedItems,
+        pagination: {
+          total_count: totalCount,
+          page,
+          page_size: pageSize,
+          total_pages: totalPages,
+        }
+      }
+
+      return response
     },
     enabled: !!organizationId,
   })

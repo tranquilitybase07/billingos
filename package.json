@@ -23,7 +23,7 @@
     "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=20",
+    "node": ">=21",
     "pnpm": ">=8"
   }
 }

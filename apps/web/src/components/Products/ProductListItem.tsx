@@ -56,7 +56,7 @@ export const ProductListItem = ({
     }
   }
 
-  const updateProduct = useUpdateProduct(organization)
+  const updateProduct = useUpdateProduct()
 
   const onArchiveProduct = useCallback(async () => {
     try {

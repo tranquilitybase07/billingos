@@ -11,6 +11,7 @@ export interface ProductFormData {
   trial_days: number;
   prices: PriceConfig[];
   features: SelectedFeature[];
+  is_archived?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
 }

@@ -32,7 +32,7 @@ export const createFeatureSchema = z.object({
     .min(1, 'Feature title is required')
     .max(255, 'Feature title must be 255 characters or less'),
 
-  description: z.string(),
+  description: z.string().optional(),
 
   type: featureTypeEnum,
 

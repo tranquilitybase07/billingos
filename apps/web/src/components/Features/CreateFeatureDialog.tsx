@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { X, Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles, Loader2 } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -71,6 +71,26 @@ export function CreateFeatureDialog({
   const [activeTab, setActiveTab] = useState<'templates' | 'custom'>('templates')
   const [autoGenerateName, setAutoGenerateName] = useState(true)
 
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      // Reset to initial state when dialog is closed
+      setTimeout(() => {
+        form.reset({
+          organization_id: organizationId,
+          name: '',
+          title: '',
+          description: '',
+          type: 'boolean_flag',
+          properties: undefined,
+          metadata: undefined,
+        })
+        setAutoGenerateName(true)
+        setActiveTab('templates')
+      }, 300) // Wait for animation to complete
+    }
+  }, [open, organizationId])
+
   const form = useForm<CreateFeatureFormData>({
     resolver: zodResolver(createFeatureSchema),
     mode: 'onSubmit', // Only validate on submit, not onChange
@@ -86,55 +106,39 @@ export function CreateFeatureDialog({
     },
   })
 
-  // Log form errors when they change
-  useEffect(() => {
-    const errors = form.formState.errors
-    if (Object.keys(errors).length > 0) {
-      console.log('⚠️ Form has errors:', errors)
-    }
-  }, [form.formState.errors])
-
   // Auto-generate name from title
   const titleValue = form.watch('title')
   useEffect(() => {
     if (autoGenerateName && titleValue) {
       form.setValue('name', generateFeatureNameSlug(titleValue), {
-        shouldValidate: true,
+        shouldValidate: false,
       })
     }
   }, [titleValue, autoGenerateName, form])
 
-  const handleTemplateSelect = (template: FeatureTemplate) => {
-    form.setValue('name', template.name)
-    form.setValue('title', template.title)
-    form.setValue('description', template.description)
-    form.setValue('type', template.type)
-    form.setValue('properties', template.properties)
-    form.setValue('metadata', template.metadata)
+  const handleTemplateSelect = useCallback((template: FeatureTemplate) => {
+    // Use form.reset to set all values at once for better performance
+    form.reset({
+      organization_id: organizationId,
+      name: template.name,
+      title: template.title,
+      description: template.description,
+      type: template.type,
+      properties: template.properties,
+      metadata: template.metadata,
+    })
     setAutoGenerateName(false)
     setActiveTab('custom')
-  }
+  }, [organizationId, form])
 
-  const onInvalid = (errors: any) => {
-    console.log('❌ Form validation FAILED, errors:', errors)
-  }
-
-  const onSubmit = async (data: CreateFeatureFormData) => {
-    console.log('🚀 onSubmit called - validation PASSED')
-
+  const onSubmit = useCallback(async (data: CreateFeatureFormData) => {
     // Prevent double submission
-    if (createFeature.isPending) {
-      console.log('⏸️  Already submitting, skipping')
-      return
-    }
+    if (createFeature.isPending) return
 
     try {
-      console.log('📤 Sending API request...')
       const feature = await createFeature.mutateAsync(data)
-      console.log('✅ API success:', feature)
 
-      // Reset form first to clear any validation states
-      console.log('🔄 Resetting form...')
+      // Reset form to initial state
       form.reset({
         organization_id: organizationId,
         name: '',
@@ -147,29 +151,23 @@ export function CreateFeatureDialog({
       setAutoGenerateName(true)
       setActiveTab('templates')
 
-      // Then show success and close
-      console.log('🎉 Showing success toast')
+      // Show success notification
       toast({
         title: 'Feature Created',
         description: `Feature "${feature.title}" was created successfully`,
       })
 
-      // Call callback with created feature
-      console.log('📞 Calling onFeatureCreated callback')
+      // Notify parent and close
       onFeatureCreated?.(feature)
-
-      // Close drawer
-      console.log('🚪 Closing drawer')
       onOpenChange(false)
     } catch (error: any) {
-      console.error('❌ Error in onSubmit:', error)
       toast({
         title: 'Error',
         description: error?.message || 'Failed to create feature',
         variant: 'destructive',
       })
     }
-  }
+  }, [createFeature, organizationId, form, toast, onFeatureCreated, onOpenChange])
 
   const dialogContent = (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-6">
@@ -223,7 +221,7 @@ export function CreateFeatureDialog({
           <form
             onSubmit={(e) => {
               e.stopPropagation() // Prevent event from bubbling to parent product form
-              form.handleSubmit(onSubmit, onInvalid)(e)
+              form.handleSubmit(onSubmit)(e)
             }}
             className="space-y-6"
           >

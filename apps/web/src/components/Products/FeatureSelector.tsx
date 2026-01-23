@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Plus, X, GripVertical, Check, Sparkles } from 'lucide-react'
 import {
   DndContext,
@@ -194,7 +194,7 @@ export function FeatureSelector({
     })
   )
 
-  const handleAddFeature = (feature: Feature) => {
+  const handleAddFeature = useCallback((feature: Feature) => {
     const newFeature: SelectedFeature = {
       feature_id: feature.id,
       display_order: selectedFeatures.length + 1,
@@ -206,9 +206,9 @@ export function FeatureSelector({
     }
     onFeaturesChange([...selectedFeatures, newFeature])
     setOpen(false)
-  }
+  }, [selectedFeatures, onFeaturesChange])
 
-  const handleFeatureCreated = (newFeature: FeatureFromAPI) => {
+  const handleFeatureCreated = useCallback((newFeature: FeatureFromAPI) => {
     // Auto-add the newly created feature to the selection
     handleAddFeature({
       id: newFeature.id,
@@ -218,9 +218,9 @@ export function FeatureSelector({
       type: newFeature.type,
     })
     setCreateDialogOpen(false)
-  }
+  }, [handleAddFeature])
 
-  const handleRemoveFeature = (featureId: string) => {
+  const handleRemoveFeature = useCallback((featureId: string) => {
     const filtered = selectedFeatures.filter((f) => f.feature_id !== featureId)
     // Re-order
     const reordered = filtered.map((f, idx) => ({
@@ -228,16 +228,16 @@ export function FeatureSelector({
       display_order: idx + 1,
     }))
     onFeaturesChange(reordered)
-  }
+  }, [selectedFeatures, onFeaturesChange])
 
-  const handleLimitChange = (featureId: string, limit: number | undefined) => {
+  const handleLimitChange = useCallback((featureId: string, limit: number | undefined) => {
     const updated = selectedFeatures.map((f) =>
       f.feature_id === featureId
         ? { ...f, config: { ...f.config, limit } }
         : f
     )
     onFeaturesChange(updated)
-  }
+  }, [selectedFeatures, onFeaturesChange])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -260,9 +260,13 @@ export function FeatureSelector({
     }
   }
 
-  const alreadySelectedIds = new Set(selectedFeatures.map((f) => f.feature_id))
-  const availableToAdd = availableFeatures.filter(
-    (f) => !alreadySelectedIds.has(f.id)
+  const alreadySelectedIds = useMemo(
+    () => new Set(selectedFeatures.map((f) => f.feature_id)),
+    [selectedFeatures]
+  )
+  const availableToAdd = useMemo(
+    () => availableFeatures.filter((f) => !alreadySelectedIds.has(f.id)),
+    [availableFeatures, alreadySelectedIds]
   )
 
   return (

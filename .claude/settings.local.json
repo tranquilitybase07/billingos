@@ -18,7 +18,14 @@
       "Bash(npx shadcn@latest add:*)",
       "Bash(pnpm dlx:*)",
       "Bash(find:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(pnpm --filter api build:*)",
+      "Bash(PORT=3001 node:*)",
+      "Bash(pnpm --filter api start:prod:*)",
+      "Bash(node apps/api/dist/apps/api/src/main.js:*)",
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
