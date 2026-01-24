@@ -74,9 +74,44 @@ export function useProductForm(organizationId: string) {
   const isValid = (): boolean => {
     if (!name.trim()) return false;
     if (prices.length === 0) return false;
-    if (prices.some((p) => p.amount_type === "fixed" && !p.price_amount))
-      return false;
+
+    // Validate each price
+    for (const price of prices) {
+      if (price.amount_type === "fixed") {
+        // Must have a price amount
+        if (!price.price_amount) return false;
+
+        // Must be a valid positive number
+        if (isNaN(price.price_amount) || price.price_amount <= 0) return false;
+
+        // Must be in cents (whole number)
+        if (!Number.isInteger(price.price_amount)) return false;
+      }
+    }
+
     return true;
+  };
+
+  // Get validation error message
+  const getValidationError = (): string | null => {
+    if (!name.trim()) return "Product name is required";
+    if (prices.length === 0) return "At least one price is required";
+
+    for (const price of prices) {
+      if (price.amount_type === "fixed") {
+        if (!price.price_amount) {
+          return `Price amount is required for ${price.recurring_interval}ly billing`;
+        }
+        if (isNaN(price.price_amount) || price.price_amount <= 0) {
+          return `Price must be a valid positive number for ${price.recurring_interval}ly billing`;
+        }
+        if (!Number.isInteger(price.price_amount)) {
+          return `Price must have at most 2 decimal places for ${price.recurring_interval}ly billing`;
+        }
+      }
+    }
+
+    return null;
   };
 
   return {
@@ -97,5 +132,6 @@ export function useProductForm(organizationId: string) {
     // Helpers
     buildPayload,
     isValid,
+    getValidationError,
   };
 }

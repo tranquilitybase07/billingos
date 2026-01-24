@@ -25,7 +25,8 @@
       "Bash(node apps/api/dist/apps/api/src/main.js:*)",
       "WebFetch(domain:docs.railway.com)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(supabase status:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

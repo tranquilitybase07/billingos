@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import ProductsPage from './ProductsPage'
 import { DataTableSearchParams, parseSearchParams } from '@/utils/datatable'
+import { getOrganizationBySlug } from '@/lib/organization'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -15,7 +16,7 @@ export default async function Page({
   params: Promise<{ organization: string }>
   searchParams: Promise<DataTableSearchParams & { query?: string }>
 }) {
-  const { organization } = await params
+  const { organization: orgSlug } = await params
   const search = await searchParams
   const { pagination, sorting } = parseSearchParams(
     search,
@@ -23,11 +24,18 @@ export default async function Page({
     20,
   )
 
-  // TODO: Fetch organization from API to get ID
+  // Fetch organization to get the actual ID
+  const organization = await getOrganizationBySlug(orgSlug)
+
+  if (!organization) {
+    // This shouldn't happen as layout already validates, but handle gracefully
+    return <div>Organization not found</div>
+  }
+
   return (
     <ProductsPage
-      organizationId="temp-org-id"
-      organizationSlug={organization}
+      organizationId={organization.id}
+      organizationSlug={orgSlug}
       pagination={pagination}
       sorting={sorting}
       query={search.query}

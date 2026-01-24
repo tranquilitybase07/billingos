@@ -40,10 +40,11 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!form.isValid()) {
+    const validationError = form.getValidationError()
+    if (validationError) {
       toast({
         title: 'Validation Error',
-        description: 'Please fill in all required fields',
+        description: validationError,
         variant: 'destructive',
       })
       return

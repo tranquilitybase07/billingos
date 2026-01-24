@@ -45,6 +45,8 @@ export function PricingEngineSection({
     new Set(['month'])
   )
   const [hasFreeTrial, setHasFreeTrial] = useState(false)
+  // Track raw input values to preserve user typing (e.g., "7." or "7.9")
+  const [inputValues, setInputValues] = useState<Record<RecurringInterval, string>>({})
 
   // Initialize state from props
   useEffect(() => {
@@ -102,6 +104,8 @@ export function PricingEngineSection({
     currentPrices: PriceConfig[]
   ) => {
     const newPrices: PriceConfig[] = []
+    const newInputValues: Record<RecurringInterval, string> = {}
+
     intervals.forEach((interval) => {
       const existing = currentPrices.find(
         (p) => p.recurring_interval === interval
@@ -112,16 +116,33 @@ export function PricingEngineSection({
         price_currency: currency,
         recurring_interval: interval,
       })
+
+      // Preserve input value if it exists, otherwise format from cents
+      if (inputValues[interval] !== undefined) {
+        newInputValues[interval] = inputValues[interval]
+      } else if (existing?.price_amount) {
+        newInputValues[interval] = (existing.price_amount / 100).toFixed(2)
+      }
     })
+
+    setInputValues(newInputValues)
     onPricesChange(newPrices)
   }
 
-  const handlePriceAmountChange = (interval: RecurringInterval, dollars: string) => {
+  const handlePriceAmountChange = (interval: RecurringInterval, value: string) => {
+    // Store raw input value - no validation while typing
+    setInputValues(prev => ({
+      ...prev,
+      [interval]: value
+    }))
+
+    // Convert to cents for internal storage (will be validated on submit)
     const updated = prices.map((p) => {
       if (p.recurring_interval === interval) {
+        const numValue = parseFloat(value)
         return {
           ...p,
-          price_amount: dollars === '' ? undefined : Math.round(parseFloat(dollars) * 100),
+          price_amount: value === '' || isNaN(numValue) ? undefined : Math.round(numValue * 100),
         }
       }
       return p
@@ -240,9 +261,12 @@ export function PricingEngineSection({
         <div className="grid gap-3 sm:grid-cols-2">
           {Array.from(selectedIntervals).map((interval) => {
             const price = prices.find((p) => p.recurring_interval === interval)
-            const dollars = price?.price_amount
-              ? (price.price_amount / 100).toFixed(2)
-              : ''
+            // Use raw input value if available, otherwise format from cents
+            const displayValue = inputValues[interval] !== undefined
+              ? inputValues[interval]
+              : price?.price_amount
+                ? (price.price_amount / 100).toFixed(2)
+                : ''
 
             return (
               <div key={interval} className="space-y-2">
@@ -255,14 +279,23 @@ export function PricingEngineSection({
                   </span>
                   <Input
                     id={`price-${interval}`}
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="0.00"
-                    value={dollars}
+                    value={displayValue}
                     onChange={(e) => handlePriceAmountChange(interval, e.target.value)}
+                    onBlur={(e) => {
+                      // Format to 2 decimals on blur if valid number
+                      const numValue = parseFloat(e.target.value)
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        const formatted = numValue.toFixed(2)
+                        setInputValues(prev => ({
+                          ...prev,
+                          [interval]: formatted
+                        }))
+                      }
+                    }}
                     className="pl-16"
-                    step="0.01"
-                    min="0"
-                    required
                   />
                 </div>
               </div>

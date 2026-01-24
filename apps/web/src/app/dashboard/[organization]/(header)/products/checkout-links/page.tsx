@@ -1,5 +1,6 @@
 import { Metadata } from 'next'
 import CheckoutLinksPage from './CheckoutLinksPage'
+import { getOrganizationBySlug } from '@/lib/organization'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -12,13 +13,19 @@ export default async function Page({
 }: {
   params: Promise<{ organization: string }>
 }) {
-  const { organization } = await params
+  const { organization: orgSlug } = await params
 
-  // TODO: Fetch organization from API to get ID
+  // Fetch organization to get the actual ID
+  const organization = await getOrganizationBySlug(orgSlug)
+
+  if (!organization) {
+    return <div>Organization not found</div>
+  }
+
   return (
     <CheckoutLinksPage
-      organizationId="temp-org-id"
-      organizationSlug={organization}
+      organizationId={organization.id}
+      organizationSlug={orgSlug}
     />
   )
 }
