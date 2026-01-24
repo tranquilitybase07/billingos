@@ -46,7 +46,7 @@ export function PricingEngineSection({
   )
   const [hasFreeTrial, setHasFreeTrial] = useState(false)
   // Track raw input values to preserve user typing (e.g., "7." or "7.9")
-  const [inputValues, setInputValues] = useState<Record<RecurringInterval, string>>({})
+  const [inputValues, setInputValues] = useState<Partial<Record<RecurringInterval, string>>>({})
 
   // Initialize state from props
   useEffect(() => {
@@ -104,7 +104,7 @@ export function PricingEngineSection({
     currentPrices: PriceConfig[]
   ) => {
     const newPrices: PriceConfig[] = []
-    const newInputValues: Record<RecurringInterval, string> = {}
+    const newInputValues: Partial<Record<RecurringInterval, string>> = {}
 
     intervals.forEach((interval) => {
       const existing = currentPrices.find(

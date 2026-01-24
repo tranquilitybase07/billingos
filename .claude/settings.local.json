@@ -26,7 +26,8 @@
       "WebFetch(domain:docs.railway.com)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(supabase status:*)"
+      "Bash(supabase status:*)",
+      "Bash(pnpm tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -8,9 +8,13 @@ import { useRouter } from 'next/navigation';
 
 interface MagicLinkFormProps {
   returnTo?: string;
+  variant?: 'default' | 'secondary';
 }
 
-export default function MagicLinkForm({ returnTo = '/dashboard' }: MagicLinkFormProps) {
+export default function MagicLinkForm({
+  returnTo = '/dashboard',
+  variant = 'default'
+}: MagicLinkFormProps) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -68,6 +72,36 @@ export default function MagicLinkForm({ returnTo = '/dashboard' }: MagicLinkForm
     );
   }
 
+  // Secondary variant - more subtle, collapsible
+  if (variant === 'secondary') {
+    return (
+      <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3">
+        <div className="flex w-full flex-col gap-2">
+          <Input
+            type="email"
+            required
+            placeholder="Enter your email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            disabled={loading}
+            className="flex-1"
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            disabled={loading}
+            fullWidth
+            className="text-sm"
+          >
+            {loading ? 'Sending magic link...' : 'Send magic link'}
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
+  // Default variant - original style
   return (
     <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2">
       <div className="flex w-full flex-row gap-2">
