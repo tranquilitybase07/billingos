@@ -40,7 +40,7 @@ const TabsTrigger = ({
   <TabsTriggerPrimitive
     ref={ref}
     className={twMerge(
-      'dark:data-[state=active]:bg-polar-700 dark:hover:text-polar-50 dark:text-polar-500 cursor-pointer px-4 text-gray-400 hover:text-black data-[state=active]:rounded-xl data-[state=active]:bg-gray-100 data-[state=active]:text-black data-[state=active]:shadow-none dark:data-[state=active]:text-white',
+      'data-[state=active]:bg-muted data-[state=active]:text-foreground hover:text-foreground text-muted-foreground cursor-pointer px-4 data-[state=active]:rounded-xl data-[state=active]:shadow-none',
       size === 'default' ? 'text-sm' : 'text-xs',
       className,
     )}

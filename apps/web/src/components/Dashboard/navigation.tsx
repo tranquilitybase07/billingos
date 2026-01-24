@@ -1,7 +1,17 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Home, AttachMoney, Settings, People } from '@mui/icons-material'
+import {
+  Home,
+  AttachMoney,
+  Settings,
+  People,
+  Inventory as HiveOutlined,
+  Link as LinkOutlined,
+  Discount as DiscountOutlined,
+  Diamond as DiamondOutlined,
+  DonutLarge as DonutLargeOutlined
+} from '@mui/icons-material'
 import type { Organization } from '@/lib/api/types'
 
 export type SubRoute = {
@@ -39,6 +49,43 @@ const generalRoutesList = (org?: Organization): Route[] => [
     checkIsActive: (currentRoute: string) =>
       currentRoute === `/dashboard/${org?.slug}`,
     if: true,
+  },
+  {
+    id: 'products',
+    title: 'Products',
+    icon: <HiveOutlined fontSize="inherit" />,
+    link: `/dashboard/${org?.slug}/products`,
+    checkIsActive: (currentRoute: string): boolean => {
+      return currentRoute.startsWith(`/dashboard/${org?.slug}/products`)
+    },
+    if: true,
+    subs: [
+      {
+        title: 'Catalogue',
+        link: `/dashboard/${org?.slug}/products`,
+        icon: <HiveOutlined fontSize="inherit" />,
+      },
+      {
+        title: 'Checkout Links',
+        link: `/dashboard/${org?.slug}/products/checkout-links`,
+        icon: <LinkOutlined fontSize="inherit" />,
+      },
+      {
+        title: 'Discounts',
+        link: `/dashboard/${org?.slug}/products/discounts`,
+        icon: <DiscountOutlined fontSize="inherit" />,
+      },
+      {
+        title: 'Benefits',
+        link: `/dashboard/${org?.slug}/products/benefits`,
+        icon: <DiamondOutlined fontSize="inherit" />,
+      },
+      {
+        title: 'Meters',
+        link: `/dashboard/${org?.slug}/products/meters`,
+        icon: <DonutLargeOutlined fontSize="inherit" />,
+      },
+    ],
   },
 ]
 

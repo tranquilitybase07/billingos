@@ -1,26 +1,26 @@
-import { ButtonProps, Button as ShadcnButton } from '@/components/ui/button'
-import { cva } from 'class-variance-authority'
+import { Button as ShadcnButton } from '@/components/ui/button'
+import { cva, type VariantProps } from 'class-variance-authority'
 import React from 'react'
 import { twMerge } from 'tailwind-merge'
 
-const buttonVariants = cva(
+const customButtonVariants = cva(
   'relative font-normal inline-flex items-center cursor-pointer font-medium select-none justify-center rounded-xl text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap',
   {
     variants: {
       variant: {
         default:
-          'bg-primary text-white hover:opacity-85 transition-opacity duration-100 border border-white/10',
+          'bg-primary text-primary-foreground hover:opacity-85 transition-opacity duration-100 border border-white/10',
         destructive:
-          'bg-red-500 dark:bg-red-600 text-white hover:bg-red-400 dark:hover:bg-red-500',
+          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:
-          'text-black dark:text-white hover:bg-gray-200 dark:bg-transparent dark:hover:bg-polar-700 border-transparent hover:border-gray-200 border dark:border-polar-700 bg-transparent border-gray-100',
+          'text-foreground hover:bg-hover border-transparent hover:border-border border bg-transparent',
         secondary:
-          'text-black dark:text-white hover:bg-gray-200 dark:bg-polar-700 dark:hover:bg-polar-600 bg-gray-100 border dark:border-white/5 border-black/4',
+          'text-foreground hover:bg-hover bg-secondary border border-border/50',
         underline:
-          'text-black dark:text-white bg-transparent border-b hover:border-black dark:hover:border-white border-transparent transition-colors duration-300 p-0! hover:bg-transparent rounded-none!',
-        link: 'text-blue-400 underline-offset-4 hover:underline bg-transparent hover:bg-transparent',
+          'text-foreground bg-transparent border-b hover:border-foreground border-transparent transition-colors duration-300 p-0! hover:bg-transparent rounded-none!',
+        link: 'text-primary underline-offset-4 hover:underline bg-transparent hover:bg-transparent',
         ghost:
-          'bg-transparent hover:bg-gray-200 dark:hover:bg-polar-700 dark:bg-transparent text-black dark:text-white',
+          'bg-transparent hover:bg-hover text-foreground',
       },
       size: {
         default: 'h-10 px-4 py-2 rounded-xl text-sm',
@@ -35,6 +35,10 @@ const buttonVariants = cva(
     },
   },
 )
+
+type ButtonProps = React.ComponentProps<'button'> & VariantProps<typeof customButtonVariants> & {
+  asChild?: boolean
+}
 
 const Button = ({
   ref,
@@ -57,7 +61,7 @@ const Button = ({
   return (
     <ShadcnButton
       className={twMerge(
-        buttonVariants({ variant, size, className }),
+        customButtonVariants({ variant, size, className }),
         fullWidth ? 'w-full' : '',
       )}
       ref={ref}
@@ -85,7 +89,7 @@ const Button = ({
   )
 }
 
-Button.displayName = ShadcnButton.displayName
+Button.displayName = 'Button'
 
 export default Button
 
@@ -94,7 +98,7 @@ const LoadingSpinner = (props: {
   size: ButtonProps['size']
 }) => {
   const classes = twMerge(
-    props.disabled ? 'fill-white text-white/20' : 'fill-white text-blue-300',
+    props.disabled ? 'fill-primary-foreground text-primary-foreground/20' : 'fill-primary-foreground text-primary/50',
     props.size === 'default' || 'large' ? 'h-4 w-4' : 'h-2 w-2',
     'animate-spin',
   )
@@ -135,7 +139,7 @@ export const RawButton = ({
 }) => {
   return (
     <ShadcnButton
-      className={twMerge(buttonVariants({ variant, size, className }))}
+      className={twMerge(customButtonVariants({ variant, size, className }))}
       ref={ref}
       {...props}
     >

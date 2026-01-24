@@ -1,6 +1,6 @@
 import TimeAgo from 'react-timeago'
 
-const PolarTimeAgo = (props: { date: Date; suffix?: string }) => {
+const BillingOSTimeAgo = (props: { date: Date; suffix?: string }) => {
   return (
     <TimeAgo
       date={props.date}
@@ -16,4 +16,4 @@ const PolarTimeAgo = (props: { date: Date; suffix?: string }) => {
   )
 }
 
-export default PolarTimeAgo
+export default BillingOSTimeAgo

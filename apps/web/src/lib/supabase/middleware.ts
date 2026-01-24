@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const LAST_VISITED_ORG_COOKIE = 'billingos_last_org'
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -56,6 +58,21 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
+  }
+
+  // Track last visited organization for smart redirects
+  // Match pattern: /dashboard/[org-slug] or /dashboard/[org-slug]/...
+  const orgMatch = request.nextUrl.pathname.match(/^\/dashboard\/([^\/]+)/);
+  if (user && orgMatch && orgMatch[1] !== 'create') {
+    const orgSlug = orgMatch[1];
+
+    // Set cookie to remember last visited org
+    supabaseResponse.cookies.set(LAST_VISITED_ORG_COOKIE, orgSlug, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

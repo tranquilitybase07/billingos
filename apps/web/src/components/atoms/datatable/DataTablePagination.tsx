@@ -43,7 +43,7 @@ export function DataTablePagination<TData>({
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:flex-nowrap sm:justify-end sm:px-2 lg:gap-x-8">
       <div className="order-3 flex w-full flex-none items-center justify-between gap-2 sm:order-0 sm:w-auto sm:justify-start">
-        <p className="dark:text-polar-500 text-sm text-gray-700">
+        <p className="text-muted-foreground text-sm">
           Rows per page
         </p>
         <Select
@@ -64,7 +64,7 @@ export function DataTablePagination<TData>({
           </SelectContent>
         </Select>
       </div>
-      <div className="dark:text-polar-500 flex flex-1 items-center justify-start text-sm text-gray-700 sm:w-[160px] sm:flex-none sm:justify-center">
+      <div className="text-muted-foreground flex flex-1 items-center justify-start text-sm sm:w-[160px] sm:flex-none sm:justify-center">
         {rowCount === 1
           ? 'Viewing the only record'
           : isShowingAllRecords

@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(mkdir:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm build:*)",
+      "WebFetch(domain:vercel.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(pnpm list:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(find:*)",
+      "Bash(xargs:*)",
+      "Bash(pnpm --filter api build:*)",
+      "Bash(PORT=3001 node:*)",
+      "Bash(pnpm --filter api start:prod:*)",
+      "Bash(node apps/api/dist/apps/api/src/main.js:*)",
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(supabase status:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}

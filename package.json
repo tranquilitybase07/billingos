@@ -2,6 +2,7 @@
   "name": "billingos",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.26.2",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -22,7 +23,7 @@
     "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=18",
+    "node": ">=21",
     "pnpm": ">=8"
   }
 }

@@ -30,7 +30,7 @@ const SelectTrigger = ({
   <SelectTriggerPrimitive
     ref={ref}
     className={twMerge(
-      'dark:bg-polar-800 dark:hover:bg-polar-700 dark:hover:border-polar-700 dark:border-polar-700 flex cursor-pointer flex-row gap-x-2 rounded-xl border border-gray-200 bg-white px-3 shadow-xs transition-colors hover:border-gray-300',
+      'bg-card hover:bg-hover hover:border-border border-input flex cursor-pointer flex-row gap-x-2 rounded-xl border px-3 shadow-xs transition-colors',
       className,
     )}
     {...props}
@@ -49,7 +49,7 @@ const SelectContent = ({
 }: React.ComponentProps<typeof SelectContentPrimitive>) => (
   <SelectContentPrimitive
     ref={ref}
-    className={twMerge('dark:bg-polar-800 rounded-xl border-none', className)}
+    className={twMerge('bg-card rounded-xl border-none', className)}
     {...props}
   >
     {children}

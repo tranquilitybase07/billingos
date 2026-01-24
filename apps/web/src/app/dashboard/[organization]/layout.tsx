@@ -42,6 +42,9 @@ export default async function OrganizationLayout({
       redirect('/dashboard')
     }
 
+    // Note: Cookie for last visited org is set in middleware (src/middleware.ts)
+    // because Next.js 15+ doesn't allow setting cookies in layouts
+
     // Wrap children in OrganizationProvider for client components
     return (
       <OrganizationProvider
