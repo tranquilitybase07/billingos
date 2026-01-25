@@ -27,7 +27,20 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(supabase status:*)",
-      "Bash(pnpm tsc:*)"
+      "Bash(pnpm tsc:*)",
+      "Bash(supabase migration:*)",
+      "Bash(npx nest:*)",
+      "WebFetch(domain:docs.flowglad.com)",
+      "WebFetch(domain:docs.useautumn.com)",
+      "WebFetch(domain:www.useautumn.com)",
+      "WebFetch(domain:useautumn.com)",
+      "WebFetch(domain:www.better-auth.com)",
+      "WebFetch(domain:docs.stripe.com)",
+      "WebFetch(domain:encore.dev)",
+      "WebFetch(domain:apidocs.chargebee.com)",
+      "WebFetch(domain:developer.paddle.com)",
+      "WebFetch(domain:clerk.com)",
+      "WebFetch(domain:docs.kinde.com)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -11,12 +13,25 @@ import { AccountModule } from './account/account.module';
 import { ProductsModule } from './products/products.module';
 import { FeaturesModule } from './features/features.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        store: redisStore,
+        host: configService.get('REDIS_HOST', 'localhost'),
+        port: configService.get('REDIS_PORT', 6379),
+        ttl: 300, // Default TTL: 5 minutes
+        max: 1000, // Maximum number of items in cache
+      }),
+      inject: [ConfigService],
     }),
     SupabaseModule,
     AuthModule,
@@ -27,6 +42,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     ProductsModule,
     FeaturesModule,
     SubscriptionsModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
