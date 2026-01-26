@@ -91,6 +91,9 @@
   --color-white: #ffffff;
   --color-black: #000000;
 
+  /* Custom Colors */
+  --color-base: rgb(0 0 0 / 0.1);
+
   /* shadcn/ui Color Aliases */
   --color-border: var(--border);
   --color-input: var(--input);
@@ -269,6 +272,8 @@
     /* Destructive variants */
     --destructive-light: var(--color-red-950);
     --destructive-border: var(--color-red-900);
+
+    --base: rgb(255 255 255 / 0.05);
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
