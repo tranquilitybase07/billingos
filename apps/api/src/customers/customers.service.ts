@@ -139,9 +139,9 @@ export class CustomersService {
         email: createDto.email.toLowerCase(),
         name: createDto.name || null,
         external_id: createDto.external_id || null,
-        billing_address: createDto.billing_address || {},
+        billing_address: (createDto.billing_address || {}) as any,
         stripe_customer_id: stripeCustomer.id,
-        metadata: createDto.metadata || {},
+        metadata: (createDto.metadata || {}) as any,
         email_verified: false,
       })
       .select()

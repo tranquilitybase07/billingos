@@ -101,6 +101,12 @@ export class SubscriptionsService {
       // 6. Create subscription in Stripe (if not free)
       let stripeSubscription: any = null;
       if (price.stripe_price_id) {
+        if (!customer.stripe_customer_id) {
+          throw new BadRequestException(
+            'Customer must have a Stripe customer ID to create a Stripe subscription',
+          );
+        }
+
         const subscriptionParams: any = {
           customer: customer.stripe_customer_id,
           items: [{ price: price.stripe_price_id }],
@@ -195,7 +201,7 @@ export class SubscriptionsService {
       );
 
       // 9. Sync Active Entitlements from Stripe (if subscription was created in Stripe)
-      if (stripeSubscription) {
+      if (stripeSubscription && customer.stripe_customer_id) {
         try {
           await this.syncActiveEntitlementsFromStripe(
             subscription.id,

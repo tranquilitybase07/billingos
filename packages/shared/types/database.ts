@@ -88,38 +88,100 @@ export type Database = {
           },
         ]
       }
+      api_keys: {
+        Row: {
+          created_at: string
+          environment: string
+          id: string
+          key_hash: string
+          key_pair_id: string | null
+          key_prefix: string
+          key_type: string
+          last_used_at: string | null
+          name: string | null
+          organization_id: string
+          revoked_at: string | null
+          signing_secret: string
+        }
+        Insert: {
+          created_at?: string
+          environment: string
+          id?: string
+          key_hash: string
+          key_pair_id?: string | null
+          key_prefix: string
+          key_type: string
+          last_used_at?: string | null
+          name?: string | null
+          organization_id: string
+          revoked_at?: string | null
+          signing_secret: string
+        }
+        Update: {
+          created_at?: string
+          environment?: string
+          id?: string
+          key_hash?: string
+          key_pair_id?: string | null
+          key_prefix?: string
+          key_type?: string
+          last_used_at?: string | null
+          name?: string | null
+          organization_id?: string
+          revoked_at?: string | null
+          signing_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
+          billing_address: Json | null
           created_at: string | null
           deleted_at: string | null
-          email: string | null
+          email: string
+          email_verified: boolean
+          external_id: string | null
           id: string
           metadata: Json | null
           name: string | null
           organization_id: string
-          stripe_customer_id: string
+          stripe_customer_id: string | null
           updated_at: string | null
         }
         Insert: {
+          billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email?: string | null
+          email: string
+          email_verified?: boolean
+          external_id?: string | null
           id?: string
           metadata?: Json | null
           name?: string | null
           organization_id: string
-          stripe_customer_id: string
+          stripe_customer_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email?: string | null
+          email?: string
+          email_verified?: boolean
+          external_id?: string | null
           id?: string
           metadata?: Json | null
           name?: string | null
           organization_id?: string
-          stripe_customer_id?: string
+          stripe_customer_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -367,6 +429,7 @@ export type Database = {
           display_order: number
           feature_id: string
           product_id: string
+          stripe_product_feature_id: string | null
           stripe_synced: boolean | null
           stripe_synced_at: string | null
         }
@@ -376,6 +439,7 @@ export type Database = {
           display_order: number
           feature_id: string
           product_id: string
+          stripe_product_feature_id?: string | null
           stripe_synced?: boolean | null
           stripe_synced_at?: string | null
         }
@@ -385,6 +449,7 @@ export type Database = {
           display_order?: number
           feature_id?: string
           product_id?: string
+          stripe_product_feature_id?: string | null
           stripe_synced?: boolean | null
           stripe_synced_at?: string | null
         }
@@ -502,6 +567,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_tokens: {
+        Row: {
+          allowed_operations: Json | null
+          api_key_id: string
+          created_at: string
+          expires_at: string
+          external_organization_id: string | null
+          external_user_id: string
+          id: string
+          last_used_at: string | null
+          metadata: Json | null
+          organization_id: string
+          revoked_at: string | null
+          token_id: string
+        }
+        Insert: {
+          allowed_operations?: Json | null
+          api_key_id: string
+          created_at?: string
+          expires_at: string
+          external_organization_id?: string | null
+          external_user_id: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json | null
+          organization_id: string
+          revoked_at?: string | null
+          token_id: string
+        }
+        Update: {
+          allowed_operations?: Json | null
+          api_key_id?: string
+          created_at?: string
+          expires_at?: string
+          external_organization_id?: string | null
+          external_user_id?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json | null
+          organization_id?: string
+          revoked_at?: string | null
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_tokens_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_tokens_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -996,6 +1121,7 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_expired_session_tokens: { Args: never; Returns: undefined }
       is_organization_admin: {
         Args: { org_id: string; user_id: string }
         Returns: boolean

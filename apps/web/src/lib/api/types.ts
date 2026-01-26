@@ -155,3 +155,40 @@ export interface User {
   identity_verification_status: string
   identity_verification_id: string | null
 }
+
+// API Key Types
+export interface ApiKey {
+  id: string
+  organizationId: string
+  keyType: 'secret' | 'publishable'
+  environment: 'live' | 'test'
+  keyPrefix: string // First 13 chars (safe to display)
+  name?: string
+  keyPairId?: string // Links to paired key
+  createdAt: Date
+  lastUsedAt?: Date
+  revokedAt?: Date
+}
+
+export interface ApiKeyPairCreated {
+  pairId: string
+  name?: string
+  environment: 'live' | 'test'
+  secretKey: {
+    id: string
+    keyPrefix: string
+    fullKey: string // Only shown ONCE
+  }
+  publishableKey: {
+    id: string
+    keyPrefix: string
+    fullKey: string // Only shown ONCE
+  }
+  createdAt: Date
+  warning: string
+}
+
+export interface CreateApiKeyDTO {
+  name?: string
+  environment?: 'live' | 'test' // Creates both secret and publishable keys
+}

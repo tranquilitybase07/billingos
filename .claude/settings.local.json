@@ -40,7 +40,9 @@
       "WebFetch(domain:apidocs.chargebee.com)",
       "WebFetch(domain:developer.paddle.com)",
       "WebFetch(domain:clerk.com)",
-      "WebFetch(domain:docs.kinde.com)"
+      "WebFetch(domain:docs.kinde.com)",
+      "Bash(lsof:*)",
+      "Bash(pnpm dev)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useUpdateOrganization, useDeleteOrganization } from '@/hooks/queries/organization'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,11 +22,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Trash2, Settings, Users, Key } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function SettingsPage() {
   const { organization } = useOrganization()
+  const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
   const [formData, setFormData] = useState({
@@ -76,6 +79,39 @@ export default function SettingsPage() {
 
   return (
     <DashboardBody className="gap-6">
+      {/* Settings Navigation */}
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your organization settings
+          </p>
+        </div>
+
+        <Tabs value="general" className="w-full">
+          <TabsList>
+            <TabsTrigger value="general" asChild>
+              <Link href={`/dashboard/${params.organization}/settings`}>
+                <Settings className="mr-2 h-4 w-4" />
+                General
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="members" asChild>
+              <Link href={`/dashboard/${params.organization}/settings/members`}>
+                <Users className="mr-2 h-4 w-4" />
+                Members
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="api-keys" asChild>
+              <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
+                <Key className="mr-2 h-4 w-4" />
+                API Keys
+              </Link>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       {/* General Settings */}
       <Card>
         <CardHeader>
