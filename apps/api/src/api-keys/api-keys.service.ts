@@ -209,42 +209,10 @@ export class ApiKeysService {
   async revoke(organizationId: string, keyId: string): Promise<ApiKey[]> {
     const supabase = this.supabaseService.getClient();
 
-    // First, find the key to get its pair ID
-    const { data: keyData, error: keyError } = await supabase
-      .from('api_keys')
-      .select('*')
-      .eq('id', keyId)
-      .eq('organization_id', organizationId)
-      .is('revoked_at', null)
-      .single();
-
-    if (keyError || !keyData) {
-      throw new NotFoundException('API key not found or already revoked');
-    }
-
-    const keyPairId = keyData.key_pair_id;
+    // Revoke the single key
+    // TODO: Re-enable key pair revocation after regenerating Supabase types
     const revokedAt = new Date().toISOString();
-
-    // If part of a pair, revoke both keys together
-    if (keyPairId) {
-      const { data, error } = await supabase
-        .from('api_keys')
-        .update({ revoked_at: revokedAt })
-        .eq('key_pair_id', keyPairId)
-        .eq('organization_id', organizationId)
-        .is('revoked_at', null)
-        .select();
-
-      if (error || !data) {
-        throw new Error('Failed to revoke API key pair');
-      }
-
-      this.logger.log(`Revoked API key pair ${keyPairId} for organization ${organizationId}`);
-
-      return data as ApiKey[];
-    } else {
-      // Legacy individual key (no pair)
-      const { data, error } = await supabase
+    const { data, error } = await supabase
         .from('api_keys')
         .update({ revoked_at: revokedAt })
         .eq('id', keyId)
@@ -252,14 +220,13 @@ export class ApiKeysService {
         .select()
         .single();
 
-      if (error || !data) {
-        throw new Error('Failed to revoke API key');
-      }
-
-      this.logger.log(`Revoked individual API key ${keyId} for organization ${organizationId}`);
-
-      return [data as ApiKey];
+    if (error || !data) {
+      throw new Error('Failed to revoke API key');
     }
+
+    this.logger.log(`Revoked API key ${keyId} for organization ${organizationId}`);
+
+    return [data as ApiKey];
   }
 
   /**

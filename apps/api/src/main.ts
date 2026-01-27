@@ -8,9 +8,12 @@ async function bootstrap() {
     rawBody: true, // Enable raw body for Stripe webhooks
   });
 
-  // Enable CORS for frontend
+  // Enable CORS for frontend and sample app
   app.enableCors({
-    origin: process.env.APP_URL || 'http://localhost:3000',
+    origin: [
+      process.env.APP_URL || 'http://localhost:3000',
+      'http://localhost:3002', // Sample app
+    ],
     credentials: true,
   });
 

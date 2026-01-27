@@ -162,6 +162,11 @@ export class ProductsService {
       // Insert prices
       const priceRecords: any[] = [];
       for (const { stripe_price, dto } of stripePrices) {
+        const recurringInterval =
+          dto.recurring_interval || createDto.recurring_interval;
+        const recurringIntervalCount =
+          dto.recurring_interval_count || createDto.recurring_interval_count || 1;
+
         const { data: priceRecord, error: priceError } = await supabase
           .from('product_prices')
           .insert({
@@ -169,6 +174,8 @@ export class ProductsService {
             amount_type: dto.amount_type,
             price_amount: dto.price_amount || null,
             price_currency: dto.price_currency || 'usd',
+            recurring_interval: recurringInterval,
+            recurring_interval_count: recurringIntervalCount,
             stripe_price_id: stripe_price?.id || null,
             is_archived: false,
           })

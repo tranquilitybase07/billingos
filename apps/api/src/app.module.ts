@@ -16,6 +16,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CustomersModule } from './customers/customers.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { SessionTokensModule } from './session-tokens/session-tokens.module';
+import { V1Module } from './v1/v1.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SessionTokensModule } from './session-tokens/session-tokens.module';
     CustomersModule,
     ApiKeysModule,
     SessionTokensModule,
+    V1Module,
   ],
   controllers: [AppController],
   providers: [AppService],

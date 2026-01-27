@@ -42,7 +42,13 @@
       "WebFetch(domain:clerk.com)",
       "WebFetch(domain:docs.kinde.com)",
       "Bash(lsof:*)",
-      "Bash(pnpm dev)"
+      "Bash(pnpm dev)",
+      "Bash(pnpm install)",
+      "Bash(pnpm remove:*)",
+      "Bash(git log:*)",
+      "Bash(psql:*)",
+      "Bash(supabase gen types:*)",
+      "Bash(packages/shared/types/database.ts)"
     ]
   },
   "enableAllProjectMcpServers": true,
