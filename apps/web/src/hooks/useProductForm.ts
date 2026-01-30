@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PriceConfig } from "@/components/Products/PricingEngineSection";
 import type { SelectedFeature } from "@/components/Products/FeatureSelector";
+import type { Product } from "@/hooks/queries/products";
 
 export interface ProductFormData {
   organization_id: string;
@@ -16,23 +17,49 @@ export interface ProductFormData {
   metadata?: Record<string, any>;
 }
 
-export function useProductForm(organizationId: string) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState("usd");
-  const [trialDays, setTrialDays] = useState(0);
+/** Convert an existing Product into initial form state */
+function productToFormState(product: Product) {
+  const prices: PriceConfig[] = product.prices.map((p) => ({
+    amount_type: (p.amount_type === "free" ? "free" : "fixed") as "fixed" | "free",
+    price_amount: p.price_amount ?? undefined,
+    price_currency: p.price_currency ?? "usd",
+    recurring_interval: p.recurring_interval,
+  }));
 
-  // Default to monthly pricing
-  const [prices, setPrices] = useState<PriceConfig[]>([
-    {
-      amount_type: "fixed",
-      price_amount: undefined,
-      price_currency: "usd",
-      recurring_interval: "month",
-    },
-  ]);
+  const features: SelectedFeature[] = (product.features ?? []).map((f, i) => ({
+    feature_id: f.feature_id,
+    display_order: f.display_order ?? i,
+    config: f.config ?? {},
+    featureName: f.feature?.name,
+    featureTitle: f.feature?.title,
+  }));
 
-  const [features, setFeatures] = useState<SelectedFeature[]>([]);
+  const currency = prices[0]?.price_currency ?? "usd";
+  const trialDays = product.trial_days ?? 0;
+
+  return { prices, features, currency, trialDays };
+}
+
+export function useProductForm(organizationId: string, initialProduct?: Product) {
+  const initial = initialProduct ? productToFormState(initialProduct) : null;
+
+  const [name, setName] = useState(initialProduct?.name ?? "");
+  const [description, setDescription] = useState(initialProduct?.description ?? "");
+  const [currency, setCurrency] = useState(initial?.currency ?? "usd");
+  const [trialDays, setTrialDays] = useState(initial?.trialDays ?? 0);
+
+  const [prices, setPrices] = useState<PriceConfig[]>(
+    initial?.prices ?? [
+      {
+        amount_type: "fixed",
+        price_amount: undefined,
+        price_currency: "usd",
+        recurring_interval: "month",
+      },
+    ],
+  );
+
+  const [features, setFeatures] = useState<SelectedFeature[]>(initial?.features ?? []);
 
   // Sync currency across all prices
   const handleCurrencyChange = (newCurrency: string) => {

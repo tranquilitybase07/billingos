@@ -10,7 +10,9 @@ import {
   Link as LinkOutlined,
   Discount as DiscountOutlined,
   Diamond as DiamondOutlined,
-  DonutLarge as DonutLargeOutlined
+  DonutLarge as DonutLargeOutlined,
+  ShoppingBag as ShoppingBagOutlined,
+  AllInclusive as AllInclusiveOutlined,
 } from '@mui/icons-material'
 import type { Organization } from '@/lib/api/types'
 
@@ -84,6 +86,28 @@ const generalRoutesList = (org?: Organization): Route[] => [
         title: 'Meters',
         link: `/dashboard/${org?.slug}/products/meters`,
         icon: <DonutLargeOutlined fontSize="inherit" />,
+      },
+    ],
+  },
+  {
+    id: 'sales',
+    title: 'Sales',
+    icon: <ShoppingBagOutlined fontSize="inherit" />,
+    link: `/dashboard/${org?.slug}/sales`,
+    checkIsActive: (currentRoute: string): boolean => {
+      return currentRoute.startsWith(`/dashboard/${org?.slug}/sales`)
+    },
+    if: true,
+    subs: [
+      {
+        title: 'Subscriptions',
+        link: `/dashboard/${org?.slug}/sales/subscriptions`,
+        icon: <AllInclusiveOutlined fontSize="inherit" />,
+      },
+      {
+        title: 'Orders',
+        link: `/dashboard/${org?.slug}/sales`,
+        icon: <ShoppingBagOutlined fontSize="inherit" />,
       },
     ],
   },

@@ -44,7 +44,7 @@ export const DashboardBody = ({
   children: ReactNode
   className?: string
   wrapperClassName?: string
-  title?: string
+  title?: ReactNode
   contextView?: ReactNode
   contextViewClassName?: string
   header?: ReactNode
@@ -70,9 +70,13 @@ export const DashboardBody = ({
         >
           {/* Page header */}
           <div className="flex items-center justify-between border-b px-6 py-4">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {pageTitle}
-            </h1>
+            {typeof pageTitle === 'string' ? (
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {pageTitle}
+              </h1>
+            ) : (
+              pageTitle
+            )}
             {header}
           </div>
 
