@@ -481,3 +481,5 @@ Before starting ANY feature implementation:
 - [ ] Ready to implement
 
 **Remember**: Polar has already solved most problems. Don't reinvent - adapt!
+- BillingOS SDK path is /Users/ankushkumar/Code/billingos-sdk/docs/architecture
+- Test app path for SDK is at /Users/ankushkumar/Code/billingos-testprojects/my-app/

@@ -141,6 +141,66 @@ export type Database = {
           },
         ]
       }
+      checkout_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          customer_email: string | null
+          customer_external_id: string | null
+          customer_name: string | null
+          expires_at: string
+          id: string
+          metadata: Json | null
+          organization_id: string
+          payment_intent_id: string | null
+          session_token: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          customer_email?: string | null
+          customer_external_id?: string | null
+          customer_name?: string | null
+          expires_at: string
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          payment_intent_id?: string | null
+          session_token: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          customer_email?: string | null
+          customer_external_id?: string | null
+          customer_name?: string | null
+          expires_at?: string
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          payment_intent_id?: string | null
+          session_token?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_sessions_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           billing_address: Json | null
@@ -422,6 +482,92 @@ export type Database = {
           },
         ]
       }
+      payment_intents: {
+        Row: {
+          amount: number
+          application_fee_amount: number | null
+          client_secret: string
+          created_at: string | null
+          currency: string
+          customer_id: string | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          price_id: string | null
+          product_id: string | null
+          status: string
+          stripe_account_id: string | null
+          stripe_customer_id: string | null
+          stripe_payment_intent_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          application_fee_amount?: number | null
+          client_secret: string
+          created_at?: string | null
+          currency?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          price_id?: string | null
+          product_id?: string | null
+          status: string
+          stripe_account_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          application_fee_amount?: number | null
+          client_secret?: string
+          created_at?: string | null
+          currency?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          price_id?: string | null
+          product_id?: string | null
+          status?: string
+          stripe_account_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_intents_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_price_id_fkey"
+            columns: ["price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_features: {
         Row: {
           config: Json | null
@@ -486,6 +632,8 @@ export type Database = {
           price_amount: number | null
           price_currency: string | null
           product_id: string
+          recurring_interval: string
+          recurring_interval_count: number | null
           stripe_price_id: string | null
           updated_at: string | null
         }
@@ -497,6 +645,8 @@ export type Database = {
           price_amount?: number | null
           price_currency?: string | null
           product_id: string
+          recurring_interval: string
+          recurring_interval_count?: number | null
           stripe_price_id?: string | null
           updated_at?: string | null
         }
@@ -508,6 +658,8 @@ export type Database = {
           price_amount?: number | null
           price_currency?: string | null
           product_id?: string
+          recurring_interval?: string
+          recurring_interval_count?: number | null
           stripe_price_id?: string | null
           updated_at?: string | null
         }
@@ -710,6 +862,8 @@ export type Database = {
           id: string
           metadata: Json | null
           organization_id: string
+          payment_intent_id: string | null
+          price_id: string | null
           product_id: string
           status: string
           stripe_subscription_id: string | null
@@ -730,6 +884,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id: string
+          payment_intent_id?: string | null
+          price_id?: string | null
           product_id: string
           status: string
           stripe_subscription_id?: string | null
@@ -750,6 +906,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id?: string
+          payment_intent_id?: string | null
+          price_id?: string | null
           product_id?: string
           status?: string
           stripe_subscription_id?: string | null
@@ -770,6 +928,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_price_id_fkey"
+            columns: ["price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
             referencedColumns: ["id"]
           },
           {

@@ -147,6 +147,15 @@ export class StripeWebhookService {
         await this.handleInvoicePaymentFailed(event.data.object);
         break;
 
+      // Payment Intent events
+      case 'payment_intent.succeeded':
+        await this.handlePaymentIntentSucceeded(event.data.object);
+        break;
+
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentIntentFailed(event.data.object);
+        break;
+
       // Customer events
       case 'customer.created':
         await this.handleCustomerCreated(event.data.object);
@@ -1156,6 +1165,300 @@ export class StripeWebhookService {
       );
     } catch (error) {
       this.logger.error('Error handling customer.deleted:', error);
+    }
+  }
+
+  /**
+   * Handle payment_intent.succeeded webhook
+   * Create customer and subscription after successful payment
+   */
+  private async handlePaymentIntentSucceeded(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<void> {
+    try {
+      this.logger.log(`Payment intent succeeded: ${paymentIntent.id}`);
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update payment intent status in database
+      const { data: paymentIntentRecord, error: updateError } = await supabase
+        .from('payment_intents')
+        .update({
+          status: paymentIntent.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_payment_intent_id', paymentIntent.id)
+        .select()
+        .single();
+
+      if (updateError || !paymentIntentRecord) {
+        this.logger.warn(
+          `Payment intent ${paymentIntent.id} not found in database`,
+        );
+        return;
+      }
+
+      // Mark checkout session as completed
+      await supabase
+        .from('checkout_sessions')
+        .update({
+          completed_at: new Date().toISOString(),
+        })
+        .eq('payment_intent_id', paymentIntentRecord.id);
+
+      // Extract metadata
+      const metadata = paymentIntent.metadata || {};
+      const organizationId = metadata.organizationId;
+      const externalUserId = metadata.externalUserId;
+      const productId = metadata.productId;
+      const priceId = metadata.priceId;
+      const trialDays = parseInt(metadata.trialDays || '0', 10);
+
+      if (!organizationId || !productId || !priceId) {
+        this.logger.error(
+          'Missing required metadata in payment intent:',
+          metadata,
+        );
+        return;
+      }
+
+      // Check if customer already exists
+      let customerId = paymentIntentRecord.customer_id;
+
+      if (!customerId && paymentIntent.customer) {
+        // Find or create customer record
+        const stripeCustomerId =
+          typeof paymentIntent.customer === 'string'
+            ? paymentIntent.customer
+            : paymentIntent.customer.id;
+
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('stripe_customer_id', stripeCustomerId)
+          .single();
+
+        if (existingCustomer) {
+          customerId = existingCustomer.id;
+        } else {
+          // Create new customer record
+          const { data: newCustomer, error: customerError } = await supabase
+            .from('customers')
+            .insert({
+              organization_id: organizationId,
+              stripe_customer_id: stripeCustomerId,
+              external_id: externalUserId,
+              email: metadata.customerEmail,
+              name: metadata.customerName,
+            })
+            .select()
+            .single();
+
+          if (customerError) {
+            this.logger.error('Failed to create customer:', customerError);
+            return;
+          }
+
+          customerId = newCustomer.id;
+          this.logger.log(`Created customer ${customerId} after payment`);
+        }
+
+        // Update payment intent with customer ID
+        await supabase
+          .from('payment_intents')
+          .update({ customer_id: customerId })
+          .eq('id', paymentIntentRecord.id);
+      }
+
+      // Get organization's Stripe account ID
+      const { data: organization } = await supabase
+        .from('organizations')
+        .select('accounts!inner(stripe_id)')
+        .eq('id', organizationId)
+        .single();
+
+      if (!organization || !organization.accounts) {
+        this.logger.error(
+          `Organization ${organizationId} or its Stripe account not found`,
+        );
+        return;
+      }
+
+      const stripeAccountId = (organization.accounts as any).stripe_id;
+
+      // Make sure we have a customer ID
+      if (!customerId) {
+        this.logger.error('Customer ID is required to create subscription');
+        return;
+      }
+
+      // Create subscription in Stripe
+      const stripeCustomerId =
+        typeof paymentIntent.customer === 'string'
+          ? paymentIntent.customer
+          : paymentIntent.customer?.id;
+
+      if (!stripeCustomerId) {
+        this.logger.error('No Stripe customer ID available');
+        return;
+      }
+
+      // Get price details for subscription
+      const { data: price } = await supabase
+        .from('product_prices')
+        .select('stripe_price_id, price_amount, price_currency')
+        .eq('id', priceId)
+        .single();
+
+      if (!price?.stripe_price_id) {
+        this.logger.error(`Stripe price ID not found for price ${priceId}`);
+        return;
+      }
+
+      // Create subscription with trial if applicable
+      const subscriptionParams: Stripe.SubscriptionCreateParams = {
+        customer: stripeCustomerId,
+        items: [{ price: price.stripe_price_id }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+        },
+        expand: ['latest_invoice.payment_intent'],
+      };
+
+      if (trialDays > 0) {
+        subscriptionParams.trial_period_days = trialDays;
+      }
+
+      const stripeSubscription = await this.stripeService.createSubscription(
+        subscriptionParams,
+        stripeAccountId,
+      );
+
+      // Get organization ID for the subscription
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('organization_id')
+        .eq('id', customerId)
+        .single();
+
+      if (!customer) {
+        this.logger.error(`Customer ${customerId} not found`);
+        return;
+      }
+
+      // Cast to any to access the timestamp properties
+      const subData = stripeSubscription as any;
+
+      // Create subscription record in database
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .insert({
+          customer_id: customerId,
+          organization_id: customer.organization_id,
+          product_id: productId,
+          price_id: priceId,
+          stripe_subscription_id: stripeSubscription.id,
+          status: stripeSubscription.status,
+          current_period_start: new Date(
+            subData.current_period_start * 1000,
+          ).toISOString(),
+          current_period_end: new Date(
+            subData.current_period_end * 1000,
+          ).toISOString(),
+          trial_end: subData.trial_end
+            ? new Date(subData.trial_end * 1000).toISOString()
+            : null,
+          trial_start: subData.trial_start
+            ? new Date(subData.trial_start * 1000).toISOString()
+            : null,
+          cancel_at_period_end: false,
+          payment_intent_id: paymentIntentRecord.id,
+          amount: price.price_amount || 0,
+          currency: price.price_currency || 'usd',
+        })
+        .select()
+        .single();
+
+      if (subError) {
+        this.logger.error('Failed to create subscription:', subError);
+        // Cancel the Stripe subscription if we can't store it
+        await this.stripeService.cancelSubscription(
+          stripeSubscription.id,
+          stripeAccountId,
+          false,
+        );
+        return;
+      }
+
+      this.logger.log(
+        `Subscription ${subscription.id} created after successful payment`,
+      );
+
+      // Grant features based on product
+      const { data: productFeatures } = await supabase
+        .from('product_features')
+        .select('feature_id, config')
+        .eq('product_id', productId);
+
+      if (productFeatures && productFeatures.length > 0 && customerId) {
+        const featureGrants = productFeatures.map((pf) => ({
+          customer_id: customerId,
+          subscription_id: subscription.id,
+          feature_id: pf.feature_id,
+          properties: pf.config || null, // Changed from 'config' to 'properties'
+          granted_at: new Date().toISOString(),
+        }));
+
+        await supabase.from('feature_grants').insert(featureGrants);
+
+        this.logger.log(
+          `Granted ${featureGrants.length} features to customer ${customerId}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Error handling payment_intent.succeeded:', error);
+    }
+  }
+
+  /**
+   * Handle payment_intent.payment_failed webhook
+   * Update payment intent status and handle failure
+   */
+  private async handlePaymentIntentFailed(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<void> {
+    try {
+      this.logger.warn(`Payment intent failed: ${paymentIntent.id}`);
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update payment intent status in database
+      const { error: updateError } = await supabase
+        .from('payment_intents')
+        .update({
+          status: paymentIntent.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_payment_intent_id', paymentIntent.id);
+
+      if (updateError) {
+        this.logger.error(
+          `Failed to update payment intent ${paymentIntent.id}:`,
+          updateError,
+        );
+        return;
+      }
+
+      // TODO: Send failure notification to customer
+      // This could be an email, in-app notification, etc.
+
+      this.logger.log(
+        `Payment intent ${paymentIntent.id} marked as failed`,
+      );
+    } catch (error) {
+      this.logger.error('Error handling payment_intent.payment_failed:', error);
     }
   }
 }

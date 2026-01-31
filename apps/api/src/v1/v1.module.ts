@@ -4,6 +4,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { FeaturesModule } from '../features/features.module';
 import { SessionTokensModule } from '../session-tokens/session-tokens.module';
 import { V1ProductsModule } from './products/products.module';
+import { CheckoutModule } from './checkout/checkout.module';
 import { CustomerController } from './customer/customer.controller';
 
 /**
@@ -15,6 +16,7 @@ import { CustomerController } from './customer/customer.controller';
  * Routes:
  * - /v1/customer/*     Customer self-service endpoints
  * - /v1/products       Pricing table products
+ * - /v1/checkout/*     Payment intent creation and processing
  * - /v1/subscriptions/* Customer subscription management
  * - /v1/features/*     Feature gating and usage tracking
  */
@@ -25,6 +27,7 @@ import { CustomerController } from './customer/customer.controller';
     FeaturesModule,
     SessionTokensModule,
     V1ProductsModule,
+    CheckoutModule,
   ],
   controllers: [
     CustomerController,

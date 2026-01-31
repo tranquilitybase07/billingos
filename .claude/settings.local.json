@@ -48,7 +48,17 @@
       "Bash(git log:*)",
       "Bash(psql:*)",
       "Bash(supabase gen types:*)",
-      "Bash(packages/shared/types/database.ts)"
+      "Bash(packages/shared/types/database.ts)",
+      "Bash(pnpm unlink:*)",
+      "Bash(pnpm link:*)",
+      "Bash(pnpm build:api:*)",
+      "Bash(pnpm uninstall:*)",
+      "Bash(pnpm store prune:*)",
+      "Bash(tr:*)",
+      "WebFetch(domain:davidhuertas.dev)",
+      "WebFetch(domain:csplite.com)",
+      "WebFetch(domain:medium.com)",
+      "Bash(pnpm dev:api:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
