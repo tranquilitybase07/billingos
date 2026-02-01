@@ -6,6 +6,7 @@ import { SessionTokensModule } from '../session-tokens/session-tokens.module';
 import { V1ProductsModule } from './products/products.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { CustomerController } from './customer/customer.controller';
+import { V1FeaturesController } from './features/features.controller';
 
 /**
  * SDK API Module (v1)
@@ -31,6 +32,7 @@ import { CustomerController } from './customer/customer.controller';
   ],
   controllers: [
     CustomerController,
+    V1FeaturesController,
   ],
 })
 export class V1Module {}

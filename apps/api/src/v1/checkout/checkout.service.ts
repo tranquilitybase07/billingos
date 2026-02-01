@@ -149,6 +149,8 @@ export class CheckoutService {
         interval: price.recurring_interval,
         intervalCount: price.recurring_interval_count?.toString() || '1',
         trialDays: product.trial_days?.toString() || '0',
+        customerEmail: dto.customerEmail || null,
+        customerName: dto.customerName || null,
         ...dto.metadata,
       },
     }, {

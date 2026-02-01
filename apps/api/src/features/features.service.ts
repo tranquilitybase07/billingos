@@ -744,6 +744,148 @@ export class FeaturesService {
     return result;
   }
 
+  /**
+   * Get all feature entitlements for a customer
+   * Shows what features they have access to via their subscription
+   */
+  async getCustomerEntitlements(customerId: string, organizationId: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // Get all active feature grants for this customer
+    const { data: grants, error } = await supabase
+      .from('feature_grants')
+      .select(
+        `
+        id,
+        granted_at,
+        properties,
+        features (
+          id,
+          name,
+          title,
+          description,
+          type,
+          properties
+        ),
+        subscriptions (
+          id,
+          status,
+          current_period_end,
+          products (
+            id,
+            name,
+            description
+          )
+        )
+      `,
+      )
+      .eq('customer_id', customerId)
+      .is('revoked_at', null);
+
+    if (error) {
+      this.logger.error('Error fetching entitlements:', error);
+      throw new BadRequestException('Failed to fetch entitlements');
+    }
+
+    // Transform grants into entitlements
+    const entitlements = (grants || []).map((grant: any) => {
+      const entitlement: any = {
+        feature_key: grant.features?.name,
+        feature_title: grant.features?.title,
+        feature_type: grant.features?.type,
+        granted_at: grant.granted_at,
+        product_name: grant.subscriptions?.products?.name,
+        subscription_status: grant.subscriptions?.status,
+      };
+
+      // Add usage info for quota features
+      if (grant.features?.type === 'usage_quota') {
+        entitlement.properties = grant.features.properties;
+      }
+
+      return entitlement;
+    });
+
+    return entitlements;
+  }
+
+  /**
+   * Get usage metrics for a customer's features
+   * Shows current consumption vs limits
+   */
+  async getUsageMetrics(customerId: string, featureName?: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // Build query for usage records
+    let query = supabase
+      .from('usage_records')
+      .select(
+        `
+        id,
+        consumed_units,
+        limit_units,
+        period_start,
+        period_end,
+        features (
+          id,
+          name,
+          title,
+          type
+        ),
+        subscriptions (
+          id,
+          status,
+          products (
+            name
+          )
+        )
+      `,
+      )
+      .eq('customer_id', customerId)
+      .gte('period_end', new Date().toISOString());
+
+    // If specific feature requested, filter by it
+    if (featureName) {
+      // First get the feature ID
+      const { data: feature } = await supabase
+        .from('features')
+        .select('id')
+        .eq('name', featureName)
+        .single();
+
+      if (feature) {
+        query = query.eq('feature_id', feature.id);
+      }
+    }
+
+    const { data: records, error } = await query;
+
+    if (error) {
+      this.logger.error('Error fetching usage metrics:', error);
+      throw new BadRequestException('Failed to fetch usage metrics');
+    }
+
+    // Transform into metrics format
+    const metrics = (records || []).map((record: any) => ({
+      feature_key: record.features?.name,
+      feature_title: record.features?.title,
+      product_name: record.subscriptions?.products?.name,
+      consumed: record.consumed_units || 0,
+      limit: record.limit_units || 0,
+      remaining: Math.max(0, (record.limit_units || 0) - (record.consumed_units || 0)),
+      percentage_used: record.limit_units > 0
+        ? Math.round(((record.consumed_units || 0) / record.limit_units) * 100)
+        : 0,
+      period_start: record.period_start,
+      period_end: record.period_end,
+      resets_in_days: Math.ceil(
+        (new Date(record.period_end).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+      ),
+    }));
+
+    return metrics;
+  }
+
   // TODO: Add Redis cache invalidation methods
   // private async invalidateFeatureCache(customerId: string, featureName: string) {
   //   const cacheKey = `feature:check:${customerId}:${featureName}`;
