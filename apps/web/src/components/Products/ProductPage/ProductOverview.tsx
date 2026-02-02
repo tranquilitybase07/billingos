@@ -4,7 +4,7 @@ import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
 import { OrderStatus } from '@/components/Orders/OrderStatus'
 import { SubscriptionStatus } from '@/components/Subscriptions/SubscriptionStatus'
 import { RevenueWidget } from '@/components/Widgets/RevenueWidget'
-import { Product } from '@/hooks/queries/products'
+import { Product, useProductSubscriptionCount } from '@/hooks/queries/products'
 import {
   DataTable,
   DataTableColumnHeader,
@@ -142,6 +142,10 @@ export const ProductOverview = ({
   product,
   isRecurring,
 }: ProductOverviewProps) => {
+  // Fetch real subscription count
+  const { data: subscriptionCount, isLoading: isLoadingSubscriptionCount } =
+    useProductSubscriptionCount(product.id)
+
   return (
     <div className="flex flex-col gap-y-16">
       {/* Metric Summary Cards */}
@@ -150,8 +154,9 @@ export const ProductOverview = ({
           <>
             <MiniMetricChartBox
               title="Active Subscriptions"
-              value={47}
+              value={subscriptionCount?.active ?? 0}
               type="scalar"
+              isLoading={isLoadingSubscriptionCount}
             />
             <MiniMetricChartBox
               title="Monthly Recurring Revenue"

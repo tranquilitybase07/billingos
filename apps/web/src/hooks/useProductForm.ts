@@ -26,13 +26,19 @@ function productToFormState(product: Product) {
     recurring_interval: p.recurring_interval,
   }));
 
-  const features: SelectedFeature[] = (product.features ?? []).map((f, i) => ({
-    feature_id: f.feature_id,
-    display_order: f.display_order ?? i,
-    config: f.config ?? {},
-    featureName: f.feature?.name,
-    featureTitle: f.feature?.title,
-  }));
+  const features: SelectedFeature[] = (product.features ?? []).map((f, i) => {
+    // API returns nested feature data under 'features' key (table name from Supabase join)
+    const featureData = (f as any).features || (f as any).feature;
+
+    return {
+      feature_id: featureData?.id || f.feature_id,
+      display_order: f.display_order ?? i + 1,
+      config: f.config ?? {},
+      featureName: featureData?.name,
+      featureTitle: featureData?.title,
+      featureType: featureData?.type as "boolean_flag" | "usage_quota" | "numeric_limit",
+    };
+  });
 
   const currency = prices[0]?.price_currency ?? "usd";
   const trialDays = product.trial_days ?? 0;
@@ -60,6 +66,9 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
   );
 
   const [features, setFeatures] = useState<SelectedFeature[]>(initial?.features ?? []);
+
+  // Store initial product for change detection
+  const initialProductRef = initialProduct;
 
   // Sync currency across all prices
   const handleCurrencyChange = (newCurrency: string) => {
@@ -141,6 +150,137 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
     return null;
   };
 
+  // Build update payload with change detection
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buildUpdatePayload = (): any => {
+    if (!initialProductRef) {
+      // If no initial product, use buildPayload for create
+      return buildPayload();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatePayload: any = {};
+
+    // Check basic fields
+    if (name !== initialProductRef.name) {
+      updatePayload.name = name;
+    }
+    if (description !== (initialProductRef.description ?? "")) {
+      updatePayload.description = description;
+    }
+    if (trialDays !== (initialProductRef.trial_days ?? 0)) {
+      updatePayload.trial_days = trialDays;
+    }
+
+    // Price change detection
+    const initialPrices = initialProductRef.prices || [];
+    const currentPrices = prices;
+
+    // Helper to compare prices (ignoring IDs)
+    const priceEquals = (p1: any, p2: any) => {
+      return (
+        p1.amount_type === p2.amount_type &&
+        p1.price_amount === p2.price_amount &&
+        p1.price_currency === p2.price_currency &&
+        p1.recurring_interval === p2.recurring_interval
+      );
+    };
+
+    // Find prices to archive (exist in initial but not in current)
+    const pricesToArchive = initialPrices
+      .filter((initialPrice) => {
+        return !currentPrices.some((currentPrice) =>
+          priceEquals(initialPrice, currentPrice)
+        );
+      })
+      .map((p) => p.id)
+      .filter(Boolean);
+
+    // Find prices to create (exist in current but not in initial)
+    const pricesToCreate = currentPrices.filter((currentPrice) => {
+      return !initialPrices.some((initialPrice) =>
+        priceEquals(initialPrice, currentPrice)
+      );
+    });
+
+    if (pricesToArchive.length > 0 || pricesToCreate.length > 0) {
+      updatePayload.prices = {};
+      if (pricesToArchive.length > 0) {
+        updatePayload.prices.archive = pricesToArchive;
+      }
+      if (pricesToCreate.length > 0) {
+        updatePayload.prices.create = pricesToCreate.map((p) => ({
+          amount_type: p.amount_type,
+          price_amount: p.price_amount,
+          price_currency: p.price_currency ?? currency,
+          recurring_interval: p.recurring_interval,
+        }));
+      }
+    }
+
+    // Feature change detection
+    const initialFeatures = (initialProductRef.features || []).map(
+      (f) => f.feature_id
+    );
+    const currentFeatures = features.map((f) => f.feature_id);
+
+    // Features to unlink (exist in initial but not in current)
+    const featuresToUnlink = initialFeatures.filter(
+      (id) => !currentFeatures.includes(id)
+    );
+
+    // Features to link (exist in current but not in initial)
+    const featuresToLink = features.filter(
+      (f) => !initialFeatures.includes(f.feature_id)
+    );
+
+    // Features to update (exist in both but config/display_order changed)
+    const featuresToUpdate = features
+      .filter((currentFeature) => {
+        const initialFeature = initialProductRef.features?.find(
+          (f) => f.feature_id === currentFeature.feature_id
+        );
+        if (!initialFeature) return false;
+
+        // Check if config or display_order changed
+        const configChanged =
+          JSON.stringify(currentFeature.config) !==
+          JSON.stringify(initialFeature.config);
+        const orderChanged =
+          currentFeature.display_order !== initialFeature.display_order;
+
+        return configChanged || orderChanged;
+      })
+      .map((f) => ({
+        feature_id: f.feature_id,
+        display_order: f.display_order,
+        config: f.config,
+      }));
+
+    if (
+      featuresToUnlink.length > 0 ||
+      featuresToLink.length > 0 ||
+      featuresToUpdate.length > 0
+    ) {
+      updatePayload.features = {};
+      if (featuresToUnlink.length > 0) {
+        updatePayload.features.unlink = featuresToUnlink;
+      }
+      if (featuresToLink.length > 0) {
+        updatePayload.features.link = featuresToLink.map((f) => ({
+          feature_id: f.feature_id,
+          display_order: f.display_order,
+          config: f.config,
+        }));
+      }
+      if (featuresToUpdate.length > 0) {
+        updatePayload.features.update = featuresToUpdate;
+      }
+    }
+
+    return updatePayload;
+  };
+
   return {
     // Form state
     name,
@@ -158,7 +298,9 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
 
     // Helpers
     buildPayload,
+    buildUpdatePayload,
     isValid,
     getValidationError,
+    isEditMode: !!initialProductRef,
   };
 }

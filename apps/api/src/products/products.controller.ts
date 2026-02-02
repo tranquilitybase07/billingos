@@ -65,6 +65,15 @@ export class ProductsController {
   }
 
   /**
+   * Get subscription count for product
+   * GET /api/products/:id/subscriptions/count
+   */
+  @Get(':id/subscriptions/count')
+  getSubscriptionCount(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.productsService.getSubscriptionCount(id, user.id);
+  }
+
+  /**
    * Update product
    * PATCH /api/products/:id
    */

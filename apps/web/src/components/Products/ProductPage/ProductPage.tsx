@@ -173,16 +173,6 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={() => {
-                        router.push(
-                          `/dashboard/${organizationSlug}/products/new?fromProductId=${product.id}`
-                        )
-                      }}
-                    >
-                      Duplicate Product
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
                       onClick={showArchiveModal}
                       className="text-destructive focus:text-destructive"
                     >

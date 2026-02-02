@@ -21,7 +21,15 @@ export interface ProductFeature {
   display_order: number
   config: Record<string, any>
   created_at: string
-  // Denormalized feature data
+  // Denormalized feature data (returned as 'features' by Supabase join)
+  features?: {
+    id: string
+    name: string
+    title: string
+    description?: string
+    type: string
+  }
+  // Keep for backward compatibility
   feature?: {
     id: string
     name: string
@@ -60,6 +68,12 @@ export interface PaginatedResponse<T> {
     page_size: number
     total_pages: number
   }
+}
+
+export interface ProductSubscriptionCount {
+  count: number
+  active: number
+  canceled: number
 }
 
 export interface UseProductsOptions {
@@ -241,5 +255,19 @@ export const useDeleteProduct = () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['product', productId] })
     },
+  })
+}
+
+/**
+ * Get subscription count for a product
+ */
+export const useProductSubscriptionCount = (productId: string | undefined) => {
+  return useQuery({
+    queryKey: ['product-subscription-count', productId],
+    queryFn: async () => {
+      if (!productId) throw new Error('Product ID is required')
+      return api.get<ProductSubscriptionCount>(`/products/${productId}/subscriptions/count`)
+    },
+    enabled: !!productId,
   })
 }

@@ -272,6 +272,26 @@ export class StripeService {
   }
 
   /**
+   * Archive a price in Stripe Connect account by setting active to false
+   */
+  async archivePrice(
+    priceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Price> {
+    this.logger.log(
+      `Archiving Stripe price ${priceId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.prices.update(
+      priceId,
+      { active: false },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
+
+  /**
    * Create a subscription in Stripe Connect account
    */
   async createSubscription(

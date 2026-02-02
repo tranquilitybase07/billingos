@@ -448,56 +448,318 @@ export class ProductsService {
     // Verify product exists and user has access
     const product = await this.findOne(id, userId);
 
-    const { data: updated, error } = await supabase
-      .from('products')
-      .update({
-        name: updateDto.name,
-        description: updateDto.description,
-        trial_days: updateDto.trial_days,
-        metadata: updateDto.metadata,
-      })
-      .eq('id', id)
-      .select()
+    // Get Stripe account for syncing
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', product.organization_id)
       .single();
 
-    if (error || !updated) {
-      throw new BadRequestException('Failed to update product');
+    let stripeAccountId: string | null = null;
+    if (org?.account_id) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('stripe_id')
+        .eq('id', org.account_id)
+        .single();
+      stripeAccountId = account?.stripe_id || null;
     }
 
-    // TODO: Update Stripe product as well
-    if (product.stripe_product_id) {
-      try {
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('account_id')
-          .eq('id', product.organization_id)
-          .single();
+    try {
+      // 1. Update basic product fields
+      if (
+        updateDto.name ||
+        updateDto.description !== undefined ||
+        updateDto.trial_days !== undefined ||
+        updateDto.metadata
+      ) {
+        const updateData: any = {};
+        if (updateDto.name) updateData.name = updateDto.name;
+        if (updateDto.description !== undefined)
+          updateData.description = updateDto.description;
+        if (updateDto.trial_days !== undefined)
+          updateData.trial_days = updateDto.trial_days;
+        if (updateDto.metadata) updateData.metadata = updateDto.metadata;
 
-        if (org?.account_id) {
-          const { data: account } = await supabase
-            .from('accounts')
-            .select('stripe_id')
-            .eq('id', org.account_id)
-            .single();
+        const { error } = await supabase
+          .from('products')
+          .update(updateData)
+          .eq('id', id);
 
-          if (account?.stripe_id) {
+        if (error) {
+          throw new BadRequestException('Failed to update product');
+        }
+
+        // Update Stripe product
+        if (product.stripe_product_id && stripeAccountId) {
+          try {
             await this.stripeService.updateProduct(
               product.stripe_product_id,
               {
                 name: updateDto.name,
                 description: updateDto.description,
               },
-              account.stripe_id,
+              stripeAccountId,
             );
+          } catch (error) {
+            this.logger.warn('Failed to update Stripe product:', error);
           }
         }
-      } catch (error) {
-        this.logger.warn('Failed to update Stripe product:', error);
-        // Don't fail the request if Stripe update fails
       }
-    }
 
-    return this.findOne(id, userId);
+      // 2. Handle price operations
+      if (updateDto.prices) {
+        // Archive prices
+        if (updateDto.prices.archive && updateDto.prices.archive.length > 0) {
+          for (const priceId of updateDto.prices.archive) {
+            // Archive in database
+            const { error } = await supabase
+              .from('product_prices')
+              .update({ is_archived: true })
+              .eq('id', priceId)
+              .eq('product_id', id);
+
+            if (error) {
+              this.logger.error(`Failed to archive price ${priceId}:`, error);
+              throw new BadRequestException(
+                `Failed to archive price ${priceId}`,
+              );
+            }
+
+            // Archive in Stripe (if stripe_price_id exists)
+            const { data: priceRecord } = await supabase
+              .from('product_prices')
+              .select('stripe_price_id')
+              .eq('id', priceId)
+              .single();
+
+            if (
+              priceRecord?.stripe_price_id &&
+              product.stripe_product_id &&
+              stripeAccountId
+            ) {
+              try {
+                await this.stripeService.archivePrice(
+                  priceRecord.stripe_price_id,
+                  stripeAccountId,
+                );
+              } catch (error) {
+                this.logger.warn(
+                  `Failed to archive Stripe price ${priceRecord.stripe_price_id}:`,
+                  error,
+                );
+              }
+            }
+          }
+        }
+
+        // Create new prices
+        if (updateDto.prices.create && updateDto.prices.create.length > 0) {
+          for (const priceDto of updateDto.prices.create) {
+            // Create in Stripe first
+            let stripePriceId: string | null = null;
+            if (priceDto.amount_type === 'fixed' && product.stripe_product_id && stripeAccountId) {
+              const recurringInterval =
+                priceDto.recurring_interval || product.recurring_interval;
+              const recurringIntervalCount =
+                priceDto.recurring_interval_count ||
+                product.recurring_interval_count ||
+                1;
+
+              try {
+                const stripePrice = await this.stripeService.createPrice(
+                  {
+                    product: product.stripe_product_id,
+                    currency: priceDto.price_currency || 'usd',
+                    unit_amount: priceDto.price_amount,
+                    recurring: {
+                      interval: recurringInterval as Stripe.Price.Recurring.Interval,
+                      interval_count: recurringIntervalCount,
+                    },
+                  },
+                  stripeAccountId,
+                );
+                stripePriceId = stripePrice.id;
+              } catch (error) {
+                this.logger.error('Failed to create Stripe price:', error);
+                throw new BadRequestException('Failed to create new price');
+              }
+            }
+
+            // Create in database
+            const recurringInterval =
+              priceDto.recurring_interval || product.recurring_interval;
+            const recurringIntervalCount =
+              priceDto.recurring_interval_count ||
+              product.recurring_interval_count ||
+              1;
+
+            const { error } = await supabase
+              .from('product_prices')
+              .insert({
+                product_id: id,
+                amount_type: priceDto.amount_type,
+                price_amount: priceDto.price_amount || null,
+                price_currency: priceDto.price_currency || 'usd',
+                recurring_interval: recurringInterval,
+                recurring_interval_count: recurringIntervalCount,
+                stripe_price_id: stripePriceId,
+                is_archived: false,
+              });
+
+            if (error) {
+              this.logger.error('Failed to create price in DB:', error);
+              throw new BadRequestException('Failed to create new price');
+            }
+          }
+        }
+      }
+
+      // 3. Handle feature operations
+      if (updateDto.features) {
+        // Unlink features
+        if (updateDto.features.unlink && updateDto.features.unlink.length > 0) {
+          for (const featureId of updateDto.features.unlink) {
+            // Get Stripe product feature ID before deleting
+            const { data: link } = await supabase
+              .from('product_features')
+              .select('stripe_product_feature_id')
+              .eq('product_id', id)
+              .eq('feature_id', featureId)
+              .single();
+
+            // Delete from database
+            const { error } = await supabase
+              .from('product_features')
+              .delete()
+              .eq('product_id', id)
+              .eq('feature_id', featureId);
+
+            if (error) {
+              this.logger.error(`Failed to unlink feature ${featureId}:`, error);
+              throw new BadRequestException(
+                `Failed to unlink feature ${featureId}`,
+              );
+            }
+
+            // Detach from Stripe
+            if (
+              link?.stripe_product_feature_id &&
+              product.stripe_product_id &&
+              stripeAccountId
+            ) {
+              try {
+                await this.stripeService.detachFeatureFromProduct(
+                  product.stripe_product_id,
+                  link.stripe_product_feature_id,
+                  stripeAccountId,
+                );
+              } catch (error) {
+                this.logger.warn(
+                  `Failed to detach feature from Stripe Product:`,
+                  error,
+                );
+              }
+            }
+          }
+        }
+
+        // Link new features
+        if (updateDto.features.link && updateDto.features.link.length > 0) {
+          for (const featureDto of updateDto.features.link) {
+            // Verify feature exists
+            const { data: feature } = await supabase
+              .from('features')
+              .select('id, stripe_feature_id')
+              .eq('id', featureDto.feature_id)
+              .eq('organization_id', product.organization_id)
+              .single();
+
+            if (!feature) {
+              throw new NotFoundException(
+                `Feature ${featureDto.feature_id} not found`,
+              );
+            }
+
+            // Create link in database
+            const { error } = await supabase
+              .from('product_features')
+              .insert({
+                product_id: id,
+                feature_id: featureDto.feature_id,
+                display_order: featureDto.display_order,
+                config: featureDto.config || {},
+                stripe_synced: false,
+              });
+
+            if (error) {
+              this.logger.error('Failed to link feature:', error);
+              throw new BadRequestException('Failed to link feature');
+            }
+
+            // Attach to Stripe Product
+            if (
+              feature.stripe_feature_id &&
+              product.stripe_product_id &&
+              stripeAccountId
+            ) {
+              try {
+                const productFeature =
+                  await this.stripeService.attachFeatureToProduct({
+                    productId: product.stripe_product_id,
+                    featureId: feature.stripe_feature_id,
+                    stripeAccountId,
+                  });
+
+                await supabase
+                  .from('product_features')
+                  .update({
+                    stripe_synced: true,
+                    stripe_synced_at: new Date().toISOString(),
+                    stripe_product_feature_id: productFeature.id,
+                  })
+                  .eq('product_id', id)
+                  .eq('feature_id', featureDto.feature_id);
+              } catch (error) {
+                this.logger.error('Failed to attach feature to Stripe:', error);
+              }
+            }
+          }
+        }
+
+        // Update existing feature links
+        if (updateDto.features.update && updateDto.features.update.length > 0) {
+          for (const updateLink of updateDto.features.update) {
+            const updateData: any = {};
+            if (updateLink.display_order !== undefined)
+              updateData.display_order = updateLink.display_order;
+            if (updateLink.config !== undefined)
+              updateData.config = updateLink.config;
+
+            const { error } = await supabase
+              .from('product_features')
+              .update(updateData)
+              .eq('product_id', id)
+              .eq('feature_id', updateLink.feature_id);
+
+            if (error) {
+              this.logger.error(
+                `Failed to update feature link ${updateLink.feature_id}:`,
+                error,
+              );
+              throw new BadRequestException(
+                `Failed to update feature link ${updateLink.feature_id}`,
+              );
+            }
+          }
+        }
+      }
+
+      return this.findOne(id, userId);
+    } catch (error) {
+      this.logger.error('Error updating product:', error);
+      throw error;
+    }
   }
 
   /**
@@ -521,5 +783,53 @@ export class ProductsService {
     this.logger.log(`Product archived: ${id}`);
 
     return { success: true };
+  }
+
+  /**
+   * Get subscription count for product
+   */
+  async getSubscriptionCount(id: string, userId: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // Verify product exists and user has access
+    await this.findOne(id, userId);
+
+    // Count total subscriptions
+    const { count: total, error: totalError } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('product_id', id);
+
+    if (totalError) {
+      throw new BadRequestException('Failed to fetch subscription count');
+    }
+
+    // Count active subscriptions (active or trialing)
+    const { count: active, error: activeError } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('product_id', id)
+      .in('status', ['active', 'trialing']);
+
+    if (activeError) {
+      throw new BadRequestException('Failed to fetch active subscription count');
+    }
+
+    // Count canceled subscriptions
+    const { count: canceled, error: canceledError } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('product_id', id)
+      .eq('status', 'canceled');
+
+    if (canceledError) {
+      throw new BadRequestException('Failed to fetch canceled subscription count');
+    }
+
+    return {
+      count: total || 0,
+      active: active || 0,
+      canceled: canceled || 0,
+    };
   }
 }

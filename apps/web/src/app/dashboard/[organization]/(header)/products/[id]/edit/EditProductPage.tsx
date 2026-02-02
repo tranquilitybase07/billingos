@@ -112,7 +112,18 @@ function EditProductForm({
     }
 
     try {
-      const payload = form.buildPayload()
+      const payload = form.buildUpdatePayload()
+
+      // Check if there are any changes
+      if (Object.keys(payload).length === 0) {
+        toast({
+          title: 'No Changes',
+          description: 'No changes were detected to save',
+          variant: 'default',
+        })
+        return
+      }
+
       await updateProduct.mutateAsync({
         id: productId,
         body: payload,
