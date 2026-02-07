@@ -756,10 +756,10 @@ export class ProductsService {
       // Convert the existing price data to match CreatePriceDto format
       const priceDto: CreatePriceDto = {
         amount_type: price.amount_type as PriceAmountType,
-        price_amount: price.price_amount || undefined,
-        price_currency: price.price_currency || undefined,
+        price_amount: price.price_amount ?? undefined,
+        price_currency: price.price_currency ?? undefined,
         recurring_interval: price.recurring_interval as RecurringInterval,
-        recurring_interval_count: price.recurring_interval_count || undefined,
+        recurring_interval_count: price.recurring_interval_count ?? undefined,
       };
 
       await this.createPriceRecord(

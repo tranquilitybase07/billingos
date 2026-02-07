@@ -18,6 +18,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { SessionTokensModule } from './session-tokens/session-tokens.module';
 import { V1Module } from './v1/v1.module';
 import { JwtDebugMiddleware } from './middleware/jwt-debug.middleware';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { JwtDebugMiddleware } from './middleware/jwt-debug.middleware';
     ApiKeysModule,
     SessionTokensModule,
     V1Module,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

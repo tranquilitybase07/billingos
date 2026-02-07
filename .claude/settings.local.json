@@ -24,7 +24,13 @@
       "Bash(pnpm install:*)",
       "Bash(pnpm list:*)",
       "Bash(pnpm test:*)",
-      "Bash(pnpm test:cov:*)"
+      "Bash(pnpm test:cov:*)",
+      "Bash(find:*)",
+      "Bash(npx nest g module:*)",
+      "Bash(npx nest g service analytics)",
+      "Bash(npx nest g controller:*)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs kill:*)"
     ],
     "deny": [],
     "ask": []
