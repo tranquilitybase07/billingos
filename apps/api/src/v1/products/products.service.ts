@@ -69,7 +69,7 @@ export class V1ProductsService {
         productFeatures:product_features(
           display_order,
           config,
-          features(*)
+          features(id, name, title, description, type, properties)
         )
       `,
       )

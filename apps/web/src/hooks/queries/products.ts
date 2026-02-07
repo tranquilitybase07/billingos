@@ -21,7 +21,15 @@ export interface ProductFeature {
   display_order: number
   config: Record<string, any>
   created_at: string
-  // Denormalized feature data
+  // Denormalized feature data (returned as 'features' by Supabase join)
+  features?: {
+    id: string
+    name: string
+    title: string
+    description?: string
+    type: string
+  }
+  // Keep for backward compatibility
   feature?: {
     id: string
     name: string
@@ -48,6 +56,12 @@ export interface Product {
   metadata: Record<string, any>
   medias: Array<{ id: string; public_url: string }>
   modified_at?: string
+  // Versioning fields
+  version?: number
+  parent_product_id?: string | null
+  version_status?: 'current' | 'superseded' | null
+  latest_version_id?: string | null
+  version_reason?: string | null
   // For compatibility with utils/product.ts
   is_recurring?: boolean
 }
@@ -60,6 +74,20 @@ export interface PaginatedResponse<T> {
     page_size: number
     total_pages: number
   }
+}
+
+export interface ProductSubscriptionCount {
+  count: number
+  active: number
+  canceled: number
+}
+
+export interface ProductRevenueMetrics {
+  mrr: number
+  revenueLastThirtyDays: number
+  arpu: number
+  activeSubscriptionCount: number
+  currency: string
 }
 
 export interface UseProductsOptions {
@@ -216,12 +244,17 @@ export const useUpdateProduct = () => {
     mutationFn: async ({ id, body }: { id: string; body: Partial<ProductFormData> }) => {
       return api.patch<Product>(`/products/${id}`, body)
     },
-    onSuccess: (data) => {
-      // Invalidate specific product and products list
+    onSuccess: (data, variables) => {
+      // Invalidate both old product (in case of versioning) and new product
+      queryClient.invalidateQueries({ queryKey: ['product', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['product', data.id] })
+      // Invalidate products list for this organization
       queryClient.invalidateQueries({
         queryKey: ['products', data.organization_id],
       })
+      // Also invalidate subscription count for both products
+      queryClient.invalidateQueries({ queryKey: ['product-subscription-count', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['product-subscription-count', data.id] })
     },
   })
 }
@@ -241,5 +274,35 @@ export const useDeleteProduct = () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['product', productId] })
     },
+  })
+}
+
+/**
+ * Get subscription count for a product
+ */
+export const useProductSubscriptionCount = (productId: string | undefined) => {
+  return useQuery({
+    queryKey: ['product-subscription-count', productId],
+    queryFn: async () => {
+      if (!productId) throw new Error('Product ID is required')
+      return api.get<ProductSubscriptionCount>(`/products/${productId}/subscriptions/count`)
+    },
+    enabled: !!productId,
+  })
+}
+
+/**
+ * Get revenue metrics for a product (MRR, 30-day revenue, ARPU)
+ */
+export const useProductRevenueMetrics = (productId: string | undefined) => {
+  return useQuery({
+    queryKey: ['product-revenue-metrics', productId],
+    queryFn: async () => {
+      if (!productId) throw new Error('Product ID is required')
+      return api.get<ProductRevenueMetrics>(`/products/${productId}/revenue-metrics`)
+    },
+    enabled: !!productId,
+    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (formerly cacheTime)
   })
 }

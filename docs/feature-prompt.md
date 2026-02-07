@@ -8,3 +8,18 @@ Add onboarding flow for businesses where they register their business and we wil
 Then check how you will implement in billingOS and here is the project path /Users/ankushkumar/Code/billingos/
 
 And later we will add more features so but for now focus on this part first focus on BE side then we will come to frontend.
+
+
+I have some doubts related to billing OS. My first doubt is related to the product update policy. I mean like once a merchant created a product and now they want to update the price so how this thing should
+work and how other products are doing it products like flow lad, andautumn so if they update the product price, should it be applied to all the existing customers or only to the new customers and since our
+product is tightly coupled with stripe, so what does stripe support and what's the recommended approach and what we should do and second question is related to the features billing OS supports linking features
+to the product and for example, a merchant creates a plan awith API calls 2000s and now they want to reduce the API calls to 1000 so should it be allowed or how other apps are handling it and what we should do
+as well so take a look at the docs first how billing OS is implemented what are the APIS we have and how we have implemented the system overall and then look at the other products as well what they are doing
+and what is the best recommended approach for us
+
+/Users/ankushkumar/Code/flowglad
+/Users/ankushkumar/Code/autumn
+
+@docs/
+
+Ask questions if you have any dobuts or questions, don't assume things, because these are critical decisions to make.

@@ -1,21 +1,20 @@
 import { Metadata } from 'next'
-import BenefitsPage from './BenefitsPage'
 import { getOrganizationBySlug } from '@/lib/organization'
+import SubscriptionsPage from './SubscriptionsPage'
 
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: 'Benefits',
-  }
+export const metadata: Metadata = {
+  title: 'Subscriptions',
 }
 
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string }>
+  searchParams: Promise<{ product_id?: string; status?: string }>
 }) {
   const { organization: orgSlug } = await params
-
-  // Fetch organization to get the actual ID
+  const search = await searchParams
   const organization = await getOrganizationBySlug(orgSlug)
 
   if (!organization) {
@@ -23,9 +22,11 @@ export default async function Page({
   }
 
   return (
-    <BenefitsPage
+    <SubscriptionsPage
       organizationId={organization.id}
       organizationSlug={orgSlug}
+      productIdFilter={search.product_id}
+      statusFilter={search.status}
     />
   )
 }

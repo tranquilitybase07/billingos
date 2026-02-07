@@ -32,6 +32,234 @@ export class CustomersService {
   ) {}
 
   /**
+   * Upsert a customer (create or update if exists)
+   * This handles race conditions between API calls and webhooks with retry logic
+   */
+  async upsertCustomer(
+    createDto: CreateCustomerDto & { stripe_customer_id?: string },
+  ): Promise<CustomerResponseDto> {
+    const supabase = this.supabaseService.getClient();
+
+    // Build the upsert data
+    const upsertData = {
+      organization_id: createDto.organization_id,
+      email: createDto.email.toLowerCase(),
+      name: createDto.name || null,
+      external_id: createDto.external_id || null,
+      billing_address: (createDto.billing_address || {}) as any,
+      stripe_customer_id: createDto.stripe_customer_id || null,
+      metadata: (createDto.metadata || {}) as any,
+      email_verified: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Try upsert with retry logic for race conditions
+    let retries = 3;
+    let lastError: any = null;
+
+    while (retries > 0) {
+      try {
+        // Primary upsert attempt using stripe_customer_id constraint
+        if (createDto.stripe_customer_id) {
+          const { data: customer, error } = await supabase
+            .from('customers')
+            .upsert(upsertData, {
+              onConflict: 'organization_id,stripe_customer_id',
+              ignoreDuplicates: false, // Update if exists
+            })
+            .select()
+            .single();
+
+          if (!error) {
+            this.logger.log(`Upserted customer ${customer.id} with Stripe ID ${createDto.stripe_customer_id}`);
+            return this.mapToResponseDto(customer);
+          }
+
+          lastError = error;
+        }
+
+        // Try with external_id constraint if available
+        if (createDto.external_id) {
+          const { data: customer, error } = await supabase
+            .from('customers')
+            .upsert(upsertData, {
+              onConflict: 'organization_id,external_id',
+              ignoreDuplicates: false,
+            })
+            .select()
+            .single();
+
+          if (!error) {
+            this.logger.log(`Upserted customer ${customer.id} with external ID ${createDto.external_id}`);
+            return this.mapToResponseDto(customer);
+          }
+
+          lastError = error;
+        }
+
+        // Try with email constraint as last resort
+        const { data: customer, error } = await supabase
+          .from('customers')
+          .upsert({
+            ...upsertData,
+            // Ensure we have a unique constraint to use
+            email: upsertData.email,
+          }, {
+            onConflict: 'organization_id,email',
+            ignoreDuplicates: false,
+          })
+          .select()
+          .single();
+
+        if (!error) {
+          this.logger.log(`Upserted customer ${customer.id} with email ${createDto.email}`);
+          return this.mapToResponseDto(customer);
+        }
+
+        lastError = error;
+
+        // If we get a conflict error, try to find and update the existing customer
+        if (error?.code === '23505') {
+          const existingCustomer = await this.findExistingCustomer(
+            createDto.organization_id,
+            createDto.stripe_customer_id,
+            createDto.external_id,
+            createDto.email,
+          );
+
+          if (existingCustomer) {
+            // Update the existing customer with merge strategy
+            const updateData: any = {
+              updated_at: new Date().toISOString(),
+            };
+
+            // Only update fields that are provided and not already set
+            if (createDto.stripe_customer_id && !existingCustomer.stripe_customer_id) {
+              updateData.stripe_customer_id = createDto.stripe_customer_id;
+            }
+            if (createDto.external_id && !existingCustomer.external_id) {
+              updateData.external_id = createDto.external_id;
+            }
+            if (createDto.name) {
+              updateData.name = createDto.name;
+            }
+            if (createDto.billing_address && Object.keys(createDto.billing_address).length > 0) {
+              updateData.billing_address = createDto.billing_address;
+            }
+            if (createDto.metadata && Object.keys(createDto.metadata).length > 0) {
+              updateData.metadata = {
+                ...(existingCustomer.metadata || {}),
+                ...createDto.metadata,
+              };
+            }
+
+            const { data: updatedCustomer, error: updateError } = await supabase
+              .from('customers')
+              .update(updateData)
+              .eq('id', existingCustomer.id)
+              .select()
+              .single();
+
+            if (!updateError && updatedCustomer) {
+              this.logger.log(`Updated existing customer ${updatedCustomer.id} after conflict`);
+              return this.mapToResponseDto(updatedCustomer);
+            }
+
+            lastError = updateError || error;
+          }
+        }
+
+        // If not a conflict error, throw immediately
+        if (error?.code !== '23505') {
+          throw error;
+        }
+
+      } catch (error) {
+        lastError = error;
+
+        if (retries > 1) {
+          // Exponential backoff: 100ms, 200ms, 400ms
+          const delay = 100 * Math.pow(2, 3 - retries);
+          this.logger.warn(
+            `Customer upsert attempt failed, retrying in ${delay}ms... (${retries - 1} attempts left)`,
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      retries--;
+    }
+
+    // All retries exhausted
+    this.logger.error('Failed to upsert customer after all retries', lastError);
+    throw new BadRequestException(
+      `Failed to upsert customer after multiple attempts: ${lastError?.message || 'Unknown error'}`,
+    );
+  }
+
+  /**
+   * Helper method to find existing customer by various identifiers
+   */
+  private async findExistingCustomer(
+    organizationId: string,
+    stripeCustomerId?: string,
+    externalId?: string,
+    email?: string,
+  ): Promise<any> {
+    const supabase = this.supabaseService.getClient();
+
+    // Try by stripe_customer_id first (most reliable)
+    if (stripeCustomerId) {
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('stripe_customer_id', stripeCustomerId)
+        .is('deleted_at', null)
+        .single();
+
+      if (data) {
+        this.logger.log(`Found existing customer by Stripe ID: ${data.id}`);
+        return data;
+      }
+    }
+
+    // Try by external_id
+    if (externalId) {
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('external_id', externalId)
+        .is('deleted_at', null)
+        .single();
+
+      if (data) {
+        this.logger.log(`Found existing customer by external ID: ${data.id}`);
+        return data;
+      }
+    }
+
+    // Try by email (case-insensitive)
+    if (email) {
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .ilike('email', email)
+        .is('deleted_at', null)
+        .single();
+
+      if (data) {
+        this.logger.log(`Found existing customer by email: ${data.id}`);
+        return data;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Create a new customer
    */
   async create(

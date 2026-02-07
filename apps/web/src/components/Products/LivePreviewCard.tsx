@@ -122,9 +122,9 @@ export function LivePreviewCard({
                 className="w-full"
               >
                 <TabsList className="grid w-full grid-cols-2">
-                  {prices.map((price) => (
+                  {prices.map((price, index) => (
                     <TabsTrigger
-                      key={price.recurring_interval}
+                      key={`${price.recurring_interval ?? 'one_time'}-${index}`}
                       value={price.recurring_interval || 'month'}
                       className="capitalize"
                     >
@@ -160,8 +160,8 @@ export function LivePreviewCard({
               <ul className="space-y-3">
                 {features
                   .sort((a, b) => a.display_order - b.display_order)
-                  .map((feature) => (
-                    <li key={feature.feature_id} className="flex items-start gap-3">
+                  .map((feature, index) => (
+                    <li key={feature.feature_id || `feature-${index}`} className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10">
                         <Check className="h-3.5 w-3.5 text-primary" />
                       </div>

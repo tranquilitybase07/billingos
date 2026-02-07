@@ -51,8 +51,10 @@ import { cn } from '@/lib/utils'
 
 interface CreateFeatureDialogProps {
   organizationId: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open?: boolean
+  isOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  onClose?: () => void
   onFeatureCreated?: (feature: Feature) => void
 }
 
@@ -62,10 +64,15 @@ interface CreateFeatureDialogProps {
  */
 export function CreateFeatureDialog({
   organizationId,
-  open,
-  onOpenChange,
+  open: openProp,
+  isOpen,
+  onOpenChange: onOpenChangeProp,
+  onClose,
   onFeatureCreated,
 }: CreateFeatureDialogProps) {
+  // Support both prop naming conventions
+  const open = openProp ?? isOpen ?? false
+  const onOpenChange = onOpenChangeProp ?? ((open: boolean) => !open && onClose?.())
   const { toast } = useToast()
   const createFeature = useCreateFeature()
   const [activeTab, setActiveTab] = useState<'templates' | 'custom'>('templates')

@@ -263,12 +263,58 @@ export class FeaturesService {
 
     const { data: features, error } = await supabase
       .from('features')
-      .select('*')
+      .select(`
+        *,
+        product_features (
+          product_id,
+          display_order,
+          config
+        )
+      `)
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 
     if (error) {
       throw new BadRequestException('Failed to fetch features');
+    }
+
+    // If we have features with product_features, enrich with product data
+    if (features && features.length > 0) {
+      // Get all unique product IDs
+      const productIds = new Set<string>();
+      features.forEach(feature => {
+        if (feature.product_features) {
+          feature.product_features.forEach((pf: any) => {
+            productIds.add(pf.product_id);
+          });
+        }
+      });
+
+      // Fetch product details if we have any product IDs
+      if (productIds.size > 0) {
+        const { data: products } = await supabase
+          .from('products')
+          .select('id, name')
+          .in('id', Array.from(productIds));
+
+        // Create a map for quick lookup
+        const productMap = new Map();
+        if (products) {
+          products.forEach(product => {
+            productMap.set(product.id, product);
+          });
+        }
+
+        // Enrich product_features with product data
+        features.forEach(feature => {
+          if (feature.product_features) {
+            feature.product_features = feature.product_features.map((pf: any) => ({
+              ...pf,
+              products: productMap.get(pf.product_id) || null
+            }));
+          }
+        });
+      }
     }
 
     return features || [];
@@ -282,7 +328,14 @@ export class FeaturesService {
 
     const { data: feature, error } = await supabase
       .from('features')
-      .select('*')
+      .select(`
+        *,
+        product_features (
+          product_id,
+          display_order,
+          config
+        )
+      `)
       .eq('id', id)
       .single();
 
@@ -301,6 +354,30 @@ export class FeaturesService {
 
     if (!membership) {
       throw new ForbiddenException('You do not have access to this feature');
+    }
+
+    // Enrich with product data if we have product_features
+    if (feature.product_features && feature.product_features.length > 0) {
+      const productIds = feature.product_features.map((pf: any) => pf.product_id);
+
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, name')
+        .in('id', productIds);
+
+      // Create a map for quick lookup
+      const productMap = new Map();
+      if (products) {
+        products.forEach(product => {
+          productMap.set(product.id, product);
+        });
+      }
+
+      // Enrich product_features with product data
+      feature.product_features = feature.product_features.map((pf: any) => ({
+        ...pf,
+        products: productMap.get(pf.product_id) || null
+      }));
     }
 
     return feature;

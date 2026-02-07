@@ -361,9 +361,22 @@ export function FeatureSelector({
           >
             <div className="space-y-2">
               {selectedFeatures.map((selectedFeature) => {
-                const feature = availableFeatures.find(
+                // Try to find feature in availableFeatures
+                let feature = availableFeatures.find(
                   (f) => f.id === selectedFeature.feature_id
                 )
+
+                // If not found (e.g., in edit mode), use denormalized data
+                if (!feature && selectedFeature.featureName) {
+                  feature = {
+                    id: selectedFeature.feature_id,
+                    name: selectedFeature.featureName,
+                    title: selectedFeature.featureTitle || selectedFeature.featureName,
+                    type: selectedFeature.featureType || 'boolean_flag',
+                  }
+                }
+
+                // If still no feature data, skip rendering
                 if (!feature) return null
 
                 return (
@@ -371,8 +384,8 @@ export function FeatureSelector({
                     key={selectedFeature.feature_id}
                     feature={feature}
                     selectedFeature={selectedFeature}
-                    onRemove={() => handleRemoveFeature(feature.id)}
-                    onLimitChange={(limit) => handleLimitChange(feature.id, limit)}
+                    onRemove={() => handleRemoveFeature(selectedFeature.feature_id)}
+                    onLimitChange={(limit) => handleLimitChange(selectedFeature.feature_id, limit)}
                   />
                 )
               })}

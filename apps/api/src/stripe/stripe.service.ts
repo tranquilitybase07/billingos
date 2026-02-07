@@ -190,8 +190,91 @@ export class StripeService {
   async updateCustomer(
     customerId: string,
     params: Stripe.CustomerUpdateParams,
+    stripeAccountId?: string,
   ): Promise<Stripe.Customer> {
-    return await this.stripe.customers.update(customerId, params);
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) {
+      options.stripeAccount = stripeAccountId;
+    }
+    return await this.stripe.customers.update(customerId, params, options);
+  }
+
+  /**
+   * Attach a payment method to a customer
+   */
+  async attachPaymentMethodToCustomer(
+    paymentMethodId: string,
+    customerId: string,
+    stripeAccountId?: string,
+  ): Promise<Stripe.PaymentMethod> {
+    this.logger.log(
+      `Attaching payment method ${paymentMethodId} to customer ${customerId}`,
+    );
+
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) {
+      options.stripeAccount = stripeAccountId;
+    }
+
+    return await this.stripe.paymentMethods.attach(
+      paymentMethodId,
+      { customer: customerId },
+      options,
+    );
+  }
+
+  /**
+   * Detach a payment method from a customer
+   */
+  async detachPaymentMethod(
+    paymentMethodId: string,
+    stripeAccountId?: string,
+  ): Promise<Stripe.PaymentMethod> {
+    this.logger.log(`Detaching payment method ${paymentMethodId}`);
+
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) {
+      options.stripeAccount = stripeAccountId;
+    }
+
+    return await this.stripe.paymentMethods.detach(paymentMethodId, options);
+  }
+
+  /**
+   * Get payment method details
+   */
+  async getPaymentMethod(
+    paymentMethodId: string,
+    stripeAccountId?: string,
+  ): Promise<Stripe.PaymentMethod> {
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) {
+      options.stripeAccount = stripeAccountId;
+    }
+
+    return await this.stripe.paymentMethods.retrieve(paymentMethodId, options);
+  }
+
+  /**
+   * List payment methods for a customer
+   */
+  async listPaymentMethods(
+    customerId: string,
+    type: Stripe.PaymentMethodListParams.Type = 'card',
+    stripeAccountId?: string,
+  ): Promise<Stripe.ApiList<Stripe.PaymentMethod>> {
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) {
+      options.stripeAccount = stripeAccountId;
+    }
+
+    return await this.stripe.paymentMethods.list(
+      {
+        customer: customerId,
+        type: type,
+      },
+      options,
+    );
   }
 
   /**
@@ -269,6 +352,26 @@ export class StripeService {
     return await this.stripe.prices.retrieve(priceId, {
       stripeAccount: stripeAccountId,
     });
+  }
+
+  /**
+   * Archive a price in Stripe Connect account by setting active to false
+   */
+  async archivePrice(
+    priceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Price> {
+    this.logger.log(
+      `Archiving Stripe price ${priceId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.prices.update(
+      priceId,
+      { active: false },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
   }
 
   /**
@@ -636,5 +739,63 @@ export class StripeService {
     });
 
     return entitlements.data;
+  }
+
+  /**
+   * List all subscriptions for a customer from Stripe
+   * Used for syncing Stripe data with our database
+   */
+  async listCustomerSubscriptions(params: {
+    customerId: string;
+    stripeAccountId?: string;
+    status?: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'all';
+  }): Promise<Stripe.ApiList<Stripe.Subscription>> {
+    this.logger.log(
+      `Listing subscriptions for customer: ${params.customerId}`,
+    );
+
+    const listParams: Stripe.SubscriptionListParams = {
+      customer: params.customerId,
+      limit: 100,
+    };
+
+    // Add status filter if specified
+    if (params.status && params.status !== 'all') {
+      listParams.status = params.status;
+    }
+
+    const options: Stripe.RequestOptions = {};
+    if (params.stripeAccountId) {
+      options.stripeAccount = params.stripeAccountId;
+    }
+
+    return await this.stripe.subscriptions.list(listParams, options);
+  }
+
+  /**
+   * Sync a single subscription from Stripe
+   * Fetches the full subscription data including expanded fields
+   */
+  async syncSubscriptionFromStripe(params: {
+    subscriptionId: string;
+    stripeAccountId?: string;
+  }): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Syncing subscription from Stripe: ${params.subscriptionId}`,
+    );
+
+    const options: Stripe.RequestOptions = {};
+    if (params.stripeAccountId) {
+      options.stripeAccount = params.stripeAccountId;
+    }
+
+    // For subscriptions.retrieve, we can pass expand as a query parameter
+    return await this.stripe.subscriptions.retrieve(
+      params.subscriptionId,
+      {
+        expand: ['items.data.price.product', 'customer'],
+      },
+      options,
+    );
   }
 }

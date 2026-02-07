@@ -8,15 +8,21 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"pnpm:dev:*\"",
+    "dev": "concurrently \"pnpm:dev:web\" \"pnpm:dev:api\"",
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api start:dev",
+    "dev:services": "docker-compose up -d && supabase start",
+    "dev:all": "pnpm dev:services && pnpm dev",
+    "stop:services": "docker-compose down && supabase stop",
     "build": "pnpm --recursive build",
     "build:web": "pnpm --filter web build",
     "build:api": "pnpm --filter api build",
     "lint": "pnpm --recursive lint",
     "db:types": "echo 'Generate types with: supabase gen types typescript --local > packages/shared/types/database.ts'",
-    "clean": "pnpm --recursive exec rm -rf node_modules .next dist"
+    "clean": "pnpm --recursive exec rm -rf node_modules .next dist",
+    "redis:start": "docker-compose up -d redis",
+    "redis:stop": "docker-compose stop redis",
+    "redis:cli": "docker exec -it billingos-redis redis-cli"
   },
   "devDependencies": {
     "typescript": "^5",

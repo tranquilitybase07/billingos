@@ -97,7 +97,19 @@ export const ProductListItem = ({
         <div className="flex min-w-0 grow flex-row items-center gap-x-4 text-sm">
           <ProductThumbnail product={product} />
           <div className="flex min-w-0 flex-col">
-            <span className="truncate font-medium">{product.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="truncate font-medium">{product.name}</span>
+              {product.version && product.version > 1 && (
+                <Badge variant="outline" className="text-xs">
+                  v{product.version}
+                </Badge>
+              )}
+              {product.version_status === 'superseded' && (
+                <Badge variant="secondary" className="text-xs">
+                  Old Version
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 flex-row items-center gap-x-4 md:gap-x-6">

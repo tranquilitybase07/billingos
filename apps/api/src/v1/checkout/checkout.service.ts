@@ -94,9 +94,9 @@ export class CheckoutService {
       throw new BadRequestException('Organization Stripe account not properly configured');
     }
 
-    // 3. Get or create Stripe customer on the CONNECTED ACCOUNT
+    // 3. Get or create customer in database and Stripe
     let stripeCustomerId: string;
-    let customerId: string | null = null;
+    let customerId: string;
 
     // Check if customer already exists in our database
     const { data: existingCustomer } = await supabase
@@ -107,6 +107,7 @@ export class CheckoutService {
       .maybeSingle();
 
     if (existingCustomer?.stripe_customer_id) {
+      // Customer already exists with Stripe ID
       stripeCustomerId = existingCustomer.stripe_customer_id;
       customerId = existingCustomer.id;
     } else {
@@ -123,7 +124,16 @@ export class CheckoutService {
       });
       stripeCustomerId = stripeCustomer.id;
 
-      // We'll create the customer record in our database after successful payment
+      // Create or update customer in our database immediately to avoid race conditions
+      const customerResult = await this.customersService.upsertCustomer({
+        organization_id: organizationId,
+        external_id: externalUserId,
+        email: dto.customerEmail || '',
+        name: dto.customerName,
+        stripe_customer_id: stripeCustomerId,
+        metadata: dto.metadata,
+      });
+      customerId = customerResult.id;
     }
 
     // 4. Create payment intent on the CONNECTED ACCOUNT with platform fee
@@ -162,7 +172,7 @@ export class CheckoutService {
       .from('payment_intents')
       .insert({
         organization_id: organizationId,
-        customer_id: customerId,
+        customer_id: customerId, // Now we always have a customer ID
         stripe_payment_intent_id: paymentIntent.id,
         stripe_customer_id: stripeCustomerId,
         stripe_account_id: stripeAccountId, // Store the connected account ID
@@ -184,9 +194,26 @@ export class CheckoutService {
 
     if (piError) {
       this.logger.error('Failed to store payment intent:', piError);
+      this.logger.error('Payment intent details:', {
+        stripePaymentIntentId: paymentIntent.id,
+        organizationId,
+        customerId,
+        amount,
+        errorCode: piError.code,
+        errorDetails: piError.details,
+      });
+
       // Cancel the Stripe payment intent if we can't store it
-      await this.stripeService.getClient().paymentIntents.cancel(paymentIntent.id);
-      throw new Error('Failed to create checkout session');
+      try {
+        await this.stripeService.getClient().paymentIntents.cancel(paymentIntent.id);
+        this.logger.warn(`Cancelled Stripe payment intent ${paymentIntent.id} due to database error`);
+      } catch (cancelError) {
+        this.logger.error('Failed to cancel payment intent after database error:', cancelError);
+      }
+
+      throw new BadRequestException(
+        `Failed to create checkout session: ${piError.message || 'Database error occurred'}`,
+      );
     }
 
     // 5. Create checkout session record
@@ -210,13 +237,23 @@ export class CheckoutService {
 
     if (sessionError) {
       this.logger.error('Failed to create checkout session:', sessionError);
-      throw new Error('Failed to create checkout session');
+      this.logger.error('Checkout session details:', {
+        paymentIntentId: paymentIntentRecord.id,
+        organizationId,
+        customerEmail: dto.customerEmail,
+        errorCode: sessionError.code,
+        errorDetails: sessionError.details,
+      });
+
+      throw new BadRequestException(
+        `Failed to create checkout session: ${sessionError.message || 'Database error occurred'}`,
+      );
     }
 
     // 6. Fetch product features
     const { data: productFeatures } = await supabase
       .from('product_features')
-      .select('features(title)')
+      .select('features(title, properties)')
       .eq('product_id', product.id)
       .order('display_order', { ascending: true });
 
@@ -284,112 +321,27 @@ export class CheckoutService {
 
       // Check if payment succeeded
       if (paymentIntent.status === 'succeeded') {
-        // Create customer record if it doesn't exist yet
-        let customerId = paymentIntentRecord.customer_id;
+        // DON'T create subscription here - the webhook handler will do it properly
+        // The webhook creates the actual Stripe subscription and syncs it to our database
 
-        if (!customerId) {
-          const metadata = paymentIntentRecord.metadata as any;
-          const externalUserId = metadata?.externalUserId;
+        this.logger.log(
+          `Payment succeeded for intent ${paymentIntentId}. Subscription will be created by webhook handler.`,
+        );
 
-          if (!externalUserId) {
-            this.logger.error('Missing externalUserId in payment intent metadata');
-            return {
-              status: 'succeeded',
-              requiresAction: false,
-              success: false,
-              message: 'Payment succeeded but failed to create customer',
-            };
-          }
-
-          // Get customer email from checkout session
-          const { data: checkoutSession } = await supabase
-            .from('checkout_sessions')
-            .select('customer_email, customer_name')
-            .eq('payment_intent_id', paymentIntentRecord.id)
-            .single();
-
-          if (!checkoutSession?.customer_email) {
-            this.logger.error('Missing customer email in checkout session');
-            return {
-              status: 'succeeded',
-              requiresAction: false,
-              success: false,
-              message: 'Payment succeeded but failed to create customer',
-            };
-          }
-
-          const { data: newCustomer, error: customerError } = await supabase
-            .from('customers')
-            .insert({
-              organization_id: paymentIntentRecord.organization_id,
-              external_id: externalUserId,
-              email: checkoutSession.customer_email,
-              name: checkoutSession.customer_name,
-              stripe_customer_id: paymentIntentRecord.stripe_customer_id,
-            })
-            .select()
-            .single();
-
-          if (customerError || !newCustomer) {
-            this.logger.error('Failed to create customer:', customerError);
-            return {
-              status: 'succeeded',
-              requiresAction: false,
-              success: false,
-              message: 'Payment succeeded but failed to create customer',
-            };
-          }
-
-          customerId = newCustomer.id;
-        }
-
-        // Verify product_id exists (should always be present)
-        if (!paymentIntentRecord.product_id) {
-          this.logger.error('Missing product_id in payment intent record');
-          return {
-            status: 'succeeded',
-            requiresAction: false,
-            success: false,
-            message: 'Payment succeeded but failed to create subscription',
-          };
-        }
-
-        // Payment succeeded - create subscription
-        const subscriptionData = {
-          organization_id: paymentIntentRecord.organization_id,
-          customer_id: customerId,
-          product_id: paymentIntentRecord.product_id,
-          price_id: paymentIntentRecord.price_id,
-          stripe_subscription_id: paymentIntent.id, // Using payment intent ID for now
-          payment_intent_id: paymentIntentRecord.id,
-          status: 'active',
-          amount: paymentIntentRecord.amount,
-          currency: paymentIntentRecord.currency,
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-        };
-
-        const { data: subscription, error: subError } = await supabase
-          .from('subscriptions')
-          .insert(subscriptionData)
-          .select()
-          .single();
-
-        if (subError) {
-          this.logger.error('Failed to create subscription:', subError);
-          return {
-            status: 'succeeded',
-            requiresAction: false,
-            success: false,
-            message: 'Payment succeeded but failed to create subscription',
-          };
-        }
+        // Mark checkout session as completed
+        await supabase
+          .from('checkout_sessions')
+          .update({
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('payment_intent_id', paymentIntentRecord.id);
 
         return {
           status: 'succeeded',
           requiresAction: false,
           success: true,
-          subscriptionId: subscription.id,
+          message: 'Payment successful! Your subscription is being activated.',
         };
       }
 
@@ -412,7 +364,25 @@ export class CheckoutService {
       };
     } catch (error) {
       this.logger.error('Failed to confirm payment:', error);
-      throw new BadRequestException('Failed to confirm payment');
+      this.logger.error('Error details:', {
+        clientSecret: clientSecret.substring(0, 20) + '...', // Log partial secret for debugging
+        paymentMethodId: dto.paymentMethodId,
+        errorMessage: error.message,
+        errorStack: error.stack,
+      });
+
+      // Provide more specific error messages
+      if (error.type === 'StripeCardError') {
+        throw new BadRequestException(`Card error: ${error.message}`);
+      } else if (error.type === 'StripeInvalidRequestError') {
+        throw new BadRequestException(`Invalid request: ${error.message}`);
+      } else if (error.type === 'StripeAPIError') {
+        throw new BadRequestException('Payment service temporarily unavailable. Please try again.');
+      }
+
+      throw new BadRequestException(
+        `Failed to confirm payment: ${error.message || 'Unknown error occurred'}`,
+      );
     }
   }
 

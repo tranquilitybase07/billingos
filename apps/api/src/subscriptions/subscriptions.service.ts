@@ -176,15 +176,33 @@ export class SubscriptionsService {
         .single();
 
       if (subError || !subscription) {
-        this.logger.error('Failed to save subscription:', subError);
+        this.logger.error('Failed to save subscription to database:', subError);
+        this.logger.error('Subscription details:', {
+          organizationId: customer.organization_id,
+          customerId: customer.id,
+          productId: product.id,
+          priceId: price.id,
+          stripeSubscriptionId: stripeSubscription?.id,
+          errorCode: subError?.code,
+          errorDetails: subError?.details,
+        });
+
         // Cleanup Stripe subscription if created
         if (stripeSubscription) {
-          await this.stripeService.cancelSubscription(
-            stripeSubscription.id,
-            account.stripe_id,
-          );
+          try {
+            await this.stripeService.cancelSubscription(
+              stripeSubscription.id,
+              account.stripe_id,
+            );
+            this.logger.warn(`Cancelled Stripe subscription ${stripeSubscription.id} due to database error`);
+          } catch (cancelError) {
+            this.logger.error('Failed to cancel Stripe subscription after database error:', cancelError);
+          }
         }
-        throw new BadRequestException('Failed to create subscription');
+
+        throw new BadRequestException(
+          `Failed to create subscription: ${subError?.message || 'Database error occurred'}`,
+        );
       }
 
       // 8. Grant all product features
@@ -390,7 +408,8 @@ export class SubscriptionsService {
           id,
           name,
           title,
-          type
+          type,
+          properties
         )
       `,
       )
