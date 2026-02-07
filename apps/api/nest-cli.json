@@ -7,7 +7,18 @@
     "tsConfigPath": "tsconfig.build.json",
     "webpack": false,
     "assets": [],
-    "watchAssets": false
+    "watchAssets": false,
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "dtoFileNameSuffix": [".dto.ts", ".entity.ts"],
+          "controllerFileNameSuffix": ".controller.ts"
+        }
+      }
+    ]
   },
   "monorepo": false,
   "root": "."

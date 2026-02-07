@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json } from 'express';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -35,9 +36,79 @@ async function bootstrap() {
     }
   });
 
+  // Swagger/OpenAPI documentation setup
+  const config = new DocumentBuilder()
+    .setTitle('BillingOS API')
+    .setDescription(
+      'Comprehensive billing and subscription management platform API. ' +
+        'Includes admin endpoints for managing organizations, products, customers, and analytics, ' +
+        'as well as SDK endpoints (v1) for customer-facing features.',
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter JWT token from Supabase authentication',
+        in: 'header',
+      },
+      'JWT',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'Authorization',
+        in: 'header',
+        description: 'Enter API key as: Bearer sk_test_xxx or Bearer sk_live_xxx',
+      },
+      'ApiKey',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'Authorization',
+        in: 'header',
+        description: 'Enter session token as: Bearer st_xxx',
+      },
+      'SessionToken',
+    )
+    .addServer('http://localhost:3001', 'Local development')
+    .addServer('https://api.billingos.com', 'Production')
+    .addTag('Health', 'Health check endpoint')
+    .addTag('Users', 'User profile management')
+    .addTag('Organizations', 'Organization and team management')
+    .addTag('Accounts', 'Stripe Connect account management')
+    .addTag('Products', 'Product catalog management (Admin)')
+    .addTag('Features', 'Feature management (Admin)')
+    .addTag('Customers', 'Customer management (Admin)')
+    .addTag('Subscriptions', 'Subscription management (Admin)')
+    .addTag('Analytics', 'Analytics and metrics (7 endpoints)')
+    .addTag('API Keys', 'API key management')
+    .addTag('Stripe Webhooks', 'Stripe webhook handlers')
+    .addTag('SDK - Session Tokens', 'Session token management (v1)')
+    .addTag('SDK - Checkout', 'Checkout flow (v1)')
+    .addTag('SDK - Customer', 'Customer portal (v1)')
+    .addTag('SDK - Features', 'Feature access and usage tracking (v1)')
+    .addTag('SDK - Products', 'Product listing (v1)')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true, // Keep auth tokens in browser
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+    customSiteTitle: 'BillingOS API Documentation',
+  });
+
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
   console.log(`🚀 API server running on http://localhost:${port}`);
+  console.log(`📚 Swagger documentation available at http://localhost:${port}/api`);
+  console.log(`📄 OpenAPI JSON available at http://localhost:${port}/api-json`);
 }
 
 void bootstrap();

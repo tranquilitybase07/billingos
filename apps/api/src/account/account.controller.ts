@@ -8,12 +8,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AccountService } from './account.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { GetOnboardingLinkDto } from './dto/get-onboarding-link.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
+
+@ApiTags('Accounts')
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)

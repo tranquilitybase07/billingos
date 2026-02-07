@@ -1,4 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -14,6 +15,8 @@ import { SubscriptionGrowthResponseDto } from './dto/subscription-growth-respons
 import { ChurnRateResponseDto } from './dto/churn-rate-response.dto';
 import { TopCustomersResponseDto } from './dto/top-customers-response.dto';
 import { ARPUResponseDto } from './dto/arpu-response.dto';
+
+@ApiTags('Analytics')
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)

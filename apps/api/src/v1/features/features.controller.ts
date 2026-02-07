@@ -7,6 +7,7 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FeaturesService } from '../../features/features.service';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
@@ -24,6 +25,8 @@ import { CustomersService } from '../../customers/customers.service';
  * - GET /v1/features/entitlements - List all customer entitlements
  * - GET /v1/features/usage-metrics - Get usage metrics for features
  */
+@ApiTags('SDK - Features')
+
 @Controller('v1/features')
 @UseGuards(SessionTokenAuthGuard)
 export class V1FeaturesController {

@@ -9,10 +9,13 @@ import {
   HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { SessionTokensService } from './session-tokens.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CreateSessionTokenDto } from './dto/create-session-token.dto';
 import { SessionTokenResponseDto } from './dto/session-token-response.dto';
+
+@ApiTags('SDK - Session Tokens')
 
 @Controller('v1/session-tokens')
 export class SessionTokensController {

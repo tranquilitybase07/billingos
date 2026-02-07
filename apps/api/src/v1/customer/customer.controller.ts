@@ -4,6 +4,7 @@ import {
   UseGuards,
   NotFoundException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CustomersService } from '../../customers/customers.service';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
@@ -18,6 +19,8 @@ import { CustomerStateResponseDto } from '../../customers/dto/customer-response.
  * Routes:
  * - GET /v1/customer/me - Get current customer state (profile + subscriptions + features)
  */
+@ApiTags('SDK - Customer')
+
 @Controller('v1/customer')
 @UseGuards(SessionTokenAuthGuard)
 export class CustomerController {

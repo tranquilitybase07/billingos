@@ -9,12 +9,15 @@ import {
   Sse,
   MessageEvent,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
 import { Observable, interval, switchMap, from, catchError, of } from 'rxjs';
+
+@ApiTags('SDK - Checkout')
 
 @Controller('v1/checkout')
 @UseGuards(SessionTokenAuthGuard)
