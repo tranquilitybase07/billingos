@@ -16,7 +16,15 @@
       "Bash(pnpm type-check:*)",
       "Bash(pnpm run build:*)",
       "Bash(pnpm build:api:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(pnpm dev:api:*)",
+      "Bash(npm run start:dev:*)",
+      "WebSearch",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm test:cov:*)"
     ],
     "deny": [],
     "ask": []

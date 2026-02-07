@@ -133,6 +133,14 @@ pnpm clean        # Remove all node_modules, .next, dist
 - `account/` - Stripe Connect account creation, onboarding, dashboard links
 - `stripe/` - Stripe webhook handling, payment processing
 - `supabase/` - Supabase client service (global)
+- `products/` - Product management with versioning support
+- `features/` - Feature flags and entitlements
+- `subscriptions/` - Subscription management
+- `customers/` - Customer management and tracking
+- `api-keys/` - API key generation and validation
+- `session-tokens/` - Session token management for SDK
+- `v1/` - Public API endpoints for SDK consumption
+- `checkout/` - Checkout session and payment processing
 
 **Key Patterns:**
 - All endpoints protected by JWT guard validating Supabase auth tokens
@@ -140,12 +148,15 @@ pnpm clean        # Remove all node_modules, .next, dist
 - Database access through Supabase client (service role for privileged ops)
 - DTOs use `class-validator` and `class-transformer`
 - Global validation pipe enabled in `main.ts`
+- **DRY Principle**: Create reusable helper methods for common operations (e.g., `createPriceRecord`)
+- **Product Versioning**: Automatic versioning when changes affect active subscriptions
 
 **Important Files:**
-- `main.ts:36` - Server starts on port 3001, CORS enabled for frontend
+- `main.ts` - Server starts on port 3001, CORS enabled for frontend
 - `app.module.ts` - All modules imported here
 - `auth/strategies/jwt.strategy.ts` - Validates Supabase JWT tokens
 - `supabase/supabase.service.ts` - Global Supabase client
+- `products/products.service.ts` - Product management with versioning logic
 
 ### Frontend (Next.js - apps/web/)
 
@@ -200,9 +211,19 @@ app/
 
 **Core Tables:**
 - `users` - Extended user profiles (links to `auth.users`)
-- `organizations` - Company/team entities
+- `organizations` - Company/team entities with payment status tracking
 - `user_organizations` - Many-to-many with roles (admin/member)
 - `accounts` - Stripe Connect accounts (one per organization)
+- `products` - Products with versioning support (version, parent_product_id, version_status)
+- `product_prices` - Pricing tiers for products (supports multiple prices per product)
+- `product_features` - Feature entitlements linked to products
+- `features` - Feature definitions with usage limits and types
+- `subscriptions` - Active subscriptions linking customers to products
+- `customers` - Customer records with external ID support
+- `api_keys` - API key storage with organization linking
+- `session_tokens` - Temporary session tokens for SDK usage
+- `payment_intents` - Payment intent tracking
+- `usage_records` - Usage tracking for metered features
 
 **Key Relationships:**
 - User can belong to multiple organizations
@@ -316,17 +337,26 @@ supabase gen types typescript --local > ../packages/shared/types/database.ts
 - ✅ Monorepo setup with pnpm workspaces
 - ✅ Backend API (auth, users, organizations, accounts, Stripe)
 - ✅ Frontend auth flow (signup, login, magic links)
-- ✅ Organization creation
+- ✅ Organization creation and management
 - ✅ React Query setup and API client
 - ✅ Middleware-based routing and auth protection
 - ✅ Database schema with RLS policies
 - ✅ Supabase local development setup
+- ✅ Product management with automatic versioning
+- ✅ API key generation and validation
+- ✅ Session token management for SDK
+- ✅ Customer management system
+- ✅ Feature flags and entitlements
+- ✅ Subscription creation and management
+- ✅ Checkout flow with Stripe integration
+- ✅ BillingOS SDK (Node.js and browser support)
+- ✅ SDK test application setup
 
 **In Progress:**
-- 🚧 Organization dashboard layout (`/dashboard/[organization]/page.tsx` needed)
-- 🚧 Stripe Connect account setup UI
-- 🚧 Team member management UI
-- 🚧 Payment processing flows
+- 🚧 Organization dashboard improvements
+- 🚧 Stripe Connect account setup UI enhancements
+- 🚧 Team member management UI refinements
+- 🚧 Advanced payment processing flows (trials, discounts)
 
 **Documented In:**
 - `FRONTEND_PROGRESS.md` - Frontend implementation roadmap
@@ -412,12 +442,28 @@ export function useOrganization(id: string) {
 - **Keep docs current** - Update when architecture changes
 
 ### Code Quality Standards
+
+**General Principles:**
 - Use TypeScript strictly (no `any` types)
 - Follow Polar's component organization patterns
-- Validate all inputs with Zod schemas
+- Validate all inputs with class-validator (backend) and Zod (frontend)
 - Handle errors gracefully with user-friendly messages
 - Write tests for critical backend logic (NestJS has Jest configured)
 - Keep components small and focused (Polar has good examples)
+
+**Backend Best Practices:**
+- **DRY (Don't Repeat Yourself)**: Extract common logic into reusable helper methods
+  - Example: `createPriceRecord` for handling price creation in multiple contexts
+- **Service Layer Pattern**: Keep business logic in services, not controllers
+- **Consistent Error Handling**: Use NestJS exception filters and proper HTTP status codes
+- **Database Operations**: Use transactions for multi-step operations
+- **Type Safety**: Leverage DTOs for input validation and type checking
+
+**Product Versioning Pattern:**
+- Products automatically version when changes affect active subscriptions
+- Old versions marked as "superseded", new versions as "current"
+- Prices and features properly copied to new versions
+- Helper methods ensure consistency across version operations
 
 ## Polar Reference Workflow (Critical)
 
@@ -481,5 +527,31 @@ Before starting ANY feature implementation:
 - [ ] Ready to implement
 
 **Remember**: Polar has already solved most problems. Don't reinvent - adapt!
-- BillingOS SDK path is /Users/ankushkumar/Code/billingos-sdk/docs/architecture
-- Test app path for SDK is at /Users/ankushkumar/Code/billingos-testprojects/my-app/
+
+## Related Projects
+
+### BillingOS SDK
+- **Path**: `/Users/ankushkumar/Code/billingos-sdk/`
+- **Documentation**: `/Users/ankushkumar/Code/billingos-sdk/docs/architecture`
+- **Purpose**: JavaScript/TypeScript SDK for integrating BillingOS into applications
+- **Features**: Session management, product fetching, checkout, feature gating
+
+### Test Application
+- **Path**: `/Users/ankushkumar/Code/billingos-testprojects/my-app/`
+- **Purpose**: Next.js app for testing SDK integration
+- **Key Files**:
+  - `.env.local` - Contains API keys and endpoints
+  - `src/app/payment-test/page.tsx` - Pricing table implementation
+  - `src/app/api/billingos-session/route.ts` - Session token generation
+
+## Known Issues & Solutions
+
+### Product Versioning
+- **Issue**: When updating product prices, new versions might lose price data
+- **Solution**: Use the `createPriceRecord` helper method to ensure consistent price creation
+- **Location**: `apps/api/src/products/products.service.ts`
+
+### API Key Organization Mismatch
+- **Issue**: Products showing from wrong organization
+- **Solution**: Ensure API keys are linked to correct organization in database
+- **Debug**: Check `api_keys` table for `organization_id` mapping

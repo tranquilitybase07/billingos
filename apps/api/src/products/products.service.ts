@@ -15,7 +15,7 @@ import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { PriceAmountType, CreatePriceDto } from './dto/create-price.dto';
+import { CreatePriceDto, PriceAmountType, RecurringInterval } from './dto/create-price.dto';
 
 @Injectable()
 export class ProductsService {
@@ -665,6 +665,64 @@ export class ProductsService {
   }
 
   /**
+   * Helper method to create a price record in both Stripe and database
+   */
+  private async createPriceRecord(
+    productId: string,
+    stripeProductId: string | null,
+    priceDto: CreatePriceDto,
+    productRecurringInterval: string,
+    productRecurringIntervalCount: number,
+    stripeAccountId: string | null,
+  ): Promise<any> {
+    const supabase = this.supabaseService.getClient();
+    let stripePriceId: string | null = null;
+
+    // Determine recurring interval (use price's interval or fall back to product's)
+    const recurringInterval = priceDto.recurring_interval || productRecurringInterval;
+    const recurringIntervalCount = priceDto.recurring_interval_count || productRecurringIntervalCount;
+
+    // Create Stripe price for fixed price types
+    if (priceDto.amount_type === 'fixed' && stripeAccountId && stripeProductId) {
+      const stripePrice = await this.stripeService.createPrice(
+        {
+          product: stripeProductId,
+          currency: priceDto.price_currency || 'usd',
+          unit_amount: priceDto.price_amount || 0,
+          recurring: {
+            interval: recurringInterval as Stripe.Price.Recurring.Interval,
+            interval_count: recurringIntervalCount,
+          },
+        },
+        stripeAccountId,
+      );
+      stripePriceId = stripePrice.id;
+    }
+
+    // Insert price into database
+    const { data: priceRecord, error: priceError } = await supabase
+      .from('product_prices')
+      .insert({
+        product_id: productId,
+        amount_type: priceDto.amount_type,
+        price_amount: priceDto.price_amount || null,
+        price_currency: priceDto.price_currency || 'usd',
+        recurring_interval: recurringInterval,
+        recurring_interval_count: recurringIntervalCount,
+        stripe_price_id: stripePriceId,
+        is_archived: false,
+      })
+      .select()
+      .single();
+
+    if (priceError || !priceRecord) {
+      throw new Error(`Failed to create price: ${priceError?.message}`);
+    }
+
+    return priceRecord;
+  }
+
+  /**
    * Copy prices to new product version
    */
   private async copyPricesToNewVersion(
@@ -686,50 +744,46 @@ export class ProductsService {
       (price) => !updateDto.prices?.archive?.includes(price.id),
     ) || [];
 
-    // Copy existing prices (not being archived)
+    // Get the new product's details once for all price operations
+    const { data: newProduct } = await supabase
+      .from('products')
+      .select('stripe_product_id, recurring_interval, recurring_interval_count')
+      .eq('id', newProductId)
+      .single();
+
+    // Copy existing prices (not being archived) using helper method
     for (const price of pricesToKeep) {
-      let stripePriceId: string | null = null;
+      // Convert the existing price data to match CreatePriceDto format
+      const priceDto: CreatePriceDto = {
+        amount_type: price.amount_type as PriceAmountType,
+        price_amount: price.price_amount || undefined,
+        price_currency: price.price_currency || undefined,
+        recurring_interval: price.recurring_interval as RecurringInterval,
+        recurring_interval_count: price.recurring_interval_count || undefined,
+      };
 
-      if (price.amount_type === 'fixed' && stripeAccountId) {
-        const { data: newProduct } = await supabase
-          .from('products')
-          .select('stripe_product_id')
-          .eq('id', newProductId)
-          .single();
-
-        if (newProduct?.stripe_product_id) {
-          const stripePrice = await this.stripeService.createPrice(
-            {
-              product: newProduct.stripe_product_id,
-              currency: price.price_currency || 'usd',
-              unit_amount: price.price_amount || 0,
-              recurring: {
-                interval: price.recurring_interval as Stripe.Price.Recurring.Interval,
-                interval_count: price.recurring_interval_count || 1,
-              },
-            },
-            stripeAccountId,
-          );
-          stripePriceId = stripePrice.id;
-        }
-      }
-
-      await supabase.from('product_prices').insert({
-        product_id: newProductId,
-        amount_type: price.amount_type,
-        price_amount: price.price_amount,
-        price_currency: price.price_currency,
-        recurring_interval: price.recurring_interval,
-        recurring_interval_count: price.recurring_interval_count,
-        stripe_price_id: stripePriceId,
-        is_archived: false,
-      });
+      await this.createPriceRecord(
+        newProductId,
+        newProduct?.stripe_product_id || null,
+        priceDto,
+        newProduct?.recurring_interval || 'month',
+        newProduct?.recurring_interval_count || 1,
+        stripeAccountId,
+      );
     }
 
-    // Add new prices from updateDto
+    // Add new prices from updateDto (reuse the newProduct we already fetched)
     if (updateDto.prices?.create) {
+      // Create new prices using the helper method
       for (const newPrice of updateDto.prices.create) {
-        // This will be handled by the normal update flow after version is created
+        await this.createPriceRecord(
+          newProductId,
+          newProduct?.stripe_product_id || null,
+          newPrice,
+          newProduct?.recurring_interval || 'month',
+          newProduct?.recurring_interval_count || 1,
+          stripeAccountId,
+        );
       }
     }
   }
