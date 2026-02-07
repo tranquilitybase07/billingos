@@ -16,109 +16,9 @@ import {
 } from '@/components/ui/select'
 import { Download as DownloadOutlined } from '@mui/icons-material'
 import Link from 'next/link'
-import { useState } from 'react'
-
-// ── Mock Data ──────────────────────────────────────────────
-// TODO: Replace with real useSubscriptions and useProducts hooks
-
-const MOCK_PRODUCTS = [
-  { id: 'prod_1', name: 'Pro Plan' },
-  { id: 'prod_2', name: 'Starter Plan' },
-  { id: 'prod_3', name: 'Enterprise Plan' },
-]
-
-const MOCK_SUBSCRIPTIONS = [
-  {
-    id: 'sub_1',
-    customer: { id: 'cust_1', name: 'Sarah Chen', email: 'sarah@example.com' },
-    product: { id: 'prod_1', name: 'Pro Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-08-15T10:30:00Z',
-    current_period_end: '2026-02-15T10:30:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_2',
-    customer: { id: 'cust_2', name: 'James Wilson', email: 'james@acme.co' },
-    product: { id: 'prod_1', name: 'Pro Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-09-01T14:00:00Z',
-    current_period_end: '2026-03-01T14:00:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_3',
-    customer: { id: 'cust_3', name: 'Maria Garcia', email: 'maria@startup.io' },
-    product: { id: 'prod_2', name: 'Starter Plan', is_archived: false },
-    status: 'trialing',
-    started_at: '2026-01-10T09:15:00Z',
-    current_period_end: '2026-02-10T09:15:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_4',
-    customer: { id: 'cust_4', name: 'Alex Johnson', email: 'alex@bigcorp.com' },
-    product: { id: 'prod_3', name: 'Enterprise Plan', is_archived: false },
-    status: 'past_due',
-    started_at: '2025-06-20T16:45:00Z',
-    current_period_end: '2026-01-20T16:45:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_5',
-    customer: { id: 'cust_5', name: 'Emily Brown', email: 'emily@design.co' },
-    product: { id: 'prod_1', name: 'Pro Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-11-05T11:00:00Z',
-    current_period_end: '2026-05-05T11:00:00Z',
-    cancel_at_period_end: true,
-  },
-  {
-    id: 'sub_6',
-    customer: { id: 'cust_6', name: 'David Kim', email: 'david@tech.io' },
-    product: { id: 'prod_2', name: 'Starter Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-10-12T08:30:00Z',
-    current_period_end: '2026-04-12T08:30:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_7',
-    customer: { id: 'cust_7', name: 'Lisa Wang', email: 'lisa@creative.co' },
-    product: { id: 'prod_3', name: 'Enterprise Plan', is_archived: false },
-    status: 'canceled',
-    started_at: '2025-04-01T12:00:00Z',
-    current_period_end: '2025-10-01T12:00:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_8',
-    customer: { id: 'cust_8', name: 'Tom Brown', email: 'tom@agency.com' },
-    product: { id: 'prod_1', name: 'Pro Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-12-01T15:20:00Z',
-    current_period_end: '2026-06-01T15:20:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_9',
-    customer: { id: 'cust_9', name: 'Nina Patel', email: 'nina@saas.io' },
-    product: { id: 'prod_2', name: 'Starter Plan', is_archived: false },
-    status: 'canceled',
-    started_at: '2025-07-15T10:00:00Z',
-    current_period_end: '2026-01-15T10:00:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_10',
-    customer: { id: 'cust_10', name: 'Ryan Cooper', email: 'ryan@dev.co' },
-    product: { id: 'prod_3', name: 'Enterprise Plan', is_archived: false },
-    status: 'active',
-    started_at: '2025-11-20T14:45:00Z',
-    current_period_end: '2026-05-20T14:45:00Z',
-    cancel_at_period_end: false,
-  },
-]
+import { useState, useMemo } from 'react'
+import { useProducts } from '@/hooks/queries/products'
+import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -138,6 +38,7 @@ interface SubscriptionsPageProps {
 }
 
 export default function SubscriptionsPage({
+  organizationId,
   organizationSlug,
   productIdFilter,
   statusFilter,
@@ -145,42 +46,46 @@ export default function SubscriptionsPage({
   const [selectedStatus, setSelectedStatus] = useState<string>(
     statusFilter ?? 'active',
   )
-
-  // If the product_id from the URL doesn't match any mock product, ignore it
-  const validProductFilter =
-    productIdFilter && MOCK_PRODUCTS.some((p) => p.id === productIdFilter)
-      ? productIdFilter
-      : 'all'
-
-  const [selectedProduct, setSelectedProduct] = useState<string>(validProductFilter)
+  const [selectedProduct, setSelectedProduct] = useState<string>(productIdFilter || 'all')
   const [cancellationFilter, setCancellationFilter] = useState<string>('all')
 
-  const filteredSubscriptions = MOCK_SUBSCRIPTIONS.filter((sub) => {
-    // Status filter
-    if (selectedStatus === 'active' && !['active', 'trialing', 'past_due'].includes(sub.status)) {
-      return false
-    }
-    if (selectedStatus === 'canceled' && sub.status !== 'canceled') {
-      return false
-    }
+  // Fetch real products for the filter dropdown
+  const { data: productsResponse, isLoading: isLoadingProducts } = useProducts(organizationId)
 
-    // Product filter
-    if (selectedProduct !== 'all' && sub.product.id !== selectedProduct) {
-      return false
-    }
+  // Fetch real subscriptions for the organization
+  const { data: subscriptions, isLoading: isLoadingSubscriptions } = useOrganizationSubscriptions(organizationId)
 
-    // Cancellation filter (only for active)
-    if (selectedStatus === 'active' && cancellationFilter !== 'all') {
-      if (cancellationFilter === 'renewing' && sub.cancel_at_period_end) {
+  // Filter subscriptions based on selected filters
+  const filteredSubscriptions = useMemo(() => {
+    if (!subscriptions) return []
+
+    return subscriptions.filter((sub) => {
+      // Status filter
+      if (selectedStatus === 'active' && !['active', 'trialing', 'past_due'].includes(sub.status)) {
         return false
       }
-      if (cancellationFilter === 'ending' && !sub.cancel_at_period_end) {
+      if (selectedStatus === 'canceled' && sub.status !== 'canceled') {
         return false
       }
-    }
 
-    return true
-  })
+      // Product filter
+      if (selectedProduct !== 'all' && sub.product_id !== selectedProduct) {
+        return false
+      }
+
+      // Cancellation filter (only for active)
+      if (selectedStatus === 'active' && cancellationFilter !== 'all') {
+        if (cancellationFilter === 'renewing' && sub.cancel_at_period_end) {
+          return false
+        }
+        if (cancellationFilter === 'ending' && !sub.cancel_at_period_end) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [subscriptions, selectedStatus, selectedProduct, cancellationFilter])
 
   return (
     <DashboardBody>
@@ -224,7 +129,7 @@ export default function SubscriptionsPage({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Products</SelectItem>
-                {MOCK_PRODUCTS.map((p) => (
+                {productsResponse?.items?.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>
@@ -248,16 +153,23 @@ export default function SubscriptionsPage({
               header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Customer" />
               ),
-              cell: ({ row: { original: sub } }) => (
-                <div className="flex flex-row items-center gap-2">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                    {sub.customer.name.charAt(0)}
+              cell: ({ row: { original: sub } }) => {
+                if (!sub.customer) {
+                  return <span className="text-sm text-muted-foreground">Unknown</span>
+                }
+                const displayName = sub.customer.name || sub.customer.email
+                const initial = displayName?.charAt(0).toUpperCase() || '?'
+                return (
+                  <div className="flex flex-row items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                      {initial}
+                    </div>
+                    <div className="truncate text-sm">
+                      {sub.customer.email}
+                    </div>
                   </div>
-                  <div className="truncate text-sm">
-                    {sub.customer.email}
-                  </div>
-                </div>
-              ),
+                )
+              },
             },
             {
               accessorKey: 'status',
@@ -269,7 +181,7 @@ export default function SubscriptionsPage({
               ),
             },
             {
-              accessorKey: 'started_at',
+              accessorKey: 'created_at',
               header: ({ column }) => (
                 <DataTableColumnHeader
                   column={column}
@@ -277,7 +189,7 @@ export default function SubscriptionsPage({
                 />
               ),
               cell: ({ row: { original: sub } }) => (
-                <span className="text-sm">{formatDate(sub.started_at)}</span>
+                <span className="text-sm">{formatDate(sub.created_at)}</span>
               ),
             },
             {
@@ -300,20 +212,23 @@ export default function SubscriptionsPage({
             },
             {
               id: 'product',
-              accessorKey: 'product',
+              accessorKey: 'product_id',
               header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Product" />
               ),
-              cell: ({ row: { original: sub } }) => (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{sub.product.name}</span>
-                  {sub.product.is_archived && (
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-950 dark:text-red-400">
-                      Archived
-                    </span>
-                  )}
-                </div>
-              ),
+              cell: ({ row: { original: sub } }) => {
+                const product = productsResponse?.items?.find((p) => p.id === sub.product_id)
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{product?.name || 'Unknown Product'}</span>
+                    {product?.is_archived && (
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-950 dark:text-red-400">
+                        Archived
+                      </span>
+                    )}
+                  </div>
+                )
+              },
             },
             {
               id: 'actions',
@@ -321,7 +236,7 @@ export default function SubscriptionsPage({
               cell: ({ row: { original: sub } }) => (
                 <span className="flex flex-row justify-end gap-x-2">
                   <Link
-                    href={`/dashboard/${organizationSlug}/customers/${sub.customer.id}`}
+                    href={`/dashboard/${organizationSlug}/customers/${sub.customer?.id || sub.customer_id}`}
                   >
                     <Button variant="secondary" size="sm">
                       View Customer
@@ -331,7 +246,7 @@ export default function SubscriptionsPage({
               ),
             },
           ]}
-          isLoading={false}
+          isLoading={isLoadingSubscriptions || isLoadingProducts}
         />
       </div>
     </DashboardBody>

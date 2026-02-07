@@ -563,6 +563,13 @@ export type Database = {
             foreignKeyName: "payment_intents_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -612,6 +619,13 @@ export type Database = {
             columns: ["feature_id"]
             isOneToOne: false
             referencedRelation: "features_needing_sync"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_features_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
             referencedColumns: ["id"]
           },
           {
@@ -668,6 +682,13 @@ export type Database = {
             foreignKeyName: "product_prices_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_prices_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -679,49 +700,95 @@ export type Database = {
           description: string | null
           id: string
           is_archived: boolean | null
+          latest_version_id: string | null
           metadata: Json | null
           name: string
           organization_id: string
+          parent_product_id: string | null
           recurring_interval: string
           recurring_interval_count: number
           stripe_product_id: string | null
           trial_days: number | null
           updated_at: string | null
+          version: number
+          version_created_at: string | null
+          version_created_reason: string | null
+          version_status: string | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
           id?: string
           is_archived?: boolean | null
+          latest_version_id?: string | null
           metadata?: Json | null
           name: string
           organization_id: string
+          parent_product_id?: string | null
           recurring_interval: string
           recurring_interval_count?: number
           stripe_product_id?: string | null
           trial_days?: number | null
           updated_at?: string | null
+          version?: number
+          version_created_at?: string | null
+          version_created_reason?: string | null
+          version_status?: string | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
           id?: string
           is_archived?: boolean | null
+          latest_version_id?: string | null
           metadata?: Json | null
           name?: string
           organization_id?: string
+          parent_product_id?: string | null
           recurring_interval?: string
           recurring_interval_count?: number
           stripe_product_id?: string | null
           trial_days?: number | null
           updated_at?: string | null
+          version?: number
+          version_created_at?: string | null
+          version_created_reason?: string | null
+          version_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_latest_version_id_fkey"
+            columns: ["latest_version_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_latest_version_id_fkey"
+            columns: ["latest_version_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -942,6 +1009,13 @@ export type Database = {
             columns: ["price_id"]
             isOneToOne: false
             referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
             referencedColumns: ["id"]
           },
           {
@@ -1271,6 +1345,31 @@ export type Database = {
           },
         ]
       }
+      product_version_analytics: {
+        Row: {
+          active_subscription_count: number | null
+          created_at: string | null
+          id: string | null
+          organization_id: string | null
+          product_name: string | null
+          subscription_count: number | null
+          total_mrr: number | null
+          updated_at: string | null
+          version: number | null
+          version_created_at: string | null
+          version_created_reason: string | null
+          version_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stripe_sync_health: {
         Row: {
           features_failed: number | null
@@ -1294,6 +1393,23 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_session_tokens: { Args: never; Returns: undefined }
+      get_latest_product_version: {
+        Args: { p_organization_id: string; p_product_name: string }
+        Returns: number
+      }
+      get_product_versions: {
+        Args: { p_organization_id: string; p_product_name: string }
+        Returns: {
+          active_subscription_count: number
+          created_at: string
+          id: string
+          subscription_count: number
+          total_mrr: number
+          version: number
+          version_created_reason: string
+          version_status: string
+        }[]
+      }
       is_organization_admin: {
         Args: { org_id: string; user_id: string }
         Returns: boolean

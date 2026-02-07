@@ -327,16 +327,28 @@ BEGIN
     reasons.ADD("Price change detected")
   END IF
 
-  // Check feature limit reductions
-  FOR EACH feature IN proposedChanges.features.update DO
-    currentLimit = GET_FEATURE_LIMIT(currentProduct, feature.id)
-    newLimit = feature.config.limit
+  // Check feature configuration changes (enhanced logic)
+  IF proposedChanges.features.update EXISTS THEN
+    FOR EACH featureUpdate IN proposedChanges.features.update DO
+      currentFeature = GET_PRODUCT_FEATURE(currentProduct.id, featureUpdate.feature_id)
+      currentConfig = currentFeature.config
+      newConfig = featureUpdate.config
 
-    IF newLimit < currentLimit THEN
-      shouldVersion = TRUE
-      reasons.ADD("Feature limit reduced: " + feature.name)
-    END IF
-  END FOR
+      // Extract limits based on feature type
+      currentLimit = EXTRACT_LIMIT(currentConfig, currentFeature.type)
+      newLimit = EXTRACT_LIMIT(newConfig, currentFeature.type)
+
+      // Check for limit reduction
+      IF newLimit != NULL AND currentLimit != NULL THEN
+        IF newLimit < currentLimit THEN
+          shouldVersion = TRUE
+          featureName = GET_FEATURE_NAME(featureUpdate.feature_id)
+          reasons.ADD("Feature limit reduced: " + featureName +
+                     " (" + currentLimit + " → " + newLimit + ")")
+        END IF
+      END IF
+    END FOR
+  END IF
 
   // Check feature removals
   IF proposedChanges.features.unlink EXISTS THEN
@@ -474,6 +486,128 @@ BEGIN
 END
 ```
 
+### 4.4 Feature Change Detection
+
+**Understanding the Feature System**:
+
+BillingOS uses a 3-layer feature configuration system:
+1. **`features.properties`** - Base configuration (organization-wide)
+2. **`product_features.config`** - Product-specific overrides
+3. **`feature_grants.properties`** - Snapshot at subscription creation (protects customers)
+
+**Feature Change Classification**:
+
+```
+ALGORITHM: ClassifyFeatureChange
+INPUT: changeType, currentValue, newValue
+OUTPUT: classification (safe|breaking)
+
+BEGIN
+  SWITCH changeType
+    CASE "add_feature":
+      RETURN "safe"  // Adding features is always safe
+
+    CASE "remove_feature":
+      RETURN "breaking"  // Removing features requires versioning
+
+    CASE "limit_change":
+      IF newValue > currentValue THEN
+        RETURN "safe"  // Increasing limits is safe
+      ELSE IF newValue < currentValue THEN
+        RETURN "breaking"  // Decreasing limits requires versioning
+      ELSE
+        RETURN "safe"  // No change
+      END IF
+
+    CASE "type_change":
+      RETURN "breaking"  // Feature type changes are always breaking
+
+    DEFAULT:
+      RETURN "safe"
+  END SWITCH
+END
+```
+
+**Feature Limit Extraction**:
+
+```
+FUNCTION: EXTRACT_LIMIT
+INPUT: config (JSONB), featureType (string)
+OUTPUT: limit (number or NULL)
+
+BEGIN
+  IF config IS NULL THEN
+    RETURN NULL
+  END IF
+
+  SWITCH featureType
+    CASE "usage_quota":
+      RETURN config.limit  // e.g., API calls per month
+
+    CASE "numeric_limit":
+      RETURN config.limit  // e.g., number of projects
+
+    CASE "boolean_flag":
+      RETURN NULL  // No limit for boolean features
+
+    DEFAULT:
+      RETURN config.limit OR config.value OR NULL
+  END SWITCH
+END
+```
+
+**Feature Change Examples**:
+
+| Change | Example | Safe? | Version? |
+|--------|---------|-------|----------|
+| Add feature | Add "premium_support" to Pro Plan | ✅ | No |
+| Remove feature | Remove "analytics" from Starter | ❌ | Yes |
+| Increase limit | API calls: 1000 → 2000 | ✅ | No |
+| Decrease limit | API calls: 2000 → 1000 | ❌ | Yes |
+| Change type | numeric_limit → usage_quota | ❌ | Yes |
+
+**Implementation in Service Layer**:
+
+```typescript
+// In products.service.ts
+async function analyzeFeatureChanges(
+  productId: string,
+  updateDto: UpdateProductDto
+): Promise<VersioningTrigger[]> {
+  const triggers: VersioningTrigger[] = [];
+
+  // Check feature removals
+  if (updateDto.features?.unlink?.length > 0) {
+    triggers.push({
+      type: 'feature_removal',
+      reason: `Removing ${updateDto.features.unlink.length} features`,
+      severity: 'breaking'
+    });
+  }
+
+  // Check feature limit changes
+  if (updateDto.features?.update) {
+    for (const update of updateDto.features.update) {
+      const current = await getProductFeature(productId, update.feature_id);
+      const currentLimit = extractLimit(current.config, current.feature.type);
+      const newLimit = extractLimit(update.config, current.feature.type);
+
+      if (newLimit !== null && currentLimit !== null) {
+        if (newLimit < currentLimit) {
+          triggers.push({
+            type: 'feature_limit_reduction',
+            reason: `${current.feature.name}: ${currentLimit} → ${newLimit}`,
+            severity: 'breaking'
+          });
+        }
+      }
+    }
+  }
+
+  return triggers;
+}
+```
+
 ---
 
 ## 5. UI/UX Design Changes
@@ -491,6 +625,8 @@ END
 │                                                             │
 │  • Price increased from $10 to $15 (+50%)                  │
 │  • API calls reduced from 2000 to 1000 (-50%)             │
+│  • Feature "advanced_analytics" removed                    │
+│  • Team members limit reduced from 10 to 5 (-50%)         │
 │                                                             │
 │  Impact:                                                    │
 │  • 450 existing customers will stay on v1 ($10/mo)        │
@@ -800,6 +936,35 @@ Archive versions can be viewed but not activated
 ```
 Solution: Database constraint prevents self-referencing
 Validation logic prevents circular chains
+```
+
+**Case**: Feature limit is null or undefined
+```
+Solution: Treat NULL as "no limit" or fall back to base feature.properties
+If newLimit is NULL and currentLimit has value: Treat as limit removal (safe)
+If newLimit has value and currentLimit is NULL: Treat as new limit (safe)
+```
+
+**Case**: Feature type change (e.g., boolean_flag → usage_quota)
+```
+Solution: Always trigger versioning for type changes
+These are fundamental behavior changes that affect SDK usage
+Show clear warning: "Feature type change detected - this is a breaking change"
+```
+
+**Case**: Base feature properties changed affecting multiple products
+```
+Solution: When updating features.properties, check all products using this feature
+Show warning: "This feature is used by 5 products. Products without overrides will be affected."
+Require explicit confirmation before proceeding
+Consider triggering versioning for affected products without overrides
+```
+
+**Case**: Feature config has custom fields beyond 'limit'
+```
+Solution: Deep comparison of config objects
+Track all changed fields, not just 'limit'
+Show specific changes in warning modal: "Custom field 'rate_limit_window' changed from 60 to 30"
 ```
 
 ### 9.2 Migration Failure Scenarios

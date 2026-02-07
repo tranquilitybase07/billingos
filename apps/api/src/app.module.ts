@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
@@ -17,6 +17,7 @@ import { CustomersModule } from './customers/customers.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { SessionTokensModule } from './session-tokens/session-tokens.module';
 import { V1Module } from './v1/v1.module';
+import { JwtDebugMiddleware } from './middleware/jwt-debug.middleware';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { V1Module } from './v1/v1.module';
       useFactory: async (configService: ConfigService) => ({
         store: redisStore,
         host: configService.get('REDIS_HOST', 'localhost'),
-        port: configService.get('REDIS_PORT', 6379),
+        port: parseInt(configService.get('REDIS_PORT', '6379'), 10),
         ttl: 300, // Default TTL: 5 minutes
         max: 1000, // Maximum number of items in cache
       }),
@@ -53,4 +54,8 @@ import { V1Module } from './v1/v1.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(JwtDebugMiddleware).forRoutes('*');
+  }
+}

@@ -5,6 +5,7 @@ import {
   Min,
   IsObject,
   IsArray,
+  IsBoolean,
   ValidateNested,
   ArrayMinSize,
 } from 'class-validator';
@@ -72,4 +73,10 @@ export class UpdateProductDto {
   @Type(() => FeatureOperationsDto)
   @IsOptional()
   features?: FeatureOperationsDto;
+}
+
+export class CheckVersioningDto extends UpdateProductDto {
+  @IsBoolean()
+  @IsOptional()
+  check_only?: boolean; // If true, only check if versioning would occur, don't actually update
 }

@@ -1,10 +1,10 @@
 import { Metadata } from 'next'
-import BenefitsPage from './BenefitsPage'
+import FeaturesPage from './FeaturesPage'
 import { getOrganizationBySlug } from '@/lib/organization'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: 'Benefits',
+    title: 'Features',
   }
 }
 
@@ -23,7 +23,7 @@ export default async function Page({
   }
 
   return (
-    <BenefitsPage
+    <FeaturesPage
       organizationId={organization.id}
       organizationSlug={orgSlug}
     />

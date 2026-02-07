@@ -219,10 +219,12 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
     }
 
     // Feature change detection
-    const initialFeatures = (initialProductRef.features || []).map(
-      (f) => f.feature_id
-    );
-    const currentFeatures = features.map((f) => f.feature_id);
+    const initialFeatures = (initialProductRef.features || [])
+      .map((f) => f.feature_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    const currentFeatures = features
+      .map((f) => f.feature_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
     // Features to unlink (exist in initial but not in current)
     const featuresToUnlink = initialFeatures.filter(

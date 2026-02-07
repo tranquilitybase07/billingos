@@ -4,7 +4,12 @@ import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
 import { OrderStatus } from '@/components/Orders/OrderStatus'
 import { SubscriptionStatus } from '@/components/Subscriptions/SubscriptionStatus'
 import { RevenueWidget } from '@/components/Widgets/RevenueWidget'
-import { Product, useProductSubscriptionCount } from '@/hooks/queries/products'
+import {
+  Product,
+  useProductSubscriptionCount,
+  useProductRevenueMetrics
+} from '@/hooks/queries/products'
+import { useProductSubscriptions } from '@/hooks/queries/subscriptions'
 import {
   DataTable,
   DataTableColumnHeader,
@@ -14,50 +19,7 @@ import { formatCurrency } from '@/utils/metrics'
 import Link from 'next/link'
 
 // ── Mock Data ──────────────────────────────────────────────
-// TODO: Replace with real API hooks (useOrders, useSubscriptions, useDiscounts)
-
-const MOCK_SUBSCRIPTIONS = [
-  {
-    id: 'sub_1',
-    customer: { id: 'cust_1', name: 'Sarah Chen', email: 'sarah@example.com' },
-    status: 'active',
-    started_at: '2025-08-15T10:30:00Z',
-    current_period_end: '2026-02-15T10:30:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_2',
-    customer: { id: 'cust_2', name: 'James Wilson', email: 'james@acme.co' },
-    status: 'active',
-    started_at: '2025-09-01T14:00:00Z',
-    current_period_end: '2026-03-01T14:00:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_3',
-    customer: { id: 'cust_3', name: 'Maria Garcia', email: 'maria@startup.io' },
-    status: 'trialing',
-    started_at: '2026-01-10T09:15:00Z',
-    current_period_end: '2026-02-10T09:15:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_4',
-    customer: { id: 'cust_4', name: 'Alex Johnson', email: 'alex@bigcorp.com' },
-    status: 'past_due',
-    started_at: '2025-06-20T16:45:00Z',
-    current_period_end: '2026-01-20T16:45:00Z',
-    cancel_at_period_end: false,
-  },
-  {
-    id: 'sub_5',
-    customer: { id: 'cust_5', name: 'Emily Brown', email: 'emily@design.co' },
-    status: 'active',
-    started_at: '2025-11-05T11:00:00Z',
-    current_period_end: '2026-05-05T11:00:00Z',
-    cancel_at_period_end: true,
-  },
-]
+// TODO: Implement real API hooks when orders and discounts features are ready
 
 const MOCK_ORDERS = [
   {
@@ -146,6 +108,14 @@ export const ProductOverview = ({
   const { data: subscriptionCount, isLoading: isLoadingSubscriptionCount } =
     useProductSubscriptionCount(product.id)
 
+  // Fetch real subscriptions for the product
+  const { data: subscriptionsData, isLoading: isLoadingSubscriptions } =
+    useProductSubscriptions(product.id, { limit: 10 })
+
+  // Fetch real revenue metrics
+  const { data: revenueMetrics, isLoading: isLoadingRevenue } =
+    useProductRevenueMetrics(product.id)
+
   return (
     <div className="flex flex-col gap-y-16">
       {/* Metric Summary Cards */}
@@ -160,8 +130,9 @@ export const ProductOverview = ({
             />
             <MiniMetricChartBox
               title="Monthly Recurring Revenue"
-              value={1245000}
+              value={revenueMetrics?.mrr ?? 0}
               type="currency"
+              isLoading={isLoadingRevenue}
             />
           </>
         ) : (
@@ -179,9 +150,10 @@ export const ProductOverview = ({
           </>
         )}
         <MiniMetricChartBox
-          title="Cumulative Revenue"
-          value={8742500}
+          title="Revenue Last 30 Days"
+          value={revenueMetrics?.revenueLastThirtyDays ?? 0}
           type="currency"
+          isLoading={isLoadingRevenue}
         />
       </div>
 
@@ -204,7 +176,7 @@ export const ProductOverview = ({
             </Link>
           </div>
           <DataTable
-            data={MOCK_SUBSCRIPTIONS}
+            data={subscriptionsData?.subscriptions || []}
             columns={[
               {
                 id: 'customer',
@@ -212,14 +184,21 @@ export const ProductOverview = ({
                 header: ({ column }) => (
                   <DataTableColumnHeader column={column} title="Customer" />
                 ),
-                cell: ({ row: { original: sub } }) => (
-                  <div className="flex flex-row items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                      {sub.customer.name.charAt(0)}
+                cell: ({ row: { original: sub } }) => {
+                  if (!sub.customer) {
+                    return <span className="text-sm text-muted-foreground">Unknown</span>
+                  }
+                  const displayName = sub.customer.name || sub.customer.email
+                  const initial = displayName?.charAt(0).toUpperCase() || '?'
+                  return (
+                    <div className="flex flex-row items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                        {initial}
+                      </div>
+                      <div className="truncate text-sm">{sub.customer.email}</div>
                     </div>
-                    <div className="truncate text-sm">{sub.customer.email}</div>
-                  </div>
-                ),
+                  )
+                },
               },
               {
                 accessorKey: 'status',
@@ -231,7 +210,7 @@ export const ProductOverview = ({
                 ),
               },
               {
-                accessorKey: 'started_at',
+                accessorKey: 'created_at',
                 header: ({ column }) => (
                   <DataTableColumnHeader
                     column={column}
@@ -239,7 +218,7 @@ export const ProductOverview = ({
                   />
                 ),
                 cell: ({ row: { original: sub } }) => (
-                  <span className="text-sm">{formatDate(sub.started_at)}</span>
+                  <span className="text-sm">{formatDate(sub.created_at)}</span>
                 ),
               },
               {
@@ -266,7 +245,7 @@ export const ProductOverview = ({
                 cell: ({ row: { original: sub } }) => (
                   <span className="flex flex-row justify-end gap-x-2">
                     <Link
-                      href={`/dashboard/${organizationSlug}/customers/${sub.customer.id}`}
+                      href={`/dashboard/${organizationSlug}/customers/${sub.customer?.id || sub.customer_id}`}
                     >
                       <Button variant="secondary" size="sm">
                         View Customer
@@ -276,7 +255,7 @@ export const ProductOverview = ({
                 ),
               },
             ]}
-            isLoading={false}
+            isLoading={isLoadingSubscriptions}
           />
         </div>
       )}

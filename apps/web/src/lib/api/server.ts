@@ -47,12 +47,18 @@ async function request<T>(
   const url = `${API_URL}${endpoint}`
 
   try {
-    const response = await fetch(url, {
+    // If next.revalidate is set, don't override with cache: 'no-store'
+    const fetchOptions: RequestInit = {
       ...options,
       headers,
-      // Don't cache by default for server-side requests
-      cache: options.cache ?? 'no-store',
-    })
+    }
+
+    // Only set cache if not using Next.js revalidate
+    if (!options.next?.revalidate) {
+      fetchOptions.cache = options.cache ?? 'no-store'
+    }
+
+    const response = await fetch(url, fetchOptions)
 
     // Handle no content responses
     if (response.status === 204) {

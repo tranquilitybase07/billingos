@@ -24,8 +24,12 @@
 #### Products Service (`products.service.ts`)
 - [ ] Add `analyzeChanges()` method to detect if versioning needed
   - [ ] Check for price changes (create/archive)
+  - [ ] Check for feature removals (`features.unlink`)
   - [ ] Check for feature limit reductions
-  - [ ] Check for feature removals
+    - [ ] Create `extractLimit()` helper for different feature types
+    - [ ] Compare current vs new limits
+    - [ ] Handle null/undefined cases
+  - [ ] Check for feature type changes (rare but critical)
   - [ ] Check for trial period reduction
 - [ ] Add `createProductVersion()` method
   - [ ] Increment version number
@@ -59,6 +63,9 @@
 #### Warning Modal Component
 - [ ] Create `VersionWarningModal.tsx`
   - [ ] Display reason for versioning
+  - [ ] Show price changes with percentages
+  - [ ] Show feature removals by name
+  - [ ] Show feature limit reductions with old/new values
   - [ ] Show impact (customer counts, revenue)
   - [ ] Confirm/Cancel buttons
 - [ ] Add to `EditProductPage.tsx`
@@ -80,10 +87,22 @@
 
 ### Testing
 - [ ] Unit tests for `analyzeChanges()`
+  - [ ] Price changes trigger versioning
+  - [ ] Feature removal triggers versioning
+  - [ ] Feature limit reduction triggers versioning
+  - [ ] Feature limit increase does NOT trigger versioning
+  - [ ] Adding features does NOT trigger versioning
+- [ ] Unit tests for `extractLimit()` helper
+  - [ ] Handle usage_quota type
+  - [ ] Handle numeric_limit type
+  - [ ] Handle boolean_flag type (returns null)
+  - [ ] Handle null/undefined configs
 - [ ] Unit tests for `createProductVersion()`
 - [ ] Integration test: Update product with customers → creates version
 - [ ] Integration test: Update product without customers → updates in place
-- [ ] E2E test: Complete flow through UI
+- [ ] Integration test: Feature limit reduction → creates version
+- [ ] Integration test: Feature limit increase → updates in place
+- [ ] E2E test: Complete flow through UI with feature changes
 
 ---
 

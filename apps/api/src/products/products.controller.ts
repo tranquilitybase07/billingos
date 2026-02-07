@@ -74,6 +74,70 @@ export class ProductsController {
   }
 
   /**
+   * Get subscriptions for product
+   * GET /api/products/:id/subscriptions?limit=10&offset=0
+   */
+  @Get(':id/subscriptions')
+  getProductSubscriptions(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    return this.productsService.getProductSubscriptions(id, user.id, parsedLimit, parsedOffset);
+  }
+
+  /**
+   * Get revenue metrics for product
+   * GET /api/products/:id/revenue-metrics
+   */
+  @Get(':id/revenue-metrics')
+  getRevenueMetrics(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.productsService.getRevenueMetrics(id, user.id);
+  }
+
+  /**
+   * Check if update would require versioning (preview)
+   * POST /api/products/:id/check-versioning
+   */
+  @Post(':id/check-versioning')
+  checkVersioning(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() updateDto: UpdateProductDto,
+  ) {
+    return this.productsService.checkVersioning(id, user.id, updateDto);
+  }
+
+  /**
+   * Get all versions of a product
+   * GET /api/products/:id/versions
+   */
+  @Get(':id/versions')
+  getVersions(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.productsService.getVersionsByProductId(id, user.id);
+  }
+
+  /**
+   * Sync subscriptions from Stripe for a customer
+   * POST /api/products/sync-subscriptions
+   * Body: { customer_id: string, stripe_account_id?: string }
+   */
+  @Post('sync-subscriptions')
+  syncSubscriptions(
+    @CurrentUser() user: User,
+    @Body() syncDto: { customer_id: string; stripe_account_id?: string },
+  ) {
+    return this.productsService.syncSubscriptionsFromStripe(
+      user.id,
+      syncDto.customer_id,
+      syncDto.stripe_account_id,
+    );
+  }
+
+  /**
    * Update product
    * PATCH /api/products/:id
    */

@@ -99,32 +99,37 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
   )
 
   return (
-    <Tabs defaultValue="overview" className="h-full">
-      <DashboardBody
-        title={
+    <DashboardBody
+      title={
+        <div className="flex min-w-0 flex-row items-center gap-4">
           <div className="flex min-w-0 flex-row items-center gap-4">
-            <div className="flex min-w-0 flex-row items-center gap-4">
-              <ProductThumbnail product={product} />
-              <h1 className="truncate text-2xl font-semibold">{product.name}</h1>
-            </div>
-
-            <div className="flex flex-row items-center gap-2">
-              <Badge
-                variant="secondary"
-                className={
-                  isRecurring
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400'
-                }
-              >
-                {isRecurring ? 'Subscription' : 'One-time'}
-              </Badge>
-              {product.is_archived && (
-                <Badge variant="destructive">Archived</Badge>
-              )}
-            </div>
+            <ProductThumbnail product={product} />
+            <h1 className="truncate text-2xl font-semibold">{product.name}</h1>
           </div>
-        }
+
+          <div className="flex flex-row items-center gap-2">
+            {product.version && product.version > 1 && (
+              <Badge variant="outline">v{product.version}</Badge>
+            )}
+            {product.version_status === 'superseded' && (
+              <Badge variant="secondary">Old Version</Badge>
+            )}
+            <Badge
+              variant="secondary"
+              className={
+                isRecurring
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400'
+              }
+            >
+              {isRecurring ? 'Subscription' : 'One-time'}
+            </Badge>
+            {product.is_archived && (
+              <Badge variant="destructive">Archived</Badge>
+            )}
+          </div>
+        </div>
+      }
         header={
           <div className="flex flex-row items-center gap-2">
             {!product.is_archived && (
@@ -193,28 +198,30 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
           </div>
         }
       >
-        <TabsList className="mb-8">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="metrics">Metrics</TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="mb-8 w-auto">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="overview">
-          <ProductOverview
-            organizationSlug={organizationSlug}
-            product={product}
-            isRecurring={isRecurring}
-          />
-        </TabsContent>
+          <TabsContent value="overview">
+            <ProductOverview
+              organizationSlug={organizationSlug}
+              product={product}
+              isRecurring={isRecurring}
+            />
+          </TabsContent>
 
-        <TabsContent value="metrics">
-          <ProductMetricsView
-            product={product}
-            isRecurring={isRecurring}
-          />
-        </TabsContent>
+          <TabsContent value="metrics">
+            <ProductMetricsView
+              product={product}
+              isRecurring={isRecurring}
+            />
+          </TabsContent>
+        </Tabs>
 
-        {/* Archive Confirmation Dialog */}
-        <AlertDialog open={isArchiveModalShown} onOpenChange={hideArchiveModal}>
+      {/* Archive Confirmation Dialog */}
+      <AlertDialog open={isArchiveModalShown} onOpenChange={hideArchiveModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Archive Product</AlertDialogTitle>
@@ -235,8 +242,8 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Unarchive Confirmation Dialog */}
-        <AlertDialog open={isUnarchiveModalShown} onOpenChange={hideUnarchiveModal}>
+      {/* Unarchive Confirmation Dialog */}
+      <AlertDialog open={isUnarchiveModalShown} onOpenChange={hideUnarchiveModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Unarchive Product</AlertDialogTitle>
@@ -251,9 +258,8 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
                 Unarchive
               </AlertDialogAction>
             </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DashboardBody>
-    </Tabs>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardBody>
   )
 }

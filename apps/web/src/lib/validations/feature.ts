@@ -44,6 +44,28 @@ export const createFeatureSchema = z.object({
 export type CreateFeatureFormData = z.infer<typeof createFeatureSchema>
 
 /**
+ * Validation schema for updating a feature
+ * Matches backend UpdateFeatureDto requirements
+ */
+export const updateFeatureSchema = z.object({
+  title: z
+    .string()
+    .min(1, 'Feature title is required')
+    .max(255, 'Feature title must be 255 characters or less')
+    .optional(),
+
+  description: z.string().optional(),
+
+  type: featureTypeEnum.optional(),
+
+  properties: z.any().optional(),
+
+  metadata: z.any().optional(),
+})
+
+export type UpdateFeatureFormData = z.infer<typeof updateFeatureSchema>
+
+/**
  * Helper function to generate a feature name slug from a title
  * Converts "API Calls per Month" to "api_calls_per_month"
  */

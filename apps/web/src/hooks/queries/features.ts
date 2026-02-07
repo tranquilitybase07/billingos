@@ -3,6 +3,16 @@ import { api } from '@/lib/api/client'
 
 export type FeatureType = 'boolean_flag' | 'usage_quota' | 'numeric_limit'
 
+export interface ProductFeature {
+  product_id: string
+  display_order?: number
+  config?: Record<string, any>
+  products?: {
+    id: string
+    name: string
+  }
+}
+
 export interface Feature {
   id: string
   organization_id: string
@@ -12,6 +22,10 @@ export interface Feature {
   type: FeatureType
   properties?: Record<string, any>
   metadata?: Record<string, any>
+  stripe_feature_id?: string | null
+  stripe_synced_at?: string | null
+  stripe_sync_status?: string | null
+  product_features?: ProductFeature[]
   created_at: string
   updated_at: string
 }
@@ -82,11 +96,10 @@ export function useUpdateFeature() {
   return useMutation({
     mutationFn: async ({
       id,
-      data,
+      ...data
     }: {
       id: string
-      data: Partial<CreateFeatureDto>
-    }) => {
+    } & Partial<CreateFeatureDto>) => {
       return api.patch<Feature>(`/features/${id}`, data)
     },
     onSuccess: (data) => {

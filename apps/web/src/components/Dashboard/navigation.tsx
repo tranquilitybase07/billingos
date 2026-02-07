@@ -78,8 +78,8 @@ const generalRoutesList = (org?: Organization): Route[] => [
         icon: <DiscountOutlined fontSize="inherit" />,
       },
       {
-        title: 'Benefits',
-        link: `/dashboard/${org?.slug}/products/benefits`,
+        title: 'Features',
+        link: `/dashboard/${org?.slug}/products/features`,
         icon: <DiamondOutlined fontSize="inherit" />,
       },
       {
