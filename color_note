@@ -1,0 +1,12 @@
+--background: var(--color-polar-800);   /* dark grey */
+--foreground: var(--color-polar-500);   /* light grey text */
+
+--card: var(--color-polar-800);          /* dark grey */
+--card-foreground: var(--color-polar-50);/* almost white */
+
+--muted: var(--color-polar-700);         /* medium grey */
+--muted-foreground: var(--color-polar-500); /* light grey */
+
+--border: var(--color-polar-700);        /* grey border */
+--input: var(--color-polar-700);         /* grey input */
+--ring: var(--color-polar-700);          /* grey focus ring */
