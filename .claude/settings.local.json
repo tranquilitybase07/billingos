@@ -32,7 +32,8 @@
       "Bash(npx tsc:*)",
       "Bash(xargs kill:*)",
       "Bash(ls:*)",
-      "Bash(timeout 60 pnpm build:*)"
+      "Bash(timeout 60 pnpm build:*)",
+      "Bash(/dev/null)"
     ],
     "deny": [],
     "ask": []
