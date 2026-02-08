@@ -10,12 +10,46 @@ async function bootstrap() {
   });
 
   // Enable CORS for frontend and sample app
+  const allowedOrigins = [
+    process.env.APP_URL || 'http://localhost:3000',
+    'http://localhost:3002', // Sample app
+    'https://billingos-web.vercel.app', // Production frontend
+    'https://*.vercel.app', // All Vercel preview deployments
+  ];
+
+  // Add FRONTEND_URL from env if it exists
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+
   app.enableCors({
-    origin: [
-      process.env.APP_URL || 'http://localhost:3000',
-      'http://localhost:3002', // Sample app
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, Postman, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Check if origin matches any allowed pattern
+      const isAllowed = allowedOrigins.some((allowedOrigin) => {
+        if (allowedOrigin.includes('*')) {
+          // Handle wildcard patterns
+          const pattern = allowedOrigin.replace(/\*/g, '.*');
+          const regex = new RegExp(`^${pattern}$`);
+          return regex.test(origin);
+        }
+        return allowedOrigin === origin;
+      });
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
   // Global validation pipe

@@ -30,7 +30,8 @@
       "Bash(npx nest g service analytics)",
       "Bash(npx nest g controller:*)",
       "Bash(npx tsc:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
