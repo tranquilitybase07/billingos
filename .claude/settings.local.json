@@ -33,7 +33,8 @@
       "Bash(xargs kill:*)",
       "Bash(ls:*)",
       "Bash(timeout 60 pnpm build:*)",
-      "Bash(/dev/null)"
+      "Bash(/dev/null)",
+      "WebFetch(domain:supabase.com)"
     ],
     "deny": [],
     "ask": []

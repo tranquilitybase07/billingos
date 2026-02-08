@@ -25,6 +25,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const supabaseUrl = configService.get<string>('SUPABASE_URL');
     const jwtSecret = configService.get<string>('SUPABASE_JWT_SECRET');
 
+    console.log('=== JWT STRATEGY INITIALIZATION ===');
+    console.log('SUPABASE_URL:', supabaseUrl);
+    console.log('SUPABASE_JWT_SECRET (first 20 chars):', jwtSecret?.substring(0, 20) + '...');
+    console.log('JWT Secret length:', jwtSecret?.length);
+    console.log('JWT Secret is base64?:', /^[A-Za-z0-9+/=]+$/.test(jwtSecret || ''));
+
     if (!supabaseUrl) {
       throw new Error('SUPABASE_URL is not defined in environment variables');
     }
@@ -34,6 +40,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Detect if we're in local development based on URL
     const isLocalDev = supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost');
+    console.log('Is Local Development?:', isLocalDev);
 
     // Configuration based on environment
     // Local: Modern Supabase uses ES256/RS256 with JWKS (asymmetric)
@@ -52,30 +59,43 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       config.audience = 'authenticated';  // Local tokens do have audience claim
 
       console.log('JWT Strategy: Using HS256 for local development (Supabase CLI v2.20.5)');
+      console.log('Expected issuer:', config.issuer);
+      console.log('Expected audience:', config.audience);
     } else {
-      // Production currently uses legacy HS256 with shared secret
-      // Will migrate to ES256/JWKS in the future
-      config.secretOrKey = jwtSecret;
+      // Production uses ES256 with JWKS (modern Supabase)
+      // Use passportJwtSecret for dynamic key fetching from JWKS endpoint
+      config.secretOrKeyProvider = passportJwtSecret({
+        cache: true,
+        rateLimit: true,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
+      });
       config.issuer = `${supabaseUrl}/auth/v1`;
-      config.algorithms = ['HS256'];
-      config.audience = 'authenticated'; // Validate audience in production
+      config.algorithms = ['ES256']; // Modern Supabase uses ES256
+      config.audience = 'authenticated';
 
-      console.log('JWT Strategy: Using HS256 (legacy) for production');
+      console.log('JWT Strategy: Using ES256 with JWKS for hosted Supabase');
+      console.log('JWKS URI:', `${supabaseUrl}/auth/v1/.well-known/jwks.json`);
+      console.log('Expected issuer:', config.issuer);
+      console.log('Expected audience:', config.audience);
     }
+
+    console.log('=== JWT STRATEGY INITIALIZED ===\n');
 
     super(config);
   }
 
   async validate(payload: JwtPayload): Promise<User> {
-    // console.log('=== JWT VALIDATION START ===');
-    // console.log('JWT Payload received:', JSON.stringify(payload, null, 2));
-    // console.log('User ID (sub):', payload.sub);
-    // console.log('Email:', payload.email);
-    // console.log('Role:', payload.role);
-    // console.log('Audience:', payload.aud);
-    // console.log('Issuer (from token):', payload.iss);
-    // console.log('Issued at:', new Date(payload.iat * 1000).toISOString());
-    // console.log('Expires at:', new Date(payload.exp * 1000).toISOString());
+    console.log('\n=== JWT VALIDATION START ===');
+    console.log('JWT Payload received:', JSON.stringify(payload, null, 2));
+    console.log('User ID (sub):', payload.sub);
+    console.log('Email:', payload.email);
+    console.log('Role:', payload.role);
+    console.log('Audience:', payload.aud);
+    console.log('Issuer (from token):', payload.iss);
+    console.log('Issued at:', new Date(payload.iat * 1000).toISOString());
+    console.log('Expires at:', new Date(payload.exp * 1000).toISOString());
+    console.log('Time until expiration:', Math.floor((payload.exp * 1000 - Date.now()) / 1000 / 60), 'minutes');
 
     // Validate that the user exists in the database
     const supabase = this.supabaseService.getClient();
@@ -95,8 +115,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // If user doesn't exist yet (new signup), create a minimal user object
       // The user service should handle creating the full user record
       if (error || !data) {
-        // console.log(`User ${payload.sub} not found in database, returning minimal user object`);
-        // console.log('=== JWT VALIDATION END (user not in DB) ===');
+        console.log(`User ${payload.sub} not found in database, returning minimal user object`);
+        console.log('=== JWT VALIDATION END (user not in DB) ===\n');
 
         // Return minimal user object for new users
         // The actual user record should be created by the user service
@@ -110,12 +130,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
       if (data?.blocked_at) {
         console.log('User is blocked');
-        console.log('=== JWT VALIDATION END (user blocked) ===');
+        console.log('=== JWT VALIDATION END (user blocked) ===\n');
         throw new UnauthorizedException('User is blocked');
       }
 
-      // console.log('User found in database:', data.id);
-      // console.log('=== JWT VALIDATION END (success) ===');
+      console.log('User found in database:', data.id);
+      console.log('=== JWT VALIDATION END (success) ===\n');
 
       // Return user object that will be attached to request.user
       return {
@@ -125,7 +145,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       };
     } catch (error) {
       console.error('Error during JWT validation:', error);
-      console.log('=== JWT VALIDATION END (error) ===');
+      console.log('=== JWT VALIDATION END (error) ===\n');
       throw error;
     }
   }
