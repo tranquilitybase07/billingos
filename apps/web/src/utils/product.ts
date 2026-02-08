@@ -23,6 +23,8 @@ export interface Product {
   metadata: Record<string, any>
   created_at: string
   modified_at?: string
+  version?: number
+  version_status?: 'current' | 'superseded' | null
 }
 
 export const hasIntervals = (

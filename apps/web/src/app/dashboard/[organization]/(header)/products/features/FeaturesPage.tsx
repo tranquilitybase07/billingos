@@ -112,7 +112,7 @@ export default function FeaturesPage({
   }
 
   // Sync status icon
-  const getSyncStatusIcon = (status: string | null) => {
+  const getSyncStatusIcon = (status: string | null | undefined) => {
     switch (status) {
       case 'synced':
         return (
@@ -287,10 +287,10 @@ export default function FeaturesPage({
                               {feature.product_features?.length || 0} products
                             </Badge>
                           </TooltipTrigger>
-                          {feature.product_features?.length > 0 && (
+                          {(feature.product_features?.length ?? 0) > 0 && (
                             <TooltipContent>
                               <div className="space-y-1">
-                                {feature.product_features.map((pf: ProductFeature) => (
+                                {feature.product_features?.map((pf: ProductFeature) => (
                                   <div key={pf.product_id} className="text-xs">
                                     {pf.products?.name || 'Unknown product'}
                                   </div>
@@ -321,7 +321,7 @@ export default function FeaturesPage({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteFeature(feature)}
-                            disabled={feature.product_features?.length > 0}
+                            disabled={(feature.product_features?.length ?? 0) > 0}
                           >
                             <DeleteIcon className="h-4 w-4" />
                           </Button>

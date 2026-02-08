@@ -31,7 +31,8 @@
       "Bash(npx nest g controller:*)",
       "Bash(npx tsc:*)",
       "Bash(xargs kill:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(timeout 60 pnpm build:*)"
     ],
     "deny": [],
     "ask": []
