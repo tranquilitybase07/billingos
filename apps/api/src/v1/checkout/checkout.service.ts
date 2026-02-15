@@ -106,6 +106,10 @@ export class CheckoutService {
       .eq('external_id', externalUserId)
       .maybeSingle();
 
+    // Handle both direct fields and nested customer object for backward compatibility
+    const customerEmail = dto.customerEmail || dto.customer?.email;
+    const customerName = dto.customerName || dto.customer?.name;
+
     if (existingCustomer?.stripe_customer_id) {
       // Customer already exists with Stripe ID
       stripeCustomerId = existingCustomer.stripe_customer_id;
@@ -113,8 +117,8 @@ export class CheckoutService {
     } else {
       // Create new Stripe customer on the CONNECTED ACCOUNT
       const stripeCustomer = await this.stripeService.getClient().customers.create({
-        email: dto.customerEmail,
-        name: dto.customerName,
+        email: customerEmail,
+        name: customerName,
         metadata: {
           organizationId,
           externalUserId,
@@ -128,8 +132,8 @@ export class CheckoutService {
       const customerResult = await this.customersService.upsertCustomer({
         organization_id: organizationId,
         external_id: externalUserId,
-        email: dto.customerEmail || '',
-        name: dto.customerName,
+        email: customerEmail || '',
+        name: customerName,
         stripe_customer_id: stripeCustomerId,
         metadata: dto.metadata,
       });
@@ -226,8 +230,8 @@ export class CheckoutService {
         organization_id: organizationId,
         session_token: externalUserId, // Using external user ID as session identifier
         payment_intent_id: paymentIntentRecord.id,
-        customer_email: dto.customerEmail,
-        customer_name: dto.customerName,
+        customer_email: customerEmail,
+        customer_name: customerName,
         customer_external_id: externalUserId,
         expires_at: expiresAt.toISOString(),
         metadata: dto.metadata,
@@ -272,8 +276,8 @@ export class CheckoutService {
         features,
       },
       customer: {
-        email: dto.customerEmail,
-        name: dto.customerName,
+        email: customerEmail,
+        name: customerName,
       },
       stripeAccountId,
       trialDays: product.trial_days || 0,

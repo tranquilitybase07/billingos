@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsNotEmpty, IsIn } from 'class-validator';
 
 export class CreateCheckoutDto {
   @IsString()
@@ -20,4 +20,29 @@ export class CreateCheckoutDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['embedded', 'redirect'])
+  mode?: 'embedded' | 'redirect';
+
+  @IsString()
+  @IsOptional()
+  successUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  cancelUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
+
+  @IsObject()
+  @IsOptional()
+  customer?: {
+    email?: string;
+    name?: string;
+    taxId?: string;
+  };
 }

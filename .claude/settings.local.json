@@ -34,7 +34,17 @@
       "Bash(ls:*)",
       "Bash(timeout 60 pnpm build:*)",
       "Bash(/dev/null)",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "Skill(pm)",
+      "Bash(pnpm link:*)",
+      "Bash(node test-sdk.js:*)",
+      "Bash(node test-sdk.mjs:*)",
+      "Bash(pnpm ls:*)",
+      "Bash(pnpm why:*)",
+      "Bash(cat:*)",
+      "Bash(pnpm config:*)",
+      "Bash(done)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

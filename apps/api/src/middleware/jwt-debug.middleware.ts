@@ -16,6 +16,25 @@ export class JwtDebugMiddleware implements NestMiddleware {
       // console.log('Token length:', token.length);
       // console.log('Token preview:', token.substring(0, 50) + '...');
 
+      // Skip decoding for non-JWT tokens
+      // - API keys: sk_test_*, sk_live_*, pk_test_*, pk_live_*
+      // - Session tokens: bos_session_*, tok_*
+      // - Other custom tokens that don't follow JWT format
+      const isNonJwtToken =
+        token.startsWith('sk_test_') ||
+        token.startsWith('sk_live_') ||
+        token.startsWith('pk_test_') ||
+        token.startsWith('pk_live_') ||
+        token.startsWith('bos_session_') ||
+        token.startsWith('tok_') ||
+        !token.includes('.'); // JWT tokens have dots separating header.payload.signature
+
+      if (isNonJwtToken) {
+        // console.log('Non-JWT token detected (API key or session token), skipping JWT decode');
+        next();
+        return;
+      }
+
       try {
         // Decode without verification to see the contents
         const decoded = jwt.decode(token, { complete: true });
