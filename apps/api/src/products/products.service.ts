@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
+import * as fs from 'fs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
@@ -484,7 +485,13 @@ export class ProductsService {
       reasons.push(`Removing ${updateDto.features.unlink.length} feature(s)`);
     }
 
-    // Check feature limit reductions
+    // Check feature additions (linking)
+    if (updateDto.features?.link && updateDto.features.link.length > 0) {
+      requiresVersioning = true;
+      reasons.push(`Adding ${updateDto.features.link.length} new feature(s)`);
+    }
+
+    // Check feature limit changes
     if (updateDto.features?.update) {
       const supabase = this.supabaseService.getClient();
 
@@ -507,11 +514,34 @@ export class ProductsService {
             currentFeature.features.type,
           );
 
-          if (newLimit !== null && currentLimit !== null && newLimit < currentLimit) {
+          // Check if limits are different
+          // We handle null (Unlimited) as a valid state, so we check for inequality
+          // explicitly. extractLimit returns null for types that don't support limits,
+          // so null === null will be false (no versioning) for those types.
+          if (newLimit !== currentLimit) {
             requiresVersioning = true;
+            const formatLimit = (l: number | null) => (l === null ? 'Unlimited' : l);
             reasons.push(
-              `Feature "${currentFeature.features.name}" limit reduced from ${currentLimit} to ${newLimit}`,
+              `Feature "${currentFeature.features.name}" limit changed from ${formatLimit(currentLimit)} to ${formatLimit(newLimit)}`,
             );
+          } else {
+            // Check for other config changes (e.g. boolean flags, metadata)
+            // We strip null/undefined values for fair comparison if needed, 
+            // but for now a direct stringify comparison is safer to catch any drift.
+            const currentConfigStr = JSON.stringify(currentFeature.config || {});
+            const newConfigStr = JSON.stringify(featureUpdate.config || {});
+            
+            if (currentConfigStr !== newConfigStr) {
+              requiresVersioning = true;
+              reasons.push(
+                `Feature "${currentFeature.features.name}" configuration changed`,
+              );
+            } else if (currentFeature.display_order !== featureUpdate.display_order) {
+               requiresVersioning = true;
+               reasons.push(
+                 `Feature "${currentFeature.features.name}" display order changed`,
+               );
+            }
           }
         }
       }
@@ -540,11 +570,11 @@ export class ProductsService {
     switch (featureType) {
       case 'usage_quota':
       case 'numeric_limit':
-        return config.limit || null;
+        return config.limit ?? null;
       case 'boolean_flag':
         return null; // No limits for boolean features
       default:
-        return config.limit || config.value || config.quantity || null;
+        return config.limit ?? config.value ?? config.quantity ?? null;
     }
   }
 
