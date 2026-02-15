@@ -485,12 +485,6 @@ export class ProductsService {
       reasons.push(`Removing ${updateDto.features.unlink.length} feature(s)`);
     }
 
-    // Check feature additions (linking)
-    if (updateDto.features?.link && updateDto.features.link.length > 0) {
-      requiresVersioning = true;
-      reasons.push(`Adding ${updateDto.features.link.length} new feature(s)`);
-    }
-
     // Check feature limit changes
     if (updateDto.features?.update) {
       const supabase = this.supabaseService.getClient();
