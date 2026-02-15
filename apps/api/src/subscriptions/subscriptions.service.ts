@@ -443,7 +443,20 @@ export class SubscriptionsService {
 
     let query = supabase
       .from('subscriptions')
-      .select('*')
+      .select(`
+        *,
+        customers (
+          id,
+          name,
+          email,
+          external_id,
+          stripe_customer_id
+        ),
+        products (
+          id,
+          name
+        )
+      `)
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 

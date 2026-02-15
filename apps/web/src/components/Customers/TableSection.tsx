@@ -38,7 +38,7 @@ export const TableSection = ({ title, columns, data }: TableSectionProps) => {
                       {columns.map((col) => (
                         <td
                           key={col.key}
-                          className="p-4 text-sm text-muted-foreground"
+                          className="p-4 text-sm text-popover-foreground"
                         >
                           {row[col.key] ?? "-"}
                         </td>

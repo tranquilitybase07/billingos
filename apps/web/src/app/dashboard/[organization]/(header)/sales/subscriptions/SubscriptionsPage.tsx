@@ -234,7 +234,7 @@ export default function SubscriptionsPage({
               id: 'actions',
               header: () => null,
               cell: ({ row: { original: sub } }) => (
-                <span className="flex flex-row justify-end gap-x-2">
+                <span className="flex flex-row justify-end gap-x-2 ">
                   <Link
                     href={`/dashboard/${organizationSlug}/customers/${sub.customer?.id || sub.customer_id}`}
                   >

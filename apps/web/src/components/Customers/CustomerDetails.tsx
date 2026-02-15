@@ -12,6 +12,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RevenueChart } from "./RevenueChart";
 import { TableSection } from "./TableSection";
+import {
+  DataTable,
+  DataTableColumnHeader,
+} from "@/components/atoms/datatable";
+import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
 
 interface Customer {
   id: string;
@@ -21,10 +26,19 @@ interface Customer {
   lifetimeRevenue: number;
   orders: number;
   balance: number;
+  subscriptions?: any[];
 }
 
 interface CustomerDetailsProps {
   customer: Customer;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export function CustomerDetails({ customer }: CustomerDetailsProps) {
@@ -35,12 +49,12 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
 
   // Dummy customer details data
   const customerDetailsData = {
-    id: "315bdb07-c364-4198-a468-8bef72cde466",
+    id: customer.id,
     externalId: "—",
-    email: "agsgdsgdsdhldgj@gmail.com",
-    name: "ramesh",
+    email: customer.email,
+    name: customer.name,
     taxId: "—",
-    createdAt: "Jan 6, 2026",
+    createdAt: "—",
   };
 
   const billingAddressData = {
@@ -216,15 +230,47 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               </CardContent>
             </Card>
 
-            <TableSection
-              title="Subscriptions"
-              columns={[
-                { title: "Product Name", key: "productName" },
-                { title: "Status", key: "status" },
-                { title: "Amount", key: "amount" },
-              ]}
-              data={[]} // currently no data
-            />
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-popover-foreground">Subscriptions</h2>
+              <DataTable
+                data={customer.subscriptions || []}
+                columns={[
+                  {
+                    accessorKey: 'products',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Product Name" />
+                    ),
+                    cell: ({ row: { original: sub } }) => {
+                      const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
+                      return (
+                        <span className="text-sm">{product?.name || "Unknown Product"}</span>
+                      );
+                    },
+                  },
+                  {
+                    accessorKey: 'status',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Status" />
+                    ),
+                    cell: ({ row: { original: sub } }) => (
+                      <SubscriptionStatus status={sub.status} />
+                    ),
+                  },
+                  {
+                    accessorKey: 'amount',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Amount" />
+                    ),
+                    cell: ({ row: { original: sub } }) => (
+                      <span className="text-sm">
+                        {sub.currency?.toUpperCase() || "USD"} {(sub.amount / 100).toFixed(2)}
+                      </span>
+                    ),
+                  },
+                ]}
+                isLoading={false}
+              />
+            </div>
 
             <TableSection
               title="Orders"
@@ -237,12 +283,11 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
             />
 
             <TableSection
-              title="Benefit Grants"
+              title="Features"
               columns={[
-                { title: "Benefit Name", key: "benefitName" },
+                { title: "Feature Name", key: "featureName" },
                 { title: "Status", key: "status" },
                 { title: "Granted At", key: "grantedAt" },
-                { title: "Revoked At", key: "revokedAt" },
               ]}
               data={[]}
             />

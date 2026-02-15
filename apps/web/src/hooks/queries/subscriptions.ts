@@ -9,6 +9,11 @@ export interface Customer {
   stripe_customer_id: string | null
 }
 
+export interface Product {
+  id: string
+  name: string
+}
+
 export interface Subscription {
   id: string
   organization_id: string
@@ -31,6 +36,7 @@ export interface Subscription {
   updated_at: string
   payment_intent_id: string | null
   customer?: Customer
+  products?: Product
 }
 
 export interface ProductSubscriptionsResponse {
