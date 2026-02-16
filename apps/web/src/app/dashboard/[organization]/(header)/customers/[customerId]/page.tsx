@@ -20,6 +20,8 @@ import { useListOrganizations } from "@/hooks/queries/organization";
 import { useCreateCustomer, useListCustomers } from "@/hooks/queries/customers";
 import { useToast } from "@/hooks/use-toast";
 
+import { useDebounce } from "@/hooks/use-debounce";
+
 interface CustomerDetailPageProps {
   params: Promise<{
     organization: string;
@@ -32,6 +34,10 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [newCustomerData, setNewCustomerData] = useState({
@@ -57,7 +63,9 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
 
   // Fetch all customers using the organization ID
   const { data: customersData, isLoading: isLoadingCustomers, error } = useListCustomers(org?.id, {
-    query: searchQuery,
+    query: debouncedSearchQuery,
+    page,
+    limit,
   });
 
   // Fetch all subscriptions for customer details
@@ -188,7 +196,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
           ) : customers.length === 0 ? (
             <div className="flex-1 flex items-center justify-center p-4">
               <p className="text-muted-foreground text-sm text-center">
-                {searchQuery ? "No customers found" : "No customers yet"}
+                {debouncedSearchQuery ? "No customers found" : "No customers yet"}
               </p>
             </div>
           ) : (
@@ -196,6 +204,9 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               customers={customers}
               selectedCustomer={selectedCustomer}
               onSelectCustomer={handleSelectCustomer}
+              page={page}
+              totalPages={customersData?.total_pages || 1}
+              onPageChange={setPage}
             />
           )}
         </div>
