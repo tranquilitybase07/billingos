@@ -102,3 +102,27 @@ export function useUpdateCustomer() {
     },
   })
 }
+
+/**
+ * Mutation hook to create a new customer
+ */
+export function useCreateCustomer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: {
+      organization_id: string
+      name: string
+      email: string
+      external_id?: string
+      metadata?: Record<string, any>
+    }) => {
+      return await api.post<any>('/customers', data)
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate customer queries to refetch updated data
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: ['organization-subscriptions', variables.organization_id] })
+    },
+  })
+}
