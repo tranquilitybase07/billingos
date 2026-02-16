@@ -17,7 +17,7 @@ import {
 import { DashboardBody } from "@/components/Layout/DashboardLayout";
 import { useOrganizationSubscriptions } from "@/hooks/queries/subscriptions";
 import { useListOrganizations } from "@/hooks/queries/organization";
-import { useCreateCustomer } from "@/hooks/queries/customers";
+import { useCreateCustomer, useListCustomers } from "@/hooks/queries/customers";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomerDetailPageProps {
@@ -55,19 +55,24 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
     return organizations.find((o) => o.slug === organizationSlug);
   }, [organizations, organizationSlug]);
 
-  // Fetch all subscriptions using the organization ID
-  const { data: subscriptions, isLoading: isLoadingSubs, error } = useOrganizationSubscriptions(org?.id);
+  // Fetch all customers using the organization ID
+  const { data: customersData, isLoading: isLoadingCustomers, error } = useListCustomers(org?.id, {
+    query: searchQuery,
+  });
+
+  // Fetch all subscriptions for customer details
+  const { data: subscriptions, isLoading: isLoadingSubs } = useOrganizationSubscriptions(org?.id);
 
   // Combined loading state
-  const isLoading = isLoadingOrg || isLoadingSubs;
+  const isLoading = isLoadingOrg || isLoadingCustomers;
 
-  // Extract unique customers from subscriptions
+  // Transform and filter customers
   const customers = useMemo(() => {
-    if (!subscriptions) return [];
+    if (!customersData?.data) return [];
 
     const customerMap = new Map();
 
-    subscriptions.forEach((sub: any) => {
+    subscriptions?.forEach((sub: any) => {
       const customer = sub.customer;
 
       if (customer && !customerMap.has(customer.id)) {
@@ -110,7 +115,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
     });
 
     return allCustomers;
-  }, [subscriptions, searchQuery, sortOrder]);
+  }, [customersData, sortOrder]);
 
   // Find the currently selected customer based on URL param
   const selectedCustomer = useMemo(() => {

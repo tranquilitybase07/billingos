@@ -22,6 +22,10 @@ export enum SortOrder {
 
 export class ListCustomersDto {
   @IsOptional()
+  @IsString()
+  organization_id?: string; // Handled separately in controller, but needed for validation
+
+  @IsOptional()
   @IsInt()
   @Type(() => Number)
   @Min(1)

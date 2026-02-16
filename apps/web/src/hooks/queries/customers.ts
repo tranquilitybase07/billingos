@@ -2,6 +2,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { Subscription } from './subscriptions'
 
+interface Customer {
+  id: string
+  organization_id: string
+  name: string | null
+  email: string
+  external_id: string | null
+  stripe_customer_id: string | null
+  metadata: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
+interface ListCustomersResponse {
+  data: Customer[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+}
+
 interface CustomerStateResponse {
   customer: any
   active_subscriptions: Subscription[]
@@ -16,6 +36,39 @@ interface CustomerStateResponse {
       [key: string]: any
     }
   }[]
+}
+
+/**
+ * Hook to fetch all customers for an organization
+ */
+export function useListCustomers(
+  organizationId: string | undefined,
+  options?: {
+    limit?: number
+    page?: number
+    query?: string
+    enabled?: boolean
+  }
+) {
+  const limit = options?.limit ?? 100
+  const page = options?.page ?? 1
+  const query = options?.query ?? ''
+
+  return useQuery<ListCustomersResponse>({
+    queryKey: ['customers', organizationId, limit, page, query],
+    queryFn: async () => {
+      if (!organizationId) throw new Error('Organization ID is required')
+
+      let url = `/customers?organization_id=${organizationId}&limit=${limit}&page=${page}`
+      if (query) {
+        url += `&query=${encodeURIComponent(query)}`
+      }
+
+      const response = await api.get<ListCustomersResponse>(url)
+      return response
+    },
+    enabled: options?.enabled !== false && !!organizationId,
+  })
 }
 
 /**
