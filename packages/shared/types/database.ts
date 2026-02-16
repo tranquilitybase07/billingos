@@ -254,7 +254,76 @@ export type Database = {
           },
         ]
       }
+      discounts: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          code: string | null
+          type: string
+          basis_points: number | null
+          amount: number | null
+          currency: string | null
+          duration: string
+          duration_in_months: number | null
+          max_redemptions: number | null
+          redemptions_count: number
+          stripe_coupon_id: string | null
+          stripe_promotion_code_id: string | null
+          created_at: string
+          updated_at: string | null
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          name: string
+          code?: string | null
+          type: string
+          basis_points?: number | null
+          amount?: number | null
+          currency?: string | null
+          duration?: string
+          duration_in_months?: number | null
+          max_redemptions?: number | null
+          redemptions_count?: number
+          stripe_coupon_id?: string | null
+          stripe_promotion_code_id?: string | null
+          created_at?: string
+          updated_at?: string | null
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          name?: string
+          code?: string | null
+          type?: string
+          basis_points?: number | null
+          amount?: number | null
+          currency?: string | null
+          duration?: string
+          duration_in_months?: number | null
+          max_redemptions?: number | null
+          redemptions_count?: number
+          stripe_coupon_id?: string | null
+          stripe_promotion_code_id?: string | null
+          created_at?: string
+          updated_at?: string | null
+          deleted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_grants: {
+
         Row: {
           created_at: string | null
           customer_id: string

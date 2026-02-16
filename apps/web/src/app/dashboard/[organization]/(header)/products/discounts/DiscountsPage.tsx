@@ -4,6 +4,7 @@ import CopyToClipboardButton from '@/components/CopyToClipboardButton/CopyToClip
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { InlineModal } from '@/components/Modal/InlineModal'
 import { CreateDiscountModalContent } from '@/components/Discounts/CreateDiscountModalContent'
+import { EditDiscountModalContent } from '@/components/Discounts/EditDiscountModalContent'
 import { useDiscounts, useDeleteDiscount } from '@/hooks/queries'
 import {
   DataTablePaginationState,
@@ -62,7 +63,16 @@ const ClientPage: React.FC<ClientPageProps> = ({
 }) => {
   const router = useRouter()
   const [query, setQuery] = useState(_query || '')
+  const [debouncedQuery, setDebouncedQuery] = useState(_query || '')
   const { toast } = useToast()
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
   const getSearchParams = (
     pagination: DataTablePaginationState,
@@ -91,6 +101,8 @@ const ClientPage: React.FC<ClientPageProps> = ({
 
   const [discountToDelete, setDiscountToDelete] = useState<Discount>()
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [discountToEdit, setDiscountToEdit] = useState<Discount>()
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const handleDeleteDiscount = useCallback(async () => {
     if (!discountToDelete) return
@@ -108,10 +120,11 @@ const ClientPage: React.FC<ClientPageProps> = ({
 
   const discountsHook = useDiscounts(organizationId, {
     ...getAPIParams(pagination, sorting),
-    query: _query,
+    query: debouncedQuery || undefined,
   })
 
   const discounts = discountsHook.data?.items || []
+
 
   const [showNewModal, setShowNewModal] = useState(false)
 
@@ -197,7 +210,10 @@ const ClientPage: React.FC<ClientPageProps> = ({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {}}>
+                          <DropdownMenuItem onClick={() => {
+                            setDiscountToEdit(discount)
+                            setShowEditModal(true)
+                          }}>
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={handleCopyDiscountId(discount)}>
@@ -252,7 +268,21 @@ const ClientPage: React.FC<ClientPageProps> = ({
         }
       />
 
-      {/* TODO: Add Update Discount Modal */}
+      {/* Edit Discount Modal */}
+      <InlineModal
+        isShown={showEditModal}
+        hide={() => setShowEditModal(false)}
+        modalContent={
+          discountToEdit ? (
+            <EditDiscountModalContent
+              organizationId={organizationId}
+              discount={discountToEdit}
+              onDiscountUpdated={() => setShowEditModal(false)}
+              hideModal={() => setShowEditModal(false)}
+            />
+          ) : null
+        }
+      />
 
       <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <AlertDialogContent>

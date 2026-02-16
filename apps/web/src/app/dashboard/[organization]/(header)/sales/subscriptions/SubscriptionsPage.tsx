@@ -17,8 +17,12 @@ import {
 import { Download as DownloadOutlined } from '@mui/icons-material'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
+import type { SortingState } from '@tanstack/react-table'
 import { useProducts } from '@/hooks/queries/products'
 import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
+import { Badge } from '@/components/ui/badge'
+import { downloadCSV } from '@/utils/csv'
+import { formatCurrency } from '@/utils/metrics'
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -48,6 +52,7 @@ export default function SubscriptionsPage({
   )
   const [selectedProduct, setSelectedProduct] = useState<string>(productIdFilter || 'all')
   const [cancellationFilter, setCancellationFilter] = useState<string>('all')
+  const [sorting, setSorting] = useState<SortingState>([])
 
   // Fetch real products for the filter dropdown
   const { data: productsResponse, isLoading: isLoadingProducts } = useProducts(organizationId)
@@ -55,11 +60,12 @@ export default function SubscriptionsPage({
   // Fetch real subscriptions for the organization
   const { data: subscriptions, isLoading: isLoadingSubscriptions } = useOrganizationSubscriptions(organizationId)
 
-  // Filter subscriptions based on selected filters
+  // Filter and sort subscriptions based on selected filters and sorting state
   const filteredSubscriptions = useMemo(() => {
     if (!subscriptions) return []
 
-    return subscriptions.filter((sub) => {
+    // 1. Filter
+    const filtered = subscriptions.filter((sub) => {
       // Status filter
       if (selectedStatus === 'active' && !['active', 'trialing', 'past_due'].includes(sub.status)) {
         return false
@@ -85,7 +91,62 @@ export default function SubscriptionsPage({
 
       return true
     })
-  }, [subscriptions, selectedStatus, selectedProduct, cancellationFilter])
+
+    // 2. Sort
+    if (sorting.length > 0) {
+      const { id, desc } = sorting[0]
+      filtered.sort((a, b) => {
+        let valA: any = ''
+        let valB: any = ''
+
+        if (id === 'customer') {
+          valA = a.customer?.name || a.customer?.email || ''
+          valB = b.customer?.name || b.customer?.email || ''
+        } else if (id === 'status') {
+          valA = a.status
+          valB = b.status
+        } else if (id === 'created_at') {
+          valA = new Date(a.created_at).getTime()
+          valB = new Date(b.created_at).getTime()
+        } else if (id === 'current_period_end') {
+          valA = a.current_period_end ? new Date(a.current_period_end).getTime() : 0
+          valB = b.current_period_end ? new Date(b.current_period_end).getTime() : 0
+        } else if (id === 'product') {
+          const prodA = productsResponse?.items?.find((p) => p.id === a.product_id)
+          const prodB = productsResponse?.items?.find((p) => p.id === b.product_id)
+          valA = prodA?.name || ''
+          valB = prodB?.name || ''
+        }
+
+        if (valA < valB) return desc ? 1 : -1
+        if (valA > valB) return desc ? -1 : 1
+        return 0
+      })
+    }
+
+    return filtered
+  }, [subscriptions, selectedStatus, selectedProduct, cancellationFilter, sorting, productsResponse])
+
+  const handleExportCSV = () => {
+    if (filteredSubscriptions.length === 0) return
+
+    const exportData = filteredSubscriptions.map((sub) => {
+      const product = productsResponse?.items?.find((p) => p.id === sub.product_id)
+      return {
+        'Customer Name': sub.customer?.name || '',
+        'Customer Email': sub.customer?.email || '',
+        Status: sub.status,
+        Product: product?.name || 'Unknown Product',
+        Version: product?.version ? `v${product.version}` : 'v1',
+        Amount: formatCurrency(sub.amount, sub.currency),
+        'Subscription Date': formatDate(sub.created_at),
+        'Renewal Date': sub.current_period_end ? formatDate(sub.current_period_end) : '',
+      }
+    })
+
+    const filename = `subscriptions-${organizationSlug}-${new Date().toISOString().split('T')[0]}.csv`
+    downloadCSV(exportData, filename)
+  }
 
   return (
     <DashboardBody>
@@ -132,12 +193,19 @@ export default function SubscriptionsPage({
                 {productsResponse?.items?.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
+                    {p.version && p.version > 1 && ` (v${p.version})`}
+                    {p.version_status === 'superseded' && ' (Old Version)'}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <Button variant="secondary" size="sm" className="gap-x-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-x-2"
+            onClick={handleExportCSV}
+          >
             <DownloadOutlined className="h-4 w-4" />
             Export CSV
           </Button>
@@ -164,8 +232,15 @@ export default function SubscriptionsPage({
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                       {initial}
                     </div>
-                    <div className="truncate text-sm">
-                      {sub.customer.email}
+                    <div className="flex flex-col truncate">
+                      <div className="truncate text-sm font-medium">
+                        {displayName}
+                      </div>
+                      {sub.customer.name && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {sub.customer.email}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -219,12 +294,22 @@ export default function SubscriptionsPage({
               cell: ({ row: { original: sub } }) => {
                 const product = productsResponse?.items?.find((p) => p.id === sub.product_id)
                 return (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">{product?.name || 'Unknown Product'}</span>
+                  <div className="flex flex-row items-center gap-2 whitespace-nowrap">
+                    <span className="text-sm font-medium">{product?.name || 'Unknown Product'}</span>
+                    {product?.version && product?.version > 1 && (
+                      <Badge variant="outline" className="text-[10px] font-normal py-0">
+                        v{product.version}
+                      </Badge>
+                    )}
+                    {product?.version_status === 'superseded' && (
+                      <Badge variant="secondary" className="text-[10px] font-normal py-0">
+                        Old Version
+                      </Badge>
+                    )}
                     {product?.is_archived && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-950 dark:text-red-400">
+                      <Badge variant="destructive" className="text-[10px] font-normal py-0">
                         Archived
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 )
@@ -247,6 +332,9 @@ export default function SubscriptionsPage({
             },
           ]}
           isLoading={isLoadingSubscriptions || isLoadingProducts}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          rowCount={filteredSubscriptions.length}
         />
       </div>
     </DashboardBody>

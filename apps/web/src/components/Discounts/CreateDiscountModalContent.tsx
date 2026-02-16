@@ -25,11 +25,7 @@ export function CreateDiscountModalContent({
   const handleSubmit = async (data: any) => {
     setIsSubmitting(true)
     try {
-      // TODO: Replace with actual API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Simulate discount creation
-      console.log('Creating discount:', data)
+      await createDiscount.mutateAsync(data)
 
       toast({
         title: 'Discount Created',
@@ -37,16 +33,17 @@ export function CreateDiscountModalContent({
       })
 
       onDiscountCreated()
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to create discount',
+        description: error?.response?.data?.message || error.message || 'Failed to create discount',
         variant: 'destructive',
       })
     } finally {
       setIsSubmitting(false)
     }
   }
+
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -60,6 +57,7 @@ export function CreateDiscountModalContent({
 
       {/* Form */}
       <DiscountForm
+        organizationId={organizationId}
         onSubmit={handleSubmit}
         onCancel={hideModal}
         isSubmitting={isSubmitting}

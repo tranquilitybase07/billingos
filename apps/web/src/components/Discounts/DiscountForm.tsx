@@ -17,8 +17,18 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import { Autorenew, X } from '@mui/icons-material'
+import { Calendar } from '@/components/ui/calendar'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Autorenew, X, CalendarMonth as CalendarIcon, Search } from '@mui/icons-material'
+import { format } from 'date-fns'
 import { useState } from 'react'
+import { Discount } from '@/utils/discount'
+import { useProducts } from '@/hooks/queries/products'
 
 interface DiscountFormData {
   name: string
@@ -30,10 +40,19 @@ interface DiscountFormData {
   duration: 'once' | 'forever' | 'repeating'
   duration_in_months?: number
   max_redemptions?: number
+  product_ids?: string[]
+  starts_at?: string
+  ends_at?: string
+}
+
+const safeParseInt = (val: string) => {
+  const parsed = parseInt(val)
+  return isNaN(parsed) ? undefined : parsed
 }
 
 interface DiscountFormProps {
-  initialData?: Partial<DiscountFormData>
+  organizationId?: string
+  initialData?: Partial<Discount>
   onSubmit: (data: DiscountFormData) => Promise<void>
   onCancel: () => void
   isUpdate?: boolean
@@ -41,6 +60,7 @@ interface DiscountFormProps {
 }
 
 export function DiscountForm({
+  organizationId,
   initialData,
   onSubmit,
   onCancel,
@@ -52,11 +72,13 @@ export function DiscountForm({
   const [type, setType] = useState<'percentage' | 'fixed'>(
     initialData?.type || 'percentage',
   )
+  const [amount, setAmount] = useState(
+    initialData?.amount ? (initialData.amount / 100).toString() : '',
+  )
   const [basisPoints, setBasisPoints] = useState(
     initialData?.basis_points?.toString() || '',
   )
-  const [amount, setAmount] = useState(initialData?.amount?.toString() || '')
-  const [currency, setCurrency] = useState(initialData?.currency || 'usd')
+  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
   const [duration, setDuration] = useState<'once' | 'forever' | 'repeating'>(
     initialData?.duration || 'once',
   )
@@ -66,6 +88,50 @@ export function DiscountForm({
   const [maxRedemptions, setMaxRedemptions] = useState(
     initialData?.max_redemptions?.toString() || '',
   )
+  const [productScope, setProductScope] = useState('all')
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(
+    initialData?.product_ids || [],
+  )
+  const [productSearch, setProductSearch] = useState('')
+  const [startsAt, setStartsAt] = useState<Date | undefined>(
+    initialData?.starts_at ? new Date(initialData.starts_at) : undefined,
+  )
+  const [endsAt, setEndsAt] = useState<Date | undefined>(
+    initialData?.ends_at ? new Date(initialData.ends_at) : undefined,
+  )
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const handleStartDateChange = (date: Date | undefined) => {
+    setStartsAt(date)
+    // If end date is before new start date, reset it
+    if (date && endsAt && endsAt < date) {
+      setEndsAt(undefined)
+    }
+  }
+
+  // Fetch products from catalog
+  const { data: productsData, isLoading: isLoadingProducts } = useProducts(
+    organizationId || '',
+    {
+      limit: 100, // Fetch all products for the picker (simplified)
+    },
+  )
+
+  const products = productsData?.items || []
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(productSearch.toLowerCase()),
+  )
+
+  const toggleProduct = (productId: string) => {
+    setSelectedProductIds((prev) => {
+      if (prev.includes(productId)) {
+        return prev.filter((id) => id !== productId)
+      }
+      return [...prev, productId]
+    })
+  }
 
   const generateCode = () => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -86,17 +152,21 @@ export function DiscountForm({
       duration,
       duration_in_months:
         duration === 'repeating' && durationInMonths
-          ? parseInt(durationInMonths)
+          ? safeParseInt(durationInMonths)
           : undefined,
-      max_redemptions: maxRedemptions ? parseInt(maxRedemptions) : undefined,
+      max_redemptions: maxRedemptions ? safeParseInt(maxRedemptions) : undefined,
+      starts_at: startsAt?.toISOString(),
+      ends_at: endsAt?.toISOString(),
     }
 
     if (type === 'percentage') {
-      data.basis_points = basisPoints ? parseInt(basisPoints) : undefined
+      data.basis_points = basisPoints ? safeParseInt(basisPoints) : undefined
     } else {
-      data.amount = amount ? parseInt(amount) : undefined
+      data.amount = amount ? Math.round(parseFloat(amount) * 100) : undefined
       data.currency = currency
     }
+
+    data.product_ids = selectedProductIds
 
     await onSubmit(data)
   }
@@ -181,18 +251,11 @@ export function DiscountForm({
                 max="100"
                 step="0.01"
                 required
-                disabled={isUpdate}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 %
               </span>
             </div>
-            {isUpdate && (
-              <p className="text-xs text-muted-foreground">
-                The percentage cannot be changed once the discount has been
-                redeemed by a customer.
-              </p>
-            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -208,16 +271,12 @@ export function DiscountForm({
                   id="amount"
                   type="number"
                   placeholder="10.00"
-                  value={amount ? (parseInt(amount) / 100).toFixed(2) : ''}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value) * 100
-                    setAmount(value ? value.toString() : '')
-                  }}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                   min="0.01"
                   step="0.01"
                   className="pl-7"
                   required
-                  disabled={isUpdate}
                 />
               </div>
               <Select value={currency} onValueChange={setCurrency}>
@@ -232,12 +291,6 @@ export function DiscountForm({
                 </SelectContent>
               </Select>
             </div>
-            {isUpdate && (
-              <p className="text-xs text-muted-foreground">
-                The amount cannot be changed once the discount has been redeemed
-                by a customer.
-              </p>
-            )}
           </div>
         )}
 
@@ -251,7 +304,6 @@ export function DiscountForm({
                 <Select
                   value={duration}
                   onValueChange={(v) => setDuration(v as any)}
-                  disabled={isUpdate}
                 >
                   <SelectTrigger id="duration">
                     <SelectValue />
@@ -282,7 +334,6 @@ export function DiscountForm({
                     value={durationInMonths}
                     onChange={(e) => setDurationInMonths(e.target.value)}
                     min="1"
-                    disabled={isUpdate}
                   />
                 </div>
               )}
@@ -310,16 +361,150 @@ export function DiscountForm({
 
               <div className="space-y-2">
                 <Label>Products</Label>
-                <div className="rounded-lg border bg-muted/50 p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Product selector coming soon. Discount will apply to all
-                    products by default.
-                  </p>
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      {selectedProductIds.length === 0
+                        ? 'All products'
+                        : `${selectedProductIds.length} product${selectedProductIds.length > 1 ? 's' : ''}`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0" align="start">
+                    {/* Search */}
+                    <div className="border-b p-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          placeholder="Search products..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="h-8 pl-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Deselect all header */}
+                    {selectedProductIds.length > 0 && (
+                      <div className="flex items-center justify-between border-b px-3 py-2">
+                        <span className="text-sm font-medium">
+                          {selectedProductIds.length} selected
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => setSelectedProductIds([])}
+                        >
+                          Deselect all
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Product list */}
+                    <div className="max-h-52 overflow-y-auto">
+                      {isLoadingProducts ? (
+                        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                          Loading products...
+                        </div>
+                      ) : filteredProducts.length === 0 ? (
+                        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                          No products found
+                        </div>
+                      ) : (
+                        filteredProducts.map((product) => {
+                          const isSelected = selectedProductIds.includes(product.id)
+                          return (
+                            <button
+                              type="button"
+                              key={product.id}
+                              className={`flex w-full cursor-pointer items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 ${isSelected ? 'bg-primary/10' : ''
+                                }`}
+                              onClick={() => toggleProduct(product.id)}
+                            >
+                              <span className={isSelected ? 'font-medium' : ''}>
+                                {product.name}
+                                {product.version && (
+                                  <span className="ml-1.5 text-xs text-muted-foreground">
+                                    v{product.version}
+                                  </span>
+                                )}
+                              </span>
+                              {isSelected && (
+                                <svg
+                                  className="h-4 w-4 text-primary"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">
+                  {selectedProductIds.length === 0
+                    ? 'Discount applies to all products.'
+                    : `Only the ${selectedProductIds.length} selected product${selectedProductIds.length > 1 ? 's' : ''} will be eligible.`}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Starts at</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startsAt ? format(startsAt, 'PPP') : 'Pick a date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={startsAt}
+                      onSelect={handleStartDateChange}
+                      disabled={{ before: today }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ends at</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endsAt ? format(endsAt, 'PPP') : 'Pick a date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={endsAt}
+                      onSelect={setEndsAt}
+                      disabled={{ before: startsAt || today }}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+
       </div>
 
       {/* Footer Actions */}

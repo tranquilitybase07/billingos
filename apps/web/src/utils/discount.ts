@@ -14,6 +14,9 @@ export interface Discount {
   max_redemptions?: number | null
   redemptions_count: number
   created_at: string
+  product_ids?: string[]
+  starts_at?: string
+  ends_at?: string
 }
 
 const isDiscountFixed = (discount: Discount): boolean => {
@@ -26,11 +29,11 @@ const isDiscountPercentage = (discount: Discount): boolean => {
 
 export const getDiscountDisplay = (discount: Discount): string => {
   if (isDiscountPercentage(discount) && discount.basis_points) {
-    return formatPercentage(-discount.basis_points / 10000)
+    return formatPercentage(discount.basis_points / 100)
   }
 
   if (isDiscountFixed(discount) && discount.amount && discount.currency) {
-    return formatCurrency(-discount.amount, discount.currency)
+    return formatCurrency(discount.amount, discount.currency)
   }
 
   return '—'

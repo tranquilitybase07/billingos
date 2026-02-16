@@ -42,9 +42,8 @@ export interface Subscription {
   updated_at: string
   payment_intent_id: string | null
   customer?: Customer
-  customers?: Customer | Customer[]
-  products?: Product | Product[]
-  product_prices?: ProductPrice | ProductPrice[]
+  product?: Product
+  price?: ProductPrice
 }
 
 export interface ProductSubscriptionsResponse {

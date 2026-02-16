@@ -798,4 +798,117 @@ export class StripeService {
       options,
     );
   }
+
+  // ================================================
+  // STRIPE COUPONS & PROMOTION CODES API METHODS
+  // ================================================
+
+  /**
+   * Create a coupon in Stripe Connect account
+   * https://docs.stripe.com/api/coupons/create
+   */
+  async createCoupon(
+    params: Stripe.CouponCreateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Coupon> {
+    this.logger.log(
+      `Creating Stripe coupon for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.coupons.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Update a coupon in Stripe Connect account
+   * Note: Only name and metadata can be updated after creation
+   * https://docs.stripe.com/api/coupons/update
+   */
+  async updateCoupon(
+    couponId: string,
+    params: Stripe.CouponUpdateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Coupon> {
+    this.logger.log(
+      `Updating Stripe coupon: ${couponId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.coupons.update(couponId, params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Delete a coupon in Stripe Connect account
+   * https://docs.stripe.com/api/coupons/delete
+   */
+  async deleteCoupon(
+    couponId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.DeletedCoupon> {
+    this.logger.log(
+      `Deleting Stripe coupon: ${couponId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.coupons.del(couponId, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Create a promotion code linked to a coupon in Stripe Connect account
+   * https://docs.stripe.com/api/promotion_codes/create
+   */
+  async createPromotionCode(
+    params: Stripe.PromotionCodeCreateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.PromotionCode> {
+    this.logger.log(
+      `Creating Stripe promotion code in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.promotionCodes.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Update a promotion code in Stripe Connect account
+   * https://docs.stripe.com/api/promotion_codes/update
+   */
+  async updatePromotionCode(
+    promotionCodeId: string,
+    params: Stripe.PromotionCodeUpdateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.PromotionCode> {
+    this.logger.log(
+      `Updating Stripe promotion code: ${promotionCodeId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.promotionCodes.update(promotionCodeId, params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Deactivate a promotion code in Stripe Connect account
+   * https://docs.stripe.com/api/promotion_codes/update
+   */
+  async deactivatePromotionCode(
+    promotionCodeId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.PromotionCode> {
+    this.logger.log(
+      `Deactivating Stripe promotion code: ${promotionCodeId} for account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.promotionCodes.update(
+      promotionCodeId,
+      { active: false },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
 }
