@@ -412,7 +412,420 @@ describe('ProductsService', () => {
 
       await service.update(mockProduct.id, testUser.id, updateDto);
 
-      // Should create new version due to trial period reduction
+      // Should create version due to trial period reduction
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when adding features with active subscriptions', async () => {
+      const updateDto: UpdateProductDto = {
+        features: {
+          link: [{
+            feature_id: 'feature_2',
+            display_order: 1,
+            config: { limit: 100 }
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: [] })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withTableResponse('features', { data: { id: 'feature_2', stripe_feature_id: 'sf_2' } })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+      expect(result).toBeDefined();
+    });
+
+    it('should create version when increasing feature limit with active subscriptions', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_1',
+        display_order: 0,
+        config: { limit: 10 },
+        features: { name: 'API Calls', type: 'usage_quota' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_1',
+            config: { limit: 20 } // Increased from 10
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures }) // Use array
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+      expect(result).toBeDefined();
+    });
+
+    it('should create version when updating Team Members limit', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_team_members',
+        display_order: 0,
+        config: { limit: 5 },
+        features: { name: 'Team Members', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_team_members',
+            config: { limit: 100 } // Increased from 5 to 100
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures }) // Use array
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+      expect(result).toBeDefined();
+    });
+
+    it('should create version when changing from Unlimited to Limited', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_unlimited',
+        display_order: 0,
+        config: {}, // No limit (Unlimited)
+        features: { name: 'Unlimited Feature', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_unlimited',
+            config: { limit: 100 }
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when changing limit from 0 to 10', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_zero',
+        display_order: 0,
+        config: { limit: 0 },
+        features: { name: 'Zero Limit Feature', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_zero',
+            config: { limit: 10 }
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when changing from Unlimited to 0', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_unlimited',
+        display_order: 0,
+        config: {}, // Unlimited
+        features: { name: 'Unlimited Feature', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_unlimited',
+            config: { limit: 0 }
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when changing limit from 33 to 50', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_limited',
+        display_order: 0,
+        config: { limit: 33 },
+        features: { name: 'Limited Feature', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_limited',
+            config: { limit: 50 }, // User scenario
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when updating feature config (even if limits are same/null)', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_bool',
+        display_order: 0,
+        config: { enabled: false }, // Old config
+        features: { name: 'Boolean Feature', type: 'boolean_flag' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_bool',
+            config: { enabled: true }, // New config
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
+      expect(stripeService.createProduct).toHaveBeenCalled();
+    });
+
+    it('should create version when only display_order changes', async () => {
+      const existingFeatures = [{
+        feature_id: 'feature_order',
+        display_order: 1,
+        config: {}, 
+        features: { name: 'Ordered Feature', type: 'numeric_limit' }
+      }];
+
+      const updateDto: UpdateProductDto = {
+        features: {
+          update: [{
+            feature_id: 'feature_order',
+            display_order: 5, // Changed order
+            config: {},
+          }],
+        },
+      };
+
+      const newProduct = productFactory.build({
+        id: 'product_v2',
+        version: 2,
+        organization_id: testOrg.id,
+        name: mockProduct.name,
+      });
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: existingPrices })
+          .withTableResponse('product_features', { data: existingFeatures })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('subscriptions', { data: activeSubscriptions })
+          .withTableResponse('rpc.get_latest_product_version', { data: 1 })
+          .withTableResponse('rpc.has_active_subscriptions', { data: true })
+          .withDefaultResponse({ data: newProduct })
+          .build()
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
+
+      await service.update(mockProduct.id, testUser.id, updateDto);
+
       expect(stripeService.createProduct).toHaveBeenCalled();
     });
   });
@@ -530,6 +943,16 @@ describe('ProductsService', () => {
     });
 
     it('should use cache when available', async () => {
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('product_prices', { data: [] })
+          .withTableResponse('product_features', { data: [] })
+          .build()
+      );
+
       const cachedMetrics = {
         mrr: 5000,
         revenue30Day: 10000,
@@ -600,6 +1023,36 @@ describe('ProductsService', () => {
 
       expect(result.will_version).toBe(true);
       expect(result.changes).toContainEqual(expect.stringContaining('Adding'));
+    });
+
+    it('should indicate versioning is required for feature addition (linking)', async () => {
+      const updateDto: UpdateProductDto = {
+        features: {
+          link: [{ feature_id: 'ft_new', display_order: 1, config: {} }],
+        },
+      };
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: [] })
+          .withTableResponse('product_features', { data: [] })
+          .withTableResponse('organizations', { data: testOrg })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('subscriptions', {
+            data: [activeSubscription.build({ product_id: mockProduct.id })]
+          })
+          .build()
+      );
+
+      const result = await service.checkVersioning(
+        mockProduct.id,
+        testUser.id,
+        updateDto
+      );
+
+      expect(result.will_version).toBe(true);
+      expect(result.changes).toContainEqual(expect.stringContaining('Adding 1 new feature(s)'));
     });
 
     it('should indicate no versioning for basic metadata updates', async () => {

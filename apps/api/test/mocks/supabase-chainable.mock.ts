@@ -219,6 +219,14 @@ export class EnhancedSupabaseMockBuilder {
         });
       }
 
+      // Handle single() queries
+      if (state.filters.some(f => f.type === 'single') && Array.isArray(baseResponse.data)) {
+        return Promise.resolve({
+          data: baseResponse.data[0],
+          error: baseResponse.error,
+        });
+      }
+
       return Promise.resolve(baseResponse);
     };
 

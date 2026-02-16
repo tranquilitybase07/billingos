@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
+import * as fs from 'fs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
@@ -410,11 +411,12 @@ export class ProductsService {
       throw new ForbiddenException('You do not have access to this product');
     }
 
-    // Fetch prices
+    // Fetch prices (only active ones)
     const { data: prices } = await supabase
       .from('product_prices')
       .select('*')
       .eq('product_id', id)
+      .eq('is_archived', false)
       .order('created_at', { ascending: true });
 
     // Fetch features
@@ -484,7 +486,7 @@ export class ProductsService {
       reasons.push(`Removing ${updateDto.features.unlink.length} feature(s)`);
     }
 
-    // Check feature limit reductions
+    // Check feature limit changes
     if (updateDto.features?.update) {
       const supabase = this.supabaseService.getClient();
 
@@ -507,11 +509,34 @@ export class ProductsService {
             currentFeature.features.type,
           );
 
-          if (newLimit !== null && currentLimit !== null && newLimit < currentLimit) {
+          // Check if limits are different
+          // We handle null (Unlimited) as a valid state, so we check for inequality
+          // explicitly. extractLimit returns null for types that don't support limits,
+          // so null === null will be false (no versioning) for those types.
+          if (newLimit !== currentLimit) {
             requiresVersioning = true;
+            const formatLimit = (l: number | null) => (l === null ? 'Unlimited' : l);
             reasons.push(
-              `Feature "${currentFeature.features.name}" limit reduced from ${currentLimit} to ${newLimit}`,
+              `Feature "${currentFeature.features.name}" limit changed from ${formatLimit(currentLimit)} to ${formatLimit(newLimit)}`,
             );
+          } else {
+            // Check for other config changes (e.g. boolean flags, metadata)
+            // We strip null/undefined values for fair comparison if needed, 
+            // but for now a direct stringify comparison is safer to catch any drift.
+            const currentConfigStr = JSON.stringify(currentFeature.config || {});
+            const newConfigStr = JSON.stringify(featureUpdate.config || {});
+            
+            if (currentConfigStr !== newConfigStr) {
+              requiresVersioning = true;
+              reasons.push(
+                `Feature "${currentFeature.features.name}" configuration changed`,
+              );
+            } else if (currentFeature.display_order !== featureUpdate.display_order) {
+               requiresVersioning = true;
+               reasons.push(
+                 `Feature "${currentFeature.features.name}" display order changed`,
+               );
+            }
           }
         }
       }
@@ -540,11 +565,11 @@ export class ProductsService {
     switch (featureType) {
       case 'usage_quota':
       case 'numeric_limit':
-        return config.limit || null;
+        return config.limit ?? null;
       case 'boolean_flag':
         return null; // No limits for boolean features
       default:
-        return config.limit || config.value || config.quantity || null;
+        return config.limit ?? config.value ?? config.quantity ?? null;
     }
   }
 
@@ -740,9 +765,26 @@ export class ProductsService {
       .eq('product_id', oldProductId)
       .eq('is_archived', false);
 
-    const pricesToKeep = currentPrices?.filter(
-      (price) => !updateDto.prices?.archive?.includes(price.id),
-    ) || [];
+    const pricesToKeep = currentPrices?.filter((price) => {
+      // Exclude prices to be archived
+      if (updateDto.prices?.archive?.includes(price.id)) {
+        return false;
+      }
+
+      // Exclude prices being replaced by new prices with same interval and currency
+      if (updateDto.prices?.create) {
+        const isBeingReplaced = updateDto.prices.create.some(
+          (newPrice) =>
+            newPrice.recurring_interval === price.recurring_interval &&
+            newPrice.price_currency === price.price_currency,
+        );
+        if (isBeingReplaced) {
+          return false;
+        }
+      }
+
+      return true;
+    }) || [];
 
     // Get the new product's details once for all price operations
     const { data: newProduct } = await supabase
@@ -799,10 +841,17 @@ export class ProductsService {
   ): Promise<void> {
     const supabase = this.supabaseService.getClient();
 
+    // Get new product's Stripe ID
+    const { data: newProduct } = await supabase
+      .from('products')
+      .select('stripe_product_id')
+      .eq('id', newProductId)
+      .single();
+
     // Get current features (excluding ones to be unlinked)
     const { data: currentFeatures } = await supabase
       .from('product_features')
-      .select('*')
+      .select('*, features!inner(id, stripe_feature_id)')
       .eq('product_id', oldProductId);
 
     const featuresToKeep = currentFeatures?.filter(
@@ -818,19 +867,99 @@ export class ProductsService {
       const config = updateConfig?.config ?? feature.config;
       const displayOrder = updateConfig?.display_order ?? feature.display_order;
 
-      await supabase.from('product_features').insert({
+      // Insert feature link in database
+      const { data: link } = await supabase.from('product_features').insert({
         product_id: newProductId,
         feature_id: feature.feature_id,
         display_order: displayOrder,
         config: config,
-        stripe_synced: false, // Will need to sync with new Stripe product
-      });
+        stripe_synced: false,
+      }).select().single();
+
+      // Sync to Stripe if the feature has a Stripe ID
+      const featureData = (feature as any).features;
+      if (link && featureData?.stripe_feature_id && newProduct?.stripe_product_id && stripeAccountId) {
+        try {
+          const productFeature = await this.stripeService.attachFeatureToProduct({
+            productId: newProduct.stripe_product_id,
+            featureId: featureData.stripe_feature_id,
+            stripeAccountId,
+          });
+
+          // Mark as synced
+          await supabase
+            .from('product_features')
+            .update({
+              stripe_synced: true,
+              stripe_synced_at: new Date().toISOString(),
+              stripe_product_feature_id: productFeature.id,
+            })
+            .eq('product_id', newProductId)
+            .eq('feature_id', feature.feature_id);
+
+          this.logger.log(
+            `Synced feature ${featureData.stripe_feature_id} to Stripe Product ${newProduct.stripe_product_id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to sync feature ${featureData.stripe_feature_id} to Stripe:`,
+            error,
+          );
+          // Don't fail the operation, just log the error
+        }
+      }
     }
 
     // Add new features from updateDto
     if (updateDto.features?.link) {
       for (const newFeature of updateDto.features.link) {
-        // This will be handled by the normal update flow after version is created
+        // Get feature details including Stripe ID
+        const { data: featureData } = await supabase
+          .from('features')
+          .select('id, stripe_feature_id')
+          .eq('id', newFeature.feature_id)
+          .single();
+
+        // Insert feature link in database
+        const { data: link } = await supabase.from('product_features').insert({
+          product_id: newProductId,
+          feature_id: newFeature.feature_id,
+          display_order: newFeature.display_order,
+          config: newFeature.config || {},
+          stripe_synced: false,
+        }).select().single();
+
+        // Sync to Stripe if the feature has a Stripe ID
+        if (link && featureData?.stripe_feature_id && newProduct?.stripe_product_id && stripeAccountId) {
+          try {
+            const productFeature = await this.stripeService.attachFeatureToProduct({
+              productId: newProduct.stripe_product_id,
+              featureId: featureData.stripe_feature_id,
+              stripeAccountId,
+            });
+
+            // Mark as synced
+            await supabase
+              .from('product_features')
+              .update({
+                stripe_synced: true,
+                stripe_synced_at: new Date().toISOString(),
+                stripe_product_feature_id: productFeature.id,
+              })
+              .eq('product_id', newProductId)
+              .eq('feature_id', newFeature.feature_id);
+
+            this.logger.log(
+              `Synced new feature ${featureData.stripe_feature_id} to Stripe Product ${newProduct.stripe_product_id}`,
+            );
+          } catch (error) {
+            this.logger.error(
+              `Failed to sync new feature ${featureData.stripe_feature_id} to Stripe:`,
+              error,
+            );
+            // Don't fail the operation, just log the error
+          }
+        }
       }
     }
   }

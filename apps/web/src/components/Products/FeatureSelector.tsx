@@ -376,8 +376,35 @@ export function FeatureSelector({
                   }
                 }
 
-                // If still no feature data, skip rendering
-                if (!feature) return null
+                // If still no feature data, render fallback
+                if (!feature) {
+                  return (
+                    <div
+                      key={selectedFeature.feature_id}
+                      className="flex items-center gap-3 rounded-lg border border-dashed border-yellow-500/50 bg-yellow-500/10 p-3"
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-yellow-600">Unknown Feature</div>
+                          <div className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700">
+                            ID: {selectedFeature.feature_id}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          This feature data is missing or invalid. Remove it to clean up.
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:bg-yellow-500/20 hover:text-yellow-700"
+                        onClick={() => handleRemoveFeature(selectedFeature.feature_id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )
+                }
 
                 return (
                   <SortableFeatureItem
