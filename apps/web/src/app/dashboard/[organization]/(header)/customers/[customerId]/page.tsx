@@ -4,7 +4,7 @@ import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CustomersList } from "@/components/Customers/CustomersList";
 import { CustomerDetails } from "@/components/Customers/CustomerDetails";
-import { Search, ChevronDown, MoreVertical, Plus, X } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, MoreVertical, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [newCustomerData, setNewCustomerData] = useState({
     name: "",
     email: "",
@@ -96,8 +97,20 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
       );
     }
 
+    // Apply sorting (always enabled)
+    allCustomers.sort((a: any, b: any) => {
+      const nameA = (a.name || a.email || '').toLowerCase();
+      const nameB = (b.name || b.email || '').toLowerCase();
+      
+      if (sortOrder === "asc") {
+        return nameA.localeCompare(nameB);
+      } else {
+        return nameB.localeCompare(nameA);
+      }
+    });
+
     return allCustomers;
-  }, [subscriptions, searchQuery]);
+  }, [subscriptions, searchQuery, sortOrder]);
 
   // Find the currently selected customer based on URL param
   const selectedCustomer = useMemo(() => {
@@ -128,12 +141,23 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronDown className="h-4 w-4" />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={() => {
+                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                }}
+              >
+                {sortOrder === "asc" ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              {/* <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreVertical className="h-4 w-4" />
-              </Button>
+              </Button> */}
               <Button
                 variant="ghost"
                 size="icon"

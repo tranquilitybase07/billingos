@@ -70,6 +70,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAttachSubscriptionOpen, setIsAttachSubscriptionOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [timePeriod, setTimePeriod] = useState<"Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly">("Daily");
   const [editFormData, setEditFormData] = useState({
     name: customer.name,
     email: customer.email,
@@ -205,16 +206,16 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="bg-base">
-                  Daily
+                  {timePeriod}
                   <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Hourly</DropdownMenuItem>
-                <DropdownMenuItem>Daily</DropdownMenuItem>
-                <DropdownMenuItem>Weekly</DropdownMenuItem>
-                <DropdownMenuItem>Monthly</DropdownMenuItem>
-                <DropdownMenuItem>Yearly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Hourly")}>Hourly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Daily")}>Daily</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Weekly")}>Weekly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Monthly")}>Monthly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Yearly")}>Yearly</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -364,7 +365,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
             {/* Revenue Chart */}
             <Card>
               <CardContent className="pt-6">
-                <RevenueChart />
+                <RevenueChart timePeriod={timePeriod} />
               </CardContent>
             </Card>
 
