@@ -35,7 +35,8 @@ import {
   Target01Icon,
   ChartBarLineIcon,
   ReloadIcon,
-  Settings01Icon
+  Settings01Icon,
+  User03Icon
 } from 'hugeicons-react'
 
 import { useOrganization } from '@/providers/OrganizationProvider'
@@ -105,7 +106,7 @@ export const DashboardSidebar = () => {
         },
         {
           title: 'Customers',
-          icon: Target01Icon,
+          icon: User03Icon,
           href: `/dashboard/${organization.slug}/customers`,
         },
         {
@@ -161,7 +162,7 @@ export const DashboardSidebar = () => {
           "group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0"
         )}>
           <Link href={`/dashboard/${organization.slug}`} className="flex items-center gap-2">
-            <div className="bg-[#F5C564] text-black h-8 w-8 rounded-lg flex items-center justify-center font-bold text-lg shrink-0">
+            <div className="bg-sidebar-primary text-sidebar-primary-foreground h-8 w-8 rounded-lg flex items-center justify-center font-bold text-lg shrink-0">
               B
             </div>
             <span className="font-semibold text-sidebar-foreground whitespace-nowrap">BillingOS</span>
@@ -191,20 +192,20 @@ export const DashboardSidebar = () => {
                         asChild
                         tooltip={isCollapsed ? item.title : undefined}
                         className={cn(
-                          "w-full h-10 px-3 transition-colors group/item relative",
-                          isItemActive && "text-sidebar-foreground hover:text-sidebar-foreground hover:bg-[#F5C564]/5"
+                          "w-full h-10 px-3 transition-colors group/item relative overflow-hidden",
+                          isItemActive && "text-sidebar-foreground bg-gradient-to-r from-sidebar-primary/20 to-transparent"
                         )}
                       >
                         <Link href={item.href} className="flex items-center gap-3">
                           {/* Active Indicator Border */}
-                          {isItemActive && (
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#F5C564]" />
-                          )}
+                          {/* {isItemActive && (
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-sidebar-primary" />
+                          )} */}
                           
                           <item.icon 
                             className={cn(
                               "h-5 w-5 shrink-0 transition-colors", 
-                              isItemActive ? "text-[#F5C564]" : "text-muted-foreground group-hover/item:text-sidebar-foreground"
+                              isItemActive ? "text-sidebar-primary" : "text-muted-foreground group-hover/item:text-sidebar-foreground"
                             )} 
                             strokeWidth={1.5}
                           />
@@ -230,7 +231,7 @@ export const DashboardSidebar = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-3 w-full outline-none group text-left">
-              <div className="bg-[#F5C564] text-black h-8 w-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground h-8 w-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
                 {organization.name.charAt(0).toUpperCase()}
               </div>
               {!isCollapsed && (
@@ -255,7 +256,7 @@ export const DashboardSidebar = () => {
                 onClick={() => router.push(`/dashboard/${org.slug}`)}
                 className={cn(
                   "focus:bg-white/10 focus:text-white cursor-pointer",
-                  org.id === organization.id && "bg-white/5 text-[#F5C564]"
+                  org.id === organization.id && "bg-white/5 text-sidebar-primary"
                 )}
               >
                 <Building2 className="mr-2 h-4 w-4" />
