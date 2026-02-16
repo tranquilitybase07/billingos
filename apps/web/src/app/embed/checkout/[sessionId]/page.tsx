@@ -1,15 +1,17 @@
 import { Suspense } from 'react'
 import { CheckoutContent } from './components/CheckoutContent'
 
-export default function CheckoutEmbedPage({
+export default async function CheckoutEmbedPage({
   params
 }: {
-  params: { sessionId: string }
+  params: Promise<{ sessionId: string }>
 }) {
+  const { sessionId } = await params
+
   return (
     <div className="min-h-screen bg-white">
       <Suspense fallback={<CheckoutSkeleton />}>
-        <CheckoutContent sessionId={params.sessionId} />
+        <CheckoutContent sessionId={sessionId} />
       </Suspense>
     </div>
   )

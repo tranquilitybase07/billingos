@@ -51,9 +51,12 @@ export function ProductSummary({
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-medium text-gray-900">{product.name}</h4>
-          <span className="text-sm text-gray-600">
-            {getIntervalText(product.interval)}
-          </span>
+          <div className="text-right">
+            <div className="text-lg font-semibold">{formatAmount(amount)}</div>
+            <span className="text-sm text-gray-600">
+              {getIntervalText(product.interval)}
+            </span>
+          </div>
         </div>
 
         {/* Features List */}

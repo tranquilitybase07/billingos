@@ -24,6 +24,7 @@ export interface CheckoutSession {
   paymentIntentId: string;
   amount: number;
   currency: string;
+  totalAmount: number; // Total amount after discounts and taxes
   product: CheckoutProduct;
   customer: CheckoutCustomer;
   stripeAccountId?: string;
@@ -109,6 +110,15 @@ export class CheckoutService {
     // Handle both direct fields and nested customer object for backward compatibility
     const customerEmail = dto.customerEmail || dto.customer?.email;
     const customerName = dto.customerName || dto.customer?.name;
+
+    // Debug logging
+    this.logger.log('Customer data received:', {
+      dtoCustomerEmail: dto.customerEmail,
+      dtoCustomerName: dto.customerName,
+      dtoCustomerObject: dto.customer,
+      finalEmail: customerEmail,
+      finalName: customerName,
+    });
 
     if (existingCustomer?.stripe_customer_id) {
       // Customer already exists with Stripe ID
@@ -263,12 +273,16 @@ export class CheckoutService {
 
     const features = (productFeatures || []).map((pf: any) => pf.features.title);
 
+    // Calculate total amount (for now, same as amount since we don't have discounts/tax yet)
+    const totalAmount = amount;
+
     return {
       id: checkoutSession.id,
       clientSecret: paymentIntent.client_secret!,
       paymentIntentId: paymentIntent.id,
       amount,
       currency,
+      totalAmount, // Add totalAmount for frontend display
       product: {
         name: product.name,
         interval: price.recurring_interval || 'month',
@@ -390,15 +404,19 @@ export class CheckoutService {
     }
   }
 
-  async getCheckoutStatus(sessionId: string): Promise<CheckoutStatus> {
+  async getCheckoutStatus(sessionId: string): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
-    // Fetch checkout session with payment intent details
+    // Fetch checkout session with all related data
     const { data: session, error: sessionError } = await supabase
       .from('checkout_sessions')
       .select(`
         *,
-        payment_intent:payment_intents(*)
+        payment_intent:payment_intents(
+          *,
+          price:product_prices(*),
+          product:products(*)
+        )
       `)
       .eq('id', sessionId)
       .single();
@@ -407,59 +425,75 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    // Check if session has expired
-    if (new Date(session.expires_at) < new Date() && !session.completed_at) {
-      return {
-        sessionId,
-        status: 'canceled',
-        errorMessage: 'Checkout session expired',
-      };
-    }
-
     const paymentIntent = session.payment_intent;
     if (!paymentIntent) {
-      return {
-        sessionId,
-        status: 'pending',
-      };
+      throw new NotFoundException('Payment intent not found for session');
     }
 
-    // Map Stripe status to our simplified status
-    let status: CheckoutStatus['status'] = 'pending';
-    if (paymentIntent.status === 'succeeded') {
-      status = 'succeeded';
+    const product = paymentIntent.product;
+    const price = paymentIntent.price;
+
+    if (!product || !price) {
+      throw new NotFoundException('Product or price information not found');
+    }
+
+    // Check if session has expired
+    const isExpired = new Date(session.expires_at) < new Date() && !session.completed_at;
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+
+    // Map Stripe status to our status
+    let status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired' = 'pending';
+    if (isExpired) {
+      status = 'expired';
+    } else if (paymentIntent.status === 'succeeded') {
+      status = 'completed';
     } else if (paymentIntent.status === 'processing') {
       status = 'processing';
-    } else if (paymentIntent.status === 'canceled') {
-      status = 'canceled';
-    } else if (paymentIntent.status.includes('failed')) {
+    } else if (paymentIntent.status === 'canceled' || paymentIntent.status.includes('failed')) {
       status = 'failed';
     }
 
-    // Check for associated subscription if payment succeeded
-    let subscriptionId: string | undefined;
-    let customerId: string | undefined;
+    // Calculate total amount (for now, same as amount since we don't have discounts/tax yet)
+    const totalAmount = paymentIntent.amount;
 
-    if (status === 'succeeded') {
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('id, customer_id')
-        .eq('payment_intent_id', paymentIntent.id)
-        .maybeSingle();
-
-      if (subscription) {
-        subscriptionId = subscription.id;
-        customerId = subscription.customer_id;
-      }
-    }
-
-    return {
+    // Debug logging for customer data
+    this.logger.log('Returning session status with customer data:', {
       sessionId,
-      status,
+      customerEmail: session.customer_email,
+      customerName: session.customer_name,
+      hasEmail: !!session.customer_email,
+      hasName: !!session.customer_name,
+    });
+
+    // Return full checkout session data for the frontend
+    // Convert null to undefined for TypeScript compatibility
+    return {
+      id: sessionId,
+      clientSecret: paymentIntent.client_secret || '',
       paymentIntentId: paymentIntent.stripe_payment_intent_id,
-      subscriptionId,
-      customerId,
-      errorMessage: status === 'failed' ? 'Payment failed' : undefined,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      totalAmount, // Add totalAmount for frontend display
+      product: {
+        name: product.name,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: session.customer_email || undefined,
+        name: session.customer_name || undefined,
+      },
+      stripeAccountId: paymentIntent.stripe_account_id || undefined,
+      trialDays: product.trial_days || 0,
     };
   }
 

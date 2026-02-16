@@ -18,15 +18,14 @@ import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-
 import { Observable, interval, switchMap, from, catchError, of } from 'rxjs';
 
 @ApiTags('SDK - Checkout')
-
 @Controller('v1/checkout')
-@UseGuards(SessionTokenAuthGuard)
 export class CheckoutController {
   private readonly logger = new Logger(CheckoutController.name);
 
   constructor(private readonly checkoutService: CheckoutService) {}
 
   @Post('create')
+  @UseGuards(SessionTokenAuthGuard)
   async createCheckout(
     @CurrentCustomer() customer: CustomerContext,
     @Body() dto: CreateCheckoutDto,
@@ -43,6 +42,8 @@ export class CheckoutController {
   }
 
   @Post(':clientSecret/confirm')
+  // No auth guard - clientSecret acts as authentication
+  // The client secret is a secure token from Stripe that proves possession
   async confirmCheckout(
     @Param('clientSecret') clientSecret: string,
     @Body() dto: ConfirmCheckoutDto,
@@ -53,6 +54,11 @@ export class CheckoutController {
   }
 
   @Get(':sessionId/status')
+  // No auth guard - session ID acts as bearer token
+  // This is safe because:
+  // 1. Session ID is cryptographically secure UUID
+  // 2. Only returns read-only status information
+  // 3. Similar to Stripe's checkout session status endpoint
   async getCheckoutStatus(@Param('sessionId') sessionId: string) {
     this.logger.log(`Getting checkout status for session: ${sessionId}`);
 

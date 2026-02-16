@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   PaymentElement,
   Elements,
@@ -8,11 +8,6 @@ import {
   useElements
 } from '@stripe/react-stripe-js'
 import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js'
-
-// Initialize Stripe
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-)
 
 interface CheckoutFormProps {
   session: any // CheckoutSessionDetails
@@ -29,6 +24,24 @@ export function CheckoutForm({
   onProcessing,
   onHeightChange
 }: CheckoutFormProps) {
+  // Initialize Stripe with connected account context if available
+  const stripePromise = useMemo(() => {
+    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+
+    // If we have a connected account ID, pass it to Stripe initialization
+    // This is required for Direct Charges on connected accounts
+    if (session.stripeAccountId) {
+      console.log('[CheckoutForm] Initializing Stripe with connected account:', session.stripeAccountId)
+      return loadStripe(publishableKey, {
+        stripeAccount: session.stripeAccountId
+      })
+    }
+
+    // Fallback to regular initialization (for platform-level charges)
+    console.log('[CheckoutForm] Initializing Stripe without connected account')
+    return loadStripe(publishableKey)
+  }, [session.stripeAccountId])
+
   const options: StripeElementsOptions = {
     clientSecret: session.clientSecret,
     appearance: {
@@ -43,9 +56,6 @@ export function CheckoutForm({
       }
     }
   }
-
-  // Use connected account if available
-  const stripeAccount = session.stripeAccountId
 
   return (
     <Elements stripe={stripePromise} options={options}>
@@ -74,6 +84,30 @@ function CheckoutFormInner({
   const [email, setEmail] = useState(session.customer?.email || '')
   const [name, setName] = useState(session.customer?.name || '')
   const formRef = useRef<HTMLFormElement>(null)
+
+  // Update state when session customer data changes
+  useEffect(() => {
+    if (session?.customer?.email) {
+      console.log('[CheckoutForm] Setting email from session:', session.customer.email)
+      setEmail(session.customer.email)
+    }
+    if (session?.customer?.name) {
+      console.log('[CheckoutForm] Setting name from session:', session.customer.name)
+      setName(session.customer.name)
+    }
+  }, [session?.customer])
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[CheckoutForm] Session data received:', {
+      sessionId: session?.id,
+      customer: session?.customer,
+      customerEmail: session?.customer?.email,
+      customerName: session?.customer?.name,
+      initialEmail: email,
+      initialName: name,
+    })
+  }, [session, email, name])
 
   // Monitor height changes
   useEffect(() => {
@@ -229,7 +263,7 @@ function CheckoutFormInner({
             Processing...
           </span>
         ) : (
-          `Pay ${formatAmount(session.totalAmount, session.currency)}`
+          `Pay ${formatAmount(session.totalAmount || session.amount, session.currency || 'usd')}`
         )}
       </button>
 
@@ -246,7 +280,12 @@ function CheckoutFormInner({
   )
 }
 
-function formatAmount(amount: number, currency: string): string {
+function formatAmount(amount: number | undefined, currency: string): string {
+  // Handle undefined or invalid amounts
+  if (amount === undefined || amount === null || isNaN(amount)) {
+    return 'Loading...'
+  }
+
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase()

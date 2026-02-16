@@ -64,7 +64,7 @@ export class CustomersService {
           const { data: customer, error } = await supabase
             .from('customers')
             .upsert(upsertData, {
-              onConflict: 'organization_id,stripe_customer_id',
+              onConflict: 'customers_org_stripe_unique',
               ignoreDuplicates: false, // Update if exists
             })
             .select()
@@ -78,100 +78,60 @@ export class CustomersService {
           lastError = error;
         }
 
-        // Try with external_id constraint if available
-        if (createDto.external_id) {
-          const { data: customer, error } = await supabase
-            .from('customers')
-            .upsert(upsertData, {
-              onConflict: 'organization_id,external_id',
-              ignoreDuplicates: false,
-            })
-            .select()
-            .single();
+        // If stripe_customer_id upsert failed, try finding by external_id or email
+        // Since these are indexes not constraints, we need to do select then insert/update
+        if (!createDto.stripe_customer_id || lastError) {
+          // Try to find existing customer by external_id or email
+          let existingCustomer: any = null;
 
-          if (!error) {
-            this.logger.log(`Upserted customer ${customer.id} with external ID ${createDto.external_id}`);
-            return this.mapToResponseDto(customer);
+          if (createDto.external_id) {
+            const { data } = await supabase
+              .from('customers')
+              .select()
+              .eq('organization_id', createDto.organization_id)
+              .eq('external_id', createDto.external_id)
+              .single();
+            existingCustomer = data;
           }
 
-          lastError = error;
-        }
-
-        // Try with email constraint as last resort
-        const { data: customer, error } = await supabase
-          .from('customers')
-          .upsert({
-            ...upsertData,
-            // Ensure we have a unique constraint to use
-            email: upsertData.email,
-          }, {
-            onConflict: 'organization_id,email',
-            ignoreDuplicates: false,
-          })
-          .select()
-          .single();
-
-        if (!error) {
-          this.logger.log(`Upserted customer ${customer.id} with email ${createDto.email}`);
-          return this.mapToResponseDto(customer);
-        }
-
-        lastError = error;
-
-        // If we get a conflict error, try to find and update the existing customer
-        if (error?.code === '23505') {
-          const existingCustomer = await this.findExistingCustomer(
-            createDto.organization_id,
-            createDto.stripe_customer_id,
-            createDto.external_id,
-            createDto.email,
-          );
+          if (!existingCustomer && createDto.email) {
+            const { data } = await supabase
+              .from('customers')
+              .select()
+              .eq('organization_id', createDto.organization_id)
+              .ilike('email', createDto.email)
+              .single();
+            existingCustomer = data;
+          }
 
           if (existingCustomer) {
-            // Update the existing customer with merge strategy
-            const updateData: any = {
-              updated_at: new Date().toISOString(),
-            };
-
-            // Only update fields that are provided and not already set
-            if (createDto.stripe_customer_id && !existingCustomer.stripe_customer_id) {
-              updateData.stripe_customer_id = createDto.stripe_customer_id;
-            }
-            if (createDto.external_id && !existingCustomer.external_id) {
-              updateData.external_id = createDto.external_id;
-            }
-            if (createDto.name) {
-              updateData.name = createDto.name;
-            }
-            if (createDto.billing_address && Object.keys(createDto.billing_address).length > 0) {
-              updateData.billing_address = createDto.billing_address;
-            }
-            if (createDto.metadata && Object.keys(createDto.metadata).length > 0) {
-              updateData.metadata = {
-                ...(existingCustomer.metadata || {}),
-                ...createDto.metadata,
-              };
-            }
-
-            const { data: updatedCustomer, error: updateError } = await supabase
+            // Update existing customer
+            const { data: customer, error } = await supabase
               .from('customers')
-              .update(updateData)
+              .update(upsertData)
               .eq('id', existingCustomer.id)
               .select()
               .single();
 
-            if (!updateError && updatedCustomer) {
-              this.logger.log(`Updated existing customer ${updatedCustomer.id} after conflict`);
-              return this.mapToResponseDto(updatedCustomer);
+            if (!error) {
+              this.logger.log(`Updated customer ${customer.id}`);
+              return this.mapToResponseDto(customer);
             }
+            lastError = error;
+          } else {
+            // Insert new customer
+            const { data: customer, error } = await supabase
+              .from('customers')
+              .insert(upsertData)
+              .select()
+              .single();
 
-            lastError = updateError || error;
+            if (!error) {
+              this.logger.log(`Created new customer ${customer.id}`);
+              return this.mapToResponseDto(customer);
+            }
+            lastError = error;
           }
-        }
-
-        // If not a conflict error, throw immediately
-        if (error?.code !== '23505') {
-          throw error;
         }
 
       } catch (error) {

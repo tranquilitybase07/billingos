@@ -44,7 +44,11 @@
       "Bash(cat:*)",
       "Bash(pnpm config:*)",
       "Bash(done)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(pnpm start:dev)",
+      "Bash(pkill:*)",
+      "Bash(pnpm update:*)",
+      "Bash(pnpm remove:*)"
     ],
     "deny": [],
     "ask": []

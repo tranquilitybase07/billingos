@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { apiClient } from '@/lib/api/client'
+import { api } from '@/lib/api/client'
 
 interface CheckoutSession {
   id: string
@@ -51,9 +51,18 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
       setError(null)
 
       // Fetch session details from API
-      const response = await apiClient.get<CheckoutSession>(
+      const response = await api.get<CheckoutSession>(
         `/v1/checkout/${sessionId}/status`
       )
+
+      // Debug logging
+      console.log('[useCheckoutSession] Session fetched from API:', {
+        sessionId,
+        customer: response.customer,
+        hasEmail: !!response.customer?.email,
+        hasName: !!response.customer?.name,
+        fullResponse: response,
+      })
 
       setSession(response)
     } catch (err) {
