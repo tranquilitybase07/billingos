@@ -9,6 +9,17 @@ export interface Customer {
   stripe_customer_id: string | null
 }
 
+export interface Product {
+  id: string
+  name: string
+}
+
+export interface ProductPrice {
+  id: string
+  recurring_interval: string
+  recurring_interval_count: number
+}
+
 export interface Subscription {
   id: string
   organization_id: string
@@ -31,6 +42,9 @@ export interface Subscription {
   updated_at: string
   payment_intent_id: string | null
   customer?: Customer
+  customers?: Customer | Customer[]
+  products?: Product | Product[]
+  product_prices?: ProductPrice | ProductPrice[]
 }
 
 export interface ProductSubscriptionsResponse {

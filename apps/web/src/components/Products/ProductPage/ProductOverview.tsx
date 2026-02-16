@@ -247,7 +247,7 @@ export const ProductOverview = ({
                     <Link
                       href={`/dashboard/${organizationSlug}/customers/${sub.customer?.id || sub.customer_id}`}
                     >
-                      <Button variant="secondary" size="sm">
+                      <Button variant="secondary" size="sm" className="hover:cursor-pointer">
                         View Customer
                       </Button>
                     </Link>
