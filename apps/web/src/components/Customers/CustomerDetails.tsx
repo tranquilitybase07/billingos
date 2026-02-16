@@ -1,15 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, MoreVertical, ChevronDown } from "lucide-react";
+import { Calendar, MoreVertical, ChevronDown, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RevenueChart } from "./RevenueChart";
 import { TableSection } from "./TableSection";
@@ -49,6 +57,15 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
     "overview"
   );
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: customer.name,
+    email: customer.email,
+    external_id: '',
+  });
+  const [metadataFields, setMetadataFields] = useState<Array<{ key: string; value: string }>>([
+    { key: '', value: '' }
+  ]);
 
   const { data: customerState, isLoading: isLoadingState } = useCustomerState(
     customer.id,
@@ -61,8 +78,34 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
     customerState,
     isLoadingState,
     grantedFeatures: customerState?.granted_features,
-    grantedFeaturesCount: customerState?.granted_features?.length || 0
+    grantedFeaturesCount: customerState?.granted_features?.length || 0,
+    // Debug properties for each feature
+    featuresWithProperties: customerState?.granted_features?.map(f => ({
+      name: f.feature_name,
+      properties: f.properties,
+      limit: (f as any).properties?.limit
+    }))
   });
+
+  const handleAddMetadataField = () => {
+    setMetadataFields([...metadataFields, { key: '', value: '' }]);
+  };
+
+  const handleRemoveMetadataField = (index: number) => {
+    setMetadataFields(metadataFields.filter((_, i) => i !== index));
+  };
+
+  const handleMetadataChange = (index: number, field: 'key' | 'value', value: string) => {
+    const updated = [...metadataFields];
+    updated[index][field] = value;
+    setMetadataFields(updated);
+  };
+
+  const handleSaveCustomer = () => {
+    // TODO: Implement save customer logic
+    console.log('Saving customer:', { ...editFormData, metadata: metadataFields });
+    setIsEditDialogOpen(false);
+  };
 
   // Dummy customer details data
   const customerDetailsData = {
@@ -155,7 +198,19 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem>
                 <DropdownMenuItem>Contact Customer</DropdownMenuItem>
                 <DropdownMenuItem>Attach Subscription</DropdownMenuItem>
-                <DropdownMenuItem className="border-b pb-3">
+                <DropdownMenuItem 
+                  className="border-b pb-3" 
+                  onClick={() => {
+                    // Reset form with current customer data
+                    setEditFormData({
+                      name: customer.name,
+                      email: customer.email,
+                      external_id: '',
+                    });
+                    setMetadataFields([{ key: '', value: '' }]);
+                    setIsEditDialogOpen(true);
+                  }}
+                >
                   Edit Customer
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-red-600 font-medium">
@@ -342,18 +397,18 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                     ),
                   },
                   {
-                    accessorKey: 'status',
+                    accessorKey: 'limit',
                     header: ({ column }) => (
-                      <DataTableColumnHeader column={column} title="Status" />
+                      <DataTableColumnHeader column={column} title="Limit" />
                     ),
-                    cell: () => (
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                      >
-                        Active
-                      </Badge>
-                    ),
+                    cell: ({ row: { original: feat } }) => {
+                      const limit = (feat as any).properties?.limit;
+                      return (
+                        <span className="text-sm">
+                          {limit !== undefined && limit !== null ? limit : 'Unlimited'}
+                        </span>
+                      );
+                    },
                   },
                   {
                     accessorKey: 'granted_at',
@@ -618,6 +673,110 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           </div>
         )}
       </div>
+
+      {/* Edit Customer Sheet */}
+      <Sheet open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-2xl font-semibold">Edit Customer</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-8 space-y-6">
+            {/* Name Field */}
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-sm font-medium">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                className="w-full text-foreground"
+              />
+            </div>
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                className="w-full text-foreground"
+              />
+            </div>
+
+            {/* External ID Field */}
+            <div className="space-y-2">
+              <Label htmlFor="external_id" className="text-sm font-medium">
+                External ID
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                An optional ID of the customer in your system. Once set, it can't be updated.
+              </p>
+              <Input
+                id="external_id"
+                value={editFormData.external_id}
+                onChange={(e) => setEditFormData({ ...editFormData, external_id: e.target.value })}
+                className="w-full text-foreground"
+                placeholder=""
+              />
+            </div>
+
+            {/* Metadata Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Metadata</Label>
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-8 w-8 rounded-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleAddMetadataField}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {metadataFields.map((field, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    placeholder="Key"
+                    value={field.key}
+                    onChange={(e) => handleMetadataChange(index, 'key', e.target.value)}
+                    className="flex-1 text-foreground"
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={field.value}
+                    onChange={(e) => handleMetadataChange(index, 'value', e.target.value)}
+                    className="flex-1 text-foreground"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveMetadataField(index)}
+                    className="h-10 w-10"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveCustomer}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save Customer
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

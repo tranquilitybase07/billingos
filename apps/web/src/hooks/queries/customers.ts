@@ -11,6 +11,10 @@ interface CustomerStateResponse {
     feature_key: string
     feature_name: string
     granted_at: string
+    properties?: {
+      limit?: number
+      [key: string]: any
+    }
   }[]
 }
 
@@ -53,7 +57,8 @@ export function useCustomerState(
           feature_id: f.feature_id,
           feature_key: f.feature_key,
           feature_name: f.feature_name,
-          granted_at: f.granted_at
+          granted_at: f.granted_at,
+          properties: f.properties || {}
         }))
       }
       

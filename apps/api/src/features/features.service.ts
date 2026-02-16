@@ -975,11 +975,7 @@ export class FeaturesService {
     const { data: grants, error } = await supabase
       .from('feature_grants')
       .select(`
-        id,
-        feature_id,
-        granted_at,
-        revoked_at,
-        subscription_id,
+        *,
         features (
           id,
           name,
@@ -1010,16 +1006,25 @@ export class FeaturesService {
     }
 
     // Map to response format
-    const features = filteredGrants.map((grant: any) => ({
-      id: grant.id,
-      feature_id: grant.feature_id,
-      feature_key: grant.features?.name || 'unknown',
-      feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
-      feature_description: grant.features?.description || null,
-      feature_type: grant.features?.type || null,
-      granted_at: grant.granted_at,
-      subscription_id: grant.subscription_id,
-    }));
+    const features = filteredGrants.map((grant: any) => {
+      this.logger.log(`Processing grant ${grant.id}:`, {
+        hasProperties: 'properties' in grant,
+        propertiesValue: grant.properties,
+        propertiesType: typeof grant.properties,
+      });
+      
+      return {
+        id: grant.id,
+        feature_id: grant.feature_id,
+        feature_key: grant.features?.name || 'unknown',
+        feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
+        feature_description: grant.features?.description || null,
+        feature_type: grant.features?.type || null,
+        granted_at: grant.granted_at,
+        subscription_id: grant.subscription_id,
+        properties: grant.properties || {},
+      };
+    });
 
     this.logger.log(`Returning ${features.length} features`);
 
