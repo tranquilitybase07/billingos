@@ -9,9 +9,10 @@ interface TableSectionProps {
   title: string;
   columns: TableColumn[];
   data?: any[]; // optional array of data objects
+  isLoading?: boolean;
 }
 
-export const TableSection = ({ title, columns, data }: TableSectionProps) => {
+export const TableSection = ({ title, columns, data, isLoading }: TableSectionProps) => {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-popover-foreground">{title}</h2>
@@ -32,7 +33,16 @@ export const TableSection = ({ title, columns, data }: TableSectionProps) => {
                 </tr>
               </thead>
               <tbody>
-                {data && data.length > 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="text-center text-sm font-medium py-12 text-muted-foreground"
+                    >
+                      Loading...
+                    </td>
+                  </tr>
+                ) : data && data.length > 0 ? (
                   data.map((row, idx) => (
                     <tr key={idx}>
                       {columns.map((col) => (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Calendar, MoreVertical, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ import {
   DataTableColumnHeader,
 } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
+import { useCustomerState } from "@/hooks/queries/customers";
 
 interface Customer {
   id: string;
@@ -31,6 +33,7 @@ interface Customer {
 
 interface CustomerDetailsProps {
   customer: Customer;
+  organizationId?: string;
 }
 
 function formatDate(dateStr: string) {
@@ -41,11 +44,25 @@ function formatDate(dateStr: string) {
   });
 }
 
-export function CustomerDetails({ customer }: CustomerDetailsProps) {
+export function CustomerDetails({ customer, organizationId }: CustomerDetailsProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "events" | "usage">(
     "overview"
   );
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+
+  const { data: customerState, isLoading: isLoadingState } = useCustomerState(
+    customer.id,
+    organizationId
+  );
+
+  console.log("DEBUG: CustomerDetails", {
+    customerId: customer.id,
+    organizationId,
+    customerState,
+    isLoadingState,
+    grantedFeatures: customerState?.granted_features,
+    grantedFeaturesCount: customerState?.granted_features?.length || 0
+  });
 
   // Dummy customer details data
   const customerDetailsData = {
@@ -308,15 +325,48 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               data={[]}
             /> */}
 
-            <TableSection
-              title="Features"
-              columns={[
-                { title: "Feature Name", key: "featureName" },
-                { title: "Status", key: "status" },
-                { title: "Granted At", key: "grantedAt" },
-              ]}
-              data={[]}
-            />
+            {/* Features table */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-popover-foreground">Features</h2>
+              <DataTable
+                data={customerState?.granted_features || []}
+                isLoading={isLoadingState}
+                columns={[
+                  {
+                    accessorKey: 'feature_name',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Feature Name" />
+                    ),
+                    cell: ({ row: { original: feat } }) => (
+                      <span className="text-sm">{feat.feature_name || feat.feature_key}</span>
+                    ),
+                  },
+                  {
+                    accessorKey: 'status',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Status" />
+                    ),
+                    cell: () => (
+                      <Badge 
+                        variant="secondary" 
+                        className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                      >
+                        Active
+                      </Badge>
+                    ),
+                  },
+                  {
+                    accessorKey: 'granted_at',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Granted At" />
+                    ),
+                    cell: ({ row: { original: feat } }) => (
+                      <span className="text-sm">{formatDate(feat.granted_at)}</span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
 
             {/* Customer Details Section */}
             <Card className="p-6">

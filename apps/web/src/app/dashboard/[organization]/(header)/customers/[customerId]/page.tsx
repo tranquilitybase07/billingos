@@ -156,7 +156,8 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               customer={{
                 ...selectedCustomer,
                 subscriptions: subscriptions?.filter((sub: any) => sub.customer_id === selectedCustomer.id) || []
-              }}
+              }} 
+              organizationId={org?.id}
             />
           ) : (
             <div className="flex items-center justify-center h-full">

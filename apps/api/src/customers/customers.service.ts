@@ -739,20 +739,28 @@ export class CustomersService {
       .eq('status', 'active')
       .is('deleted_at', null);
 
-    // 3. Get granted features (using raw SQL to avoid type issues)
-    const { data: featureGrants } = await supabase
+    // 3. Get granted features - use left join to see all grants even if feature is missing
+    const { data: featureGrants, error: featureGrantsError } = await supabase
       .from('feature_grants')
       .select(`
         id,
         feature_id,
         granted_at,
-        features!inner (
-          key,
-          name
+        features (
+          name,
+          title,
+          organization_id
         )
       `)
       .eq('customer_id', id)
       .is('revoked_at', null);
+
+    this.logger.log(`Feature grants query for customer ${id}:`, {
+      featureGrants,
+      featureGrantsError,
+      count: featureGrants?.length || 0,
+      rawGrants: JSON.stringify(featureGrants, null, 2)
+    });
 
     const state: CustomerStateResponseDto = {
       customer,
@@ -767,13 +775,23 @@ export class CustomersService {
           cancel_at_period_end: sub.cancel_at_period_end || false,
         })) || [],
       granted_features:
-        (featureGrants as any)?.map((grant: any) => ({
-          id: grant.id,
-          feature_id: grant.feature_id,
-          feature_key: grant.features?.key || '',
-          feature_name: grant.features?.name || '',
-          granted_at: grant.granted_at || new Date().toISOString(),
-        })) || [],
+        (featureGrants as any)?.map((grant: any) => {
+          // Log each grant to see what's happening
+          this.logger.log(`Processing grant:`, {
+            grantId: grant.id,
+            featureId: grant.feature_id,
+            features: grant.features,
+            hasFeatures: !!grant.features
+          });
+          
+          return {
+            id: grant.id,
+            feature_id: grant.feature_id,
+            feature_key: grant.features?.name || 'unknown',
+            feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
+            granted_at: grant.granted_at || new Date().toISOString(),
+          };
+        }) || [],
     };
 
     // Cache for 1 hour (3600 seconds)

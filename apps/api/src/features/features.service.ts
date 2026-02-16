@@ -963,6 +963,69 @@ export class FeaturesService {
     return metrics;
   }
 
+  /**
+   * Get all granted features for a customer
+   */
+  async getCustomerFeatures(customerId: string, organizationId?: string) {
+    const supabase = this.supabaseService.getClient();
+
+    this.logger.log(`Getting features for customer ${customerId}, org: ${organizationId}`);
+
+    // Build the query
+    const { data: grants, error } = await supabase
+      .from('feature_grants')
+      .select(`
+        id,
+        feature_id,
+        granted_at,
+        revoked_at,
+        subscription_id,
+        features (
+          id,
+          name,
+          title,
+          description,
+          type,
+          organization_id
+        )
+      `)
+      .eq('customer_id', customerId)
+      .is('revoked_at', null);
+
+    if (error) {
+      this.logger.error(`Error fetching customer features:`, error);
+      throw new BadRequestException('Failed to fetch customer features');
+    }
+
+    this.logger.log(`Found ${grants?.length || 0} feature grants for customer ${customerId}`);
+    this.logger.log(`Raw grants data:`, JSON.stringify(grants, null, 2));
+
+    // Filter by organization if provided
+    let filteredGrants = grants || [];
+    if (organizationId) {
+      filteredGrants = filteredGrants.filter(
+        (grant: any) => grant.features?.organization_id === organizationId
+      );
+      this.logger.log(`After org filter: ${filteredGrants.length} grants`);
+    }
+
+    // Map to response format
+    const features = filteredGrants.map((grant: any) => ({
+      id: grant.id,
+      feature_id: grant.feature_id,
+      feature_key: grant.features?.name || 'unknown',
+      feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
+      feature_description: grant.features?.description || null,
+      feature_type: grant.features?.type || null,
+      granted_at: grant.granted_at,
+      subscription_id: grant.subscription_id,
+    }));
+
+    this.logger.log(`Returning ${features.length} features`);
+
+    return features;
+  }
+
   // TODO: Add Redis cache invalidation methods
   // private async invalidateFeatureCache(customerId: string, featureName: string) {
   //   const cacheKey = `feature:check:${customerId}:${featureName}`;
