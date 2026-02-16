@@ -261,11 +261,33 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                     header: ({ column }) => (
                       <DataTableColumnHeader column={column} title="Amount" />
                     ),
-                    cell: ({ row: { original: sub } }) => (
-                      <span className="text-sm">
-                        {sub.currency?.toUpperCase() || "USD"} {(sub.amount / 100).toFixed(2)}
-                      </span>
-                    ),
+                    cell: ({ row: { original: sub } }) => {
+                      const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
+                      const amount = `${sub.currency?.toUpperCase() || "USD"} ${(sub.amount / 100).toFixed(2)}`;
+                      
+                      // Format duration (e.g., "monthly", "yearly", "every 3 months")
+                      let duration = "";
+                      if (product?.recurring_interval) {
+                        const count = product.recurring_interval_count || 1;
+                        const interval = product.recurring_interval;
+                        
+                        if (count === 1) {
+                          duration = interval === "month" ? "monthly" : 
+                                   interval === "year" ? "yearly" : 
+                                   interval === "week" ? "weekly" : 
+                                   interval === "day" ? "daily" : interval;
+                        } else {
+                          duration = `every ${count} ${interval}s`;
+                        }
+                      }
+                      
+                      return (
+                        <span className="text-sm">
+                          {amount}
+                          {duration && <span className="text-muted-foreground"> / {duration}</span>}
+                        </span>
+                      );
+                    },
                   },
                 ]}
                 isLoading={false}

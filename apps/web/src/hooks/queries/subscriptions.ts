@@ -12,6 +12,8 @@ export interface Customer {
 export interface Product {
   id: string
   name: string
+  recurring_interval: string
+  recurring_interval_count: number
 }
 
 export interface Subscription {

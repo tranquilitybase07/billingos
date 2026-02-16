@@ -454,7 +454,9 @@ export class SubscriptionsService {
         ),
         products (
           id,
-          name
+          name,
+          recurring_interval,
+          recurring_interval_count
         )
       `)
       .eq('organization_id', organizationId)
