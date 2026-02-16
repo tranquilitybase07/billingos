@@ -263,13 +263,14 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                     ),
                     cell: ({ row: { original: sub } }) => {
                       const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
+                      const productPrice = Array.isArray(sub.product_prices) ? sub.product_prices[0] : sub.product_prices;
                       const amount = `${sub.currency?.toUpperCase() || "USD"} ${(sub.amount / 100).toFixed(2)}`;
                       
                       // Format duration (e.g., "monthly", "yearly", "every 3 months")
                       let duration = "";
-                      if (product?.recurring_interval) {
-                        const count = product.recurring_interval_count || 1;
-                        const interval = product.recurring_interval;
+                      if (productPrice?.recurring_interval) {
+                        const count = productPrice.recurring_interval_count || 1;
+                        const interval = productPrice.recurring_interval;
                         
                         if (count === 1) {
                           duration = interval === "month" ? "monthly" : 

@@ -454,7 +454,10 @@ export class SubscriptionsService {
         ),
         products (
           id,
-          name,
+          name
+        ),
+        product_prices (
+          id,
           recurring_interval,
           recurring_interval_count
         )

@@ -12,6 +12,10 @@ export interface Customer {
 export interface Product {
   id: string
   name: string
+}
+
+export interface ProductPrice {
+  id: string
   recurring_interval: string
   recurring_interval_count: number
 }
@@ -38,7 +42,9 @@ export interface Subscription {
   updated_at: string
   payment_intent_id: string | null
   customer?: Customer
-  products?: Product
+  customers?: Customer | Customer[]
+  products?: Product | Product[]
+  product_prices?: ProductPrice | ProductPrice[]
 }
 
 export interface ProductSubscriptionsResponse {
