@@ -192,3 +192,78 @@ export interface CreateApiKeyDTO {
   name?: string
   environment?: 'live' | 'test' // Creates both secret and publishable keys
 }
+// Analytics Types
+export interface MRRResponse {
+  mrr: number
+  currency: string
+  active_subscriptions: number
+  cached_at: string
+}
+
+export interface RevenueTrendDataPoint {
+  date: string
+  revenue: number
+  transaction_count: number
+}
+
+export interface RevenueTrendResponse {
+  data: RevenueTrendDataPoint[]
+  total_revenue: number
+  period: {
+    start: string
+    end: string
+  }
+  granularity: string
+}
+
+export interface SubscriptionGrowthDataPoint {
+  date: string
+  new_subscriptions: number
+  canceled_subscriptions: number
+  net_growth: number
+}
+
+export interface SubscriptionGrowthResponse {
+  data: SubscriptionGrowthDataPoint[]
+  summary: {
+    total_new: number
+    total_canceled: number
+    net_growth: number
+  }
+  period: {
+    start: string
+    end: string
+  }
+}
+
+export interface ChurnRateDataPoint {
+  date: string
+  active_at_start: number
+  new_subscriptions: number
+  canceled_subscriptions: number
+  churn_rate: number
+  retention_rate: number
+}
+
+export interface ChurnRateResponse {
+  data: ChurnRateDataPoint[]
+  summary: {
+    avg_churn_rate: number
+    avg_retention_rate: number
+    total_periods: number
+  }
+  period: {
+    start: string
+    end: string
+  }
+  granularity: Granularity
+}
+
+export type Granularity = 'day' | 'week' | 'month'
+
+export interface AnalyticsQueryParams {
+  organization_id: string
+  start_date?: string
+  end_date?: string
+  granularity?: Granularity
+}

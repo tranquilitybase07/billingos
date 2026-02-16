@@ -10,6 +10,8 @@ import { CreditCard, Users, CheckCircle, AlertCircle, ArrowRight } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { orgPath } from '@/lib/navigation'
 
+import { DashboardAreaCharts } from '@/components/Dashboard/DashboardAreaCharts'
+
 export default function DashboardHomePage() {
   const { organization } = useOrganization()
   const { data: paymentStatus, isLoading: isLoadingPayment } = usePaymentStatus(organization.id)
@@ -116,6 +118,9 @@ export default function DashboardHomePage() {
         </Card>
       </div>
 
+      {/* Area Charts */}
+      <DashboardAreaCharts />
+
       {/* Organization details */}
       <Card>
         <CardHeader>
@@ -176,6 +181,8 @@ export default function DashboardHomePage() {
           </dl>
         </CardContent>
       </Card>
+
+
     </DashboardBody>
   )
 }
