@@ -25,7 +25,68 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export function RevenueChart() {
+type TimePeriod = "Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly";
+
+interface RevenueChartProps {
+  timePeriod?: TimePeriod;
+}
+
+// Helper function to generate date labels based on time period
+function generateDateLabels(period: TimePeriod): string[] {
+  const now = new Date();
+  const labels: string[] = [];
+  
+  switch (period) {
+    case "Hourly":
+      // Generate last 9 hours
+      for (let i = 8; i >= 0; i--) {
+        const date = new Date(now);
+        date.setHours(now.getHours() - i);
+        const hour = date.getHours();
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        labels.push(`${displayHour} ${ampm}`);
+      }
+      break;
+      
+    case "Daily":
+      // Generate last 9 days
+      for (let i = 8; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        labels.push(date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }));
+      }
+      break;
+      
+    case "Weekly":
+      // Generate last 9 weeks
+      for (let i = 8; i >= 0; i--) {
+        labels.push(`Week ${9 - i}`);
+      }
+      break;
+      
+    case "Monthly":
+      // Generate last 9 months
+      for (let i = 8; i >= 0; i--) {
+        const date = new Date(now);
+        date.setMonth(now.getMonth() - i);
+        labels.push(date.toLocaleDateString('en-US', { month: 'short' }));
+      }
+      break;
+      
+    case "Yearly":
+      // Generate last 9 years
+      for (let i = 8; i >= 0; i--) {
+        const year = now.getFullYear() - i;
+        labels.push(year.toString());
+      }
+      break;
+  }
+  
+  return labels;
+}
+
+export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -34,19 +95,13 @@ export function RevenueChart() {
     "color" | "silver"
   >("color");
 
-  // Generate date labels for x-axis
-  const dates = [
-    "Jan 06",
-    "Jan 07",
-    "Jan 08",
-    "Jan 09",
-    "Jan 10",
-    "Jan 11",
-    "Jan 12",
-    "Jan 13",
-    "Jan 14",
-  ];
-  const currentDate = "Jan 10, 2026";
+  // Generate date labels for x-axis based on selected time period
+  const dates = generateDateLabels(timePeriod);
+  const currentDate = new Date().toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: '2-digit', 
+    year: 'numeric' 
+  });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -76,7 +131,7 @@ export function RevenueChart() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <DropdownMenu>
+        {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="secondary"
@@ -98,7 +153,9 @@ export function RevenueChart() {
             <DropdownMenuItem>One-Time Products</DropdownMenuItem>
             <DropdownMenuItem>One-Time Products Revenue</DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> */}
+
+        <h2 className="text-lg font-semibold">Revenue</h2>
 
         <TooltipProvider>
           <Tooltip>
@@ -109,7 +166,7 @@ export function RevenueChart() {
                 className="hover:bg-base hover:cursor-pointer"
                 onClick={() => setIsShareModalOpen(true)}
               >
-                <ArrowUpRight className="h-4 w-4" />
+                <ArrowUpRight className="h-5 w-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -149,7 +206,7 @@ export function RevenueChart() {
                   top: `${tooltipPosition.y}px`,
                   transform:
                     hoveredIndex >= dates.length - 2
-                      ? "translate(calc(-100% - 2px), -30%)"
+                      ? "translate(calc(-100% - 10px), -30%)"
                       : "translate(10px, -50%)",
                 }}
               >

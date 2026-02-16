@@ -1,14 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, MoreVertical, ChevronDown } from "lucide-react";
+import { Calendar, MoreVertical, ChevronDown, X, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RevenueChart } from "./RevenueChart";
 import { TableSection } from "./TableSection";
@@ -17,12 +26,24 @@ import {
   DataTableColumnHeader,
 } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
+import { useCustomerState, useUpdateCustomer } from "@/hooks/queries/customers";
+import { useProducts } from "@/hooks/queries/products";
+import { useCreateSubscription } from "@/hooks/queries/subscriptions";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Customer {
   id: string;
   name: string;
   email: string;
   avatar: string;
+  created_at?: string;
   lifetimeRevenue: number;
   orders: number;
   balance: number;
@@ -31,21 +52,124 @@ interface Customer {
 
 interface CustomerDetailsProps {
   customer: Customer;
+  organizationId?: string;
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
-export function CustomerDetails({ customer }: CustomerDetailsProps) {
+function formatTime(dateStr: string) {
+  return new Date(dateStr).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+export function CustomerDetails({ customer, organizationId }: CustomerDetailsProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "events" | "usage">(
     "overview"
   );
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAttachSubscriptionOpen, setIsAttachSubscriptionOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [timePeriod, setTimePeriod] = useState<"Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly">("Daily");
+  const [editFormData, setEditFormData] = useState({
+    name: customer.name,
+    email: customer.email,
+    external_id: '',
+  });
+  const [metadataFields, setMetadataFields] = useState<Array<{ key: string; value: string }>>([
+    { key: '', value: '' }
+  ]);
+
+  const { toast } = useToast();
+  const updateCustomer = useUpdateCustomer();
+  const createSubscription = useCreateSubscription();
+  const { data: products, isLoading: isLoadingProducts } = useProducts(organizationId);
+
+  const { data: customerState, isLoading: isLoadingState } = useCustomerState(
+    customer.id,
+    organizationId
+  );
+
+  console.log("DEBUG: CustomerDetails", {
+    customerId: customer.id,
+    organizationId,
+    customerState,
+    isLoadingState,
+    grantedFeatures: customerState?.granted_features,
+    grantedFeaturesCount: customerState?.granted_features?.length || 0,
+    // Debug properties for each feature
+    featuresWithProperties: customerState?.granted_features?.map(f => ({
+      name: f.feature_name,
+      properties: f.properties,
+      limit: (f as any).properties?.limit
+    }))
+  });
+
+  const handleAddMetadataField = () => {
+    setMetadataFields([...metadataFields, { key: '', value: '' }]);
+  };
+
+  const handleRemoveMetadataField = (index: number) => {
+    setMetadataFields(metadataFields.filter((_, i) => i !== index));
+  };
+
+  const handleMetadataChange = (index: number, field: 'key' | 'value', value: string) => {
+    const updated = [...metadataFields];
+    updated[index][field] = value;
+    setMetadataFields(updated);
+  };
+
+  const handleSaveCustomer = async () => {
+    try {
+      // Convert metadata array to object
+      const metadata = metadataFields.reduce((acc, field) => {
+        if (field.key && field.value) {
+          acc[field.key] = field.value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      await updateCustomer.mutateAsync({
+        customerId: customer.id,
+        organizationId,
+        data: {
+          name: editFormData.name,
+          email: editFormData.email,
+          ...(editFormData.external_id && { external_id: editFormData.external_id }),
+          ...(Object.keys(metadata).length > 0 && { metadata }),
+        }
+      });
+
+      toast({
+        title: "Customer updated",
+        description: "Customer details have been successfully updated.",
+      });
+
+      // Update the customer prop directly for immediate feedback
+      customer.name = editFormData.name;
+      customer.email = editFormData.email;
+      if (editFormData.external_id) {
+        customer.external_id = editFormData.external_id;
+      }
+
+      setIsEditDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error updating customer",
+        description: error.message || "Failed to update customer details.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Dummy customer details data
   const customerDetailsData = {
@@ -91,20 +215,20 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="bg-base">
-                  Daily
+                  {timePeriod}
                   <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Hourly</DropdownMenuItem>
-                <DropdownMenuItem>Daily</DropdownMenuItem>
-                <DropdownMenuItem>Weekly</DropdownMenuItem>
-                <DropdownMenuItem>Monthly</DropdownMenuItem>
-                <DropdownMenuItem>Yearly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Hourly")}>Hourly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Daily")}>Daily</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Weekly")}>Weekly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Monthly")}>Monthly</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimePeriod("Yearly")}>Yearly</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" size="icon" className="bg-base">
+            {/* <Button variant="outline" size="icon" className="bg-base">
               <Calendar className="h-4 w-4" />
             </Button>
 
@@ -126,7 +250,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                 <DropdownMenuItem>Last Year</DropdownMenuItem>
                 <DropdownMenuItem>All Time</DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu> */}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -135,9 +259,33 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem>
-                <DropdownMenuItem>Contact Customer</DropdownMenuItem>
-                <DropdownMenuItem className="border-b pb-3">
+                {/* <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem> */}
+                {/* <DropdownMenuItem>Contact Customer</DropdownMenuItem> */}
+                <DropdownMenuItem onClick={() => {
+                  // Pre-select the product if customer has a subscription
+                  const existingSubscription = customer.subscriptions?.[0];
+                  if (existingSubscription?.product_id) {
+                    setSelectedProductId(existingSubscription.product_id);
+                  } else {
+                    setSelectedProductId("");
+                  }
+                  setIsAttachSubscriptionOpen(true);
+                }}>
+                  Attach Subscription
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="border-b pb-3" 
+                  onClick={() => {
+                    // Reset form with current customer data
+                    setEditFormData({
+                      name: customer.name,
+                      email: customer.email,
+                      external_id: '',
+                    });
+                    setMetadataFields([{ key: '', value: '' }]);
+                    setIsEditDialogOpen(true);
+                  }}
+                >
                   Edit Customer
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-red-600 font-medium">
@@ -190,7 +338,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* <div className="grid grid-cols-3 gap-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-normal text-muted-foreground">
@@ -221,15 +369,16 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                   <div className="text-2xl">-</div>
                 </CardContent>
               </Card>
-            </div>
+            </div> */}
 
             {/* Revenue Chart */}
             <Card>
               <CardContent className="pt-6">
-                <RevenueChart />
+                <RevenueChart timePeriod={timePeriod} />
               </CardContent>
             </Card>
 
+              {/*subscriptions table */}
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-popover-foreground">Subscriptions</h2>
               <DataTable
@@ -295,7 +444,8 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               />
             </div>
 
-            <TableSection
+            {/*orders table */}
+            {/* <TableSection
               title="Orders"
               columns={[
                 { title: "Description", key: "description" },
@@ -303,17 +453,50 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                 { title: "Amount", key: "amount" },
               ]}
               data={[]}
-            />
+            /> */}
 
-            <TableSection
-              title="Features"
-              columns={[
-                { title: "Feature Name", key: "featureName" },
-                { title: "Status", key: "status" },
-                { title: "Granted At", key: "grantedAt" },
-              ]}
-              data={[]}
-            />
+            {/* Features table */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-popover-foreground">Features</h2>
+              <DataTable
+                data={customerState?.granted_features || []}
+                isLoading={isLoadingState}
+                columns={[
+                  {
+                    accessorKey: 'feature_name',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Feature Name" />
+                    ),
+                    cell: ({ row: { original: feat } }) => (
+                      <span className="text-sm">{feat.feature_name || feat.feature_key}</span>
+                    ),
+                  },
+                  {
+                    accessorKey: 'limit',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Limit" />
+                    ),
+                    cell: ({ row: { original: feat } }) => {
+                      const limit = (feat as any).properties?.limit;
+                      return (
+                        <span className="text-sm">
+                          {limit !== undefined && limit !== null ? limit : 'Unlimited'}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    accessorKey: 'granted_at',
+                    header: ({ column }) => (
+                      <DataTableColumnHeader column={column} title="Granted At" />
+                    ),
+                    cell: ({ row: { original: feat } }) => (
+                      <span className="text-sm">{formatDate(feat.granted_at)}</span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
 
             {/* Customer Details Section */}
             <Card className="p-6">
@@ -496,9 +679,15 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                       System
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Jan 06, 2026 {expandedEventId === "event-1" ? (<span>
-                        <span>,</span><span className="ml-2">11:34:53 AM</span>
-                      </span>) : ("")}
+                      {customer.created_at ? formatDate(customer.created_at) : "Unknown date"}{" "}
+                      {expandedEventId === "event-1" && customer.created_at ? (
+                        <span>
+                          <span>,</span>
+                          <span className="ml-2">{formatTime(customer.created_at)}</span>
+                        </span>
+                      ) : (
+                        ""
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -565,6 +754,212 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
           </div>
         )}
       </div>
+
+      {/* Attach Subscription Sheet */}
+      <Sheet open={isAttachSubscriptionOpen} onOpenChange={setIsAttachSubscriptionOpen}>
+        <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-2xl font-semibold">Attach Subscription</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-8 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="product" className="text-sm font-medium">
+                Select Product
+              </Label>
+              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <SelectTrigger className="w-full text-foreground">
+                  <SelectValue placeholder="Choose a product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingProducts ? (
+                    <SelectItem value="loading" disabled>Loading products...</SelectItem>
+                  ) : products?.items && products.items.length > 0 ? (
+                    products.items.map((product: any) => {
+                      // Determine version display
+                      let versionLabel = '';
+                      if (product.version) {
+                        if (product.version_status === 'current') {
+                          versionLabel = ` - v${product.version}`;
+                        } else if (product.version_status === 'superseded') {
+                          versionLabel = ' - Old Version';
+                        } else {
+                          versionLabel = ` - v${product.version}`;
+                        }
+                      }
+                      
+                      // Check if customer is already subscribed to this product
+                      const isSubscribed = customer.subscriptions?.some(
+                        (sub: any) => sub.product_id === product.id
+                      );
+                      
+                      return (
+                        <SelectItem key={product.id} value={product.id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span className="flex-1">{product.name}{versionLabel}</span>
+                            {isSubscribed && (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })
+                  ) : (
+                    <SelectItem value="no-products" disabled>No products available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Attach Button */}
+            <Button
+              onClick={async () => {
+                try {
+                  if (!selectedProductId || !organizationId) return;
+
+                  // Find the selected product to get its first price
+                  const selectedProduct = products?.items.find(p => p.id === selectedProductId);
+                  const priceId = selectedProduct?.prices?.[0]?.id;
+
+                  await createSubscription.mutateAsync({
+                    organization_id: organizationId,
+                    customer_id: customer.id,
+                    product_id: selectedProductId,
+                    price_id: priceId,
+                  });
+
+                  toast({
+                    title: "Subscription attached",
+                    description: "Customer has been successfully attached to the selected product.",
+                  });
+
+                  setIsAttachSubscriptionOpen(false);
+                  setSelectedProductId("");
+                } catch (error: any) {
+                  toast({
+                    title: "Error attaching subscription",
+                    description: error.message || "Failed to attach subscription.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={
+                !selectedProductId || 
+                selectedProductId === "loading" || 
+                selectedProductId === "no-products" ||
+                (customer.subscriptions && customer.subscriptions.length > 0) // Disable if customer already has a subscription
+              }
+            >
+              Attach Subscription
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Customer Sheet */}
+      <Sheet open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-2xl font-semibold">Edit Customer</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-8 space-y-6">
+            {/* Name Field */}
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-sm font-medium">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                className="w-full text-foreground"
+              />
+            </div>
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                className="w-full text-foreground"
+              />
+            </div>
+
+            {/* External ID Field */}
+            <div className="space-y-2">
+              <Label htmlFor="external_id" className="text-sm font-medium">
+                External ID
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                An optional ID of the customer in your system. Once set, it can't be updated.
+              </p>
+              <Input
+                id="external_id"
+                value={editFormData.external_id}
+                onChange={(e) => setEditFormData({ ...editFormData, external_id: e.target.value })}
+                className="w-full text-foreground"
+                placeholder=""
+              />
+            </div>
+
+            {/* Metadata Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Metadata</Label>
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-8 w-8 rounded-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleAddMetadataField}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {metadataFields.map((field, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    placeholder="Key"
+                    value={field.key}
+                    onChange={(e) => handleMetadataChange(index, 'key', e.target.value)}
+                    className="flex-1 text-foreground"
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={field.value}
+                    onChange={(e) => handleMetadataChange(index, 'value', e.target.value)}
+                    className="flex-1 text-foreground"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveMetadataField(index)}
+                    className="h-10 w-10"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveCustomer}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save Customer
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

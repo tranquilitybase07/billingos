@@ -48,6 +48,34 @@ export class FeaturesController {
   }
 
   /**
+   * Check if customer has access to a feature (SDK endpoint)
+   * GET /api/features/check?customer_id=xxx&feature_name=xxx
+   * TODO: Add SDK authentication guard instead of JWT
+   */
+  @Get('check')
+  @UseGuards(JwtAuthGuard) // TODO: Replace with SDK auth guard
+  checkAccess(
+    @Query('customer_id') customerId: string,
+    @Query('feature_name') featureName: string,
+  ) {
+    return this.featuresService.checkAccess(customerId, featureName);
+  }
+
+  /**
+   * Get all granted features for a customer
+   * GET /api/features/customer/:customerId?organization_id=xxx
+   * IMPORTANT: This must be before @Get(':id') to avoid route conflicts
+   */
+  @Get('customer/:customerId')
+  @UseGuards(JwtAuthGuard)
+  getCustomerFeatures(
+    @Param('customerId') customerId: string,
+    @Query('organization_id') organizationId?: string,
+  ) {
+    return this.featuresService.getCustomerFeatures(customerId, organizationId);
+  }
+
+  /**
    * Get a single feature by ID
    * GET /api/features/:id
    */
@@ -79,20 +107,6 @@ export class FeaturesController {
   @UseGuards(JwtAuthGuard)
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.featuresService.remove(id, user.id);
-  }
-
-  /**
-   * Check if customer has access to a feature (SDK endpoint)
-   * GET /api/features/check?customer_id=xxx&feature_name=xxx
-   * TODO: Add SDK authentication guard instead of JWT
-   */
-  @Get('check')
-  @UseGuards(JwtAuthGuard) // TODO: Replace with SDK auth guard
-  checkAccess(
-    @Query('customer_id') customerId: string,
-    @Query('feature_name') featureName: string,
-  ) {
-    return this.featuresService.checkAccess(customerId, featureName);
   }
 
   /**

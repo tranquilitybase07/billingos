@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 
 export interface Customer {
@@ -127,5 +127,29 @@ export function useSubscription(
       return response
     },
     enabled: options?.enabled !== false && !!subscriptionId,
+  })
+}
+
+/**
+ * Mutation hook to create a subscription
+ */
+export function useCreateSubscription() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: {
+      organization_id: string
+      customer_id: string
+      product_id: string
+      price_id?: string
+    }) => {
+      return await api.post<Subscription>('/subscriptions', data)
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate subscription queries to refetch updated data
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['organization-subscriptions', variables.organization_id] })
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions', variables.customer_id] })
+    },
   })
 }
