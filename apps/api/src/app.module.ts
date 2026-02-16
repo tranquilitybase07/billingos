@@ -13,6 +13,7 @@ import { AccountModule } from './account/account.module';
 import { ProductsModule } from './products/products.module';
 import { FeaturesModule } from './features/features.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { DiscountsModule } from './discounts/discounts.module';
 import { CustomersModule } from './customers/customers.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { SessionTokensModule } from './session-tokens/session-tokens.module';
@@ -52,6 +53,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     SessionTokensModule,
     V1Module,
     AnalyticsModule,
+    DiscountsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

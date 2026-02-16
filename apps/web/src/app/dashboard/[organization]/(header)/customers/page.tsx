@@ -15,7 +15,7 @@ interface CustomersPageProps {
 export default function CustomersPage({ params }: CustomersPageProps) {
   const { organization: organizationSlug } = use(params);
   const router = useRouter();
-  
+
   // Fetch organizations list to convert slug to ID
   const { data: organizations, isLoading: isLoadingOrg } = useListOrganizations();
 
@@ -33,14 +33,11 @@ export default function CustomersPage({ params }: CustomersPageProps) {
   // Extract unique customers to find the first one
   const firstCustomerId = useMemo(() => {
     if (!subscriptions || subscriptions.length === 0) return null;
-    
+
     // Find the first valid customer ID
     for (const sub of subscriptions) {
-      if (sub.customers) {
-        const customer = Array.isArray(sub.customers) ? sub.customers[0] : sub.customers;
-        if (customer && customer.id) {
-            return customer.id;
-        }
+      if (sub.customer) {
+        return sub.customer.id;
       }
     }
     return null;
@@ -59,9 +56,9 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         {isLoading ? (
           <p className="text-muted-foreground text-sm">Loading customers...</p>
         ) : !firstCustomerId ? (
-           <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground text-sm">No customers found</p>
-            </div>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground text-sm">No customers found</p>
+          </div>
         ) : (
           <p className="text-muted-foreground text-sm">Redirecting...</p>
         )}

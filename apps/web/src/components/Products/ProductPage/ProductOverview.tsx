@@ -64,24 +64,7 @@ const MOCK_ORDERS = [
   },
 ]
 
-const MOCK_DISCOUNTS = [
-  {
-    id: 'disc_1',
-    name: 'Early Bird',
-    code: 'EARLY20',
-    type: 'percentage' as const,
-    amount: 20,
-    created_at: '2025-12-01T00:00:00Z',
-  },
-  {
-    id: 'disc_2',
-    name: 'Annual Promo',
-    code: 'ANNUAL10',
-    type: 'percentage' as const,
-    amount: 10,
-    created_at: '2026-01-01T00:00:00Z',
-  },
-]
+
 
 // ── Component ──────────────────────────────────────────────
 
@@ -99,6 +82,9 @@ function formatDate(dateStr: string) {
   })
 }
 
+import { useProductDiscounts } from '@/hooks/queries/discounts'
+import { getDiscountDisplay } from '@/utils/discount'
+
 export const ProductOverview = ({
   organizationSlug,
   product,
@@ -115,6 +101,12 @@ export const ProductOverview = ({
   // Fetch real revenue metrics
   const { data: revenueMetrics, isLoading: isLoadingRevenue } =
     useProductRevenueMetrics(product.id)
+
+  // Fetch applicable discounts
+  const { data: discounts, isLoading: isLoadingDiscounts } = useProductDiscounts(
+    product.id,
+    product.organization_id
+  )
 
   return (
     <div className="flex flex-col gap-y-16">
@@ -361,7 +353,7 @@ export const ProductOverview = ({
             </div>
           </div>
           <DataTable
-            data={MOCK_DISCOUNTS}
+            data={discounts || []}
             columns={[
               {
                 accessorKey: 'name',
@@ -378,18 +370,20 @@ export const ProductOverview = ({
                   <DataTableColumnHeader column={column} title="Code" />
                 ),
                 cell: ({ row: { original: discount } }) => (
-                  <code className="rounded bg-muted px-2 py-0.5 text-xs">
-                    {discount.code}
-                  </code>
+                  discount.code ? (
+                    <code className="rounded bg-muted px-2 py-0.5 text-xs">
+                      {discount.code}
+                    </code>
+                  ) : <span className="text-muted-foreground text-sm">—</span>
                 ),
               },
               {
-                accessorKey: 'amount',
+                id: 'amount',
                 header: ({ column }) => (
                   <DataTableColumnHeader column={column} title="Amount" />
                 ),
                 cell: ({ row: { original: discount } }) => (
-                  <span className="text-sm">{discount.amount}%</span>
+                  <span className="text-sm">{getDiscountDisplay(discount)}</span>
                 ),
               },
               {
@@ -404,7 +398,7 @@ export const ProductOverview = ({
                 ),
               },
             ]}
-            isLoading={false}
+            isLoading={isLoadingDiscounts}
           />
         </div>
       )}

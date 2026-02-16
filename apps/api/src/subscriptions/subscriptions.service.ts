@@ -372,7 +372,25 @@ export class SubscriptionsService {
 
     const { data: subscription, error } = await supabase
       .from('subscriptions')
-      .select('*')
+      .select(`
+        *,
+        customer:customers (
+          id,
+          name,
+          email,
+          external_id,
+          stripe_customer_id
+        ),
+        product:products (
+          id,
+          name
+        ),
+        price:product_prices (
+          id,
+          recurring_interval,
+          recurring_interval_count
+        )
+      `)
       .eq('id', id)
       .single();
 
@@ -445,18 +463,18 @@ export class SubscriptionsService {
       .from('subscriptions')
       .select(`
         *,
-        customers (
+        customer:customers (
           id,
           name,
           email,
           external_id,
           stripe_customer_id
         ),
-        products (
+        product:products (
           id,
           name
         ),
-        product_prices (
+        price:product_prices (
           id,
           recurring_interval,
           recurring_interval_count

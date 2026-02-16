@@ -21,7 +21,7 @@ interface CustomerDetailPageProps {
 export default function CustomerDetailPage({ params }: CustomerDetailPageProps) {
   const { organization: organizationSlug, customerId } = use(params);
   const router = useRouter();
-  
+
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch organizations list to convert slug to ID
@@ -44,14 +44,14 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
     if (!subscriptions) return [];
 
     const customerMap = new Map();
-    
+
     subscriptions.forEach((sub: any) => {
-      const customer = Array.isArray(sub.customers) ? sub.customers[0] : sub.customers;
-      
+      const customer = sub.customer;
+
       if (customer && !customerMap.has(customer.id)) {
         const displayName = customer.name || customer.email;
         const initial = displayName?.charAt(0).toUpperCase() || '?';
-        
+
         customerMap.set(customer.id, {
           id: customer.id,
           name: customer.name || customer.email,
@@ -65,7 +65,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
     });
 
     let allCustomers = Array.from(customerMap.values());
-    
+
     if (searchQuery.trim()) {
       const lowerQuery = searchQuery.toLowerCase();
       allCustomers = allCustomers.filter(
@@ -152,11 +152,11 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
         {/* Right Side - Customer Details */}
         <div className="flex-1 overflow-auto">
           {selectedCustomer ? (
-            <CustomerDetails 
+            <CustomerDetails
               customer={{
                 ...selectedCustomer,
                 subscriptions: subscriptions?.filter((sub: any) => sub.customer_id === selectedCustomer.id) || []
-              }} 
+              }}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
