@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -10,6 +11,8 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PortalService } from './portal.service';
 import { CreatePortalSessionDto } from './dto/create-portal-session.dto';
+import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { UpdateCustomerDto } from '../../customers/dto/update-customer.dto';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import {
   CurrentCustomer,
@@ -59,5 +62,31 @@ export class PortalController {
   async getPortalData(@Param('sessionId') sessionId: string) {
     this.logger.log(`Fetching portal data for session: ${sessionId}`);
     return this.portalService.getPortalData(sessionId);
+  }
+
+  @Post(':sessionId/cancel-subscription')
+  @ApiOperation({ summary: 'Cancel a customer subscription' })
+  @ApiResponse({ status: 200, description: 'Subscription cancelled successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async cancelSubscription(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: CancelSubscriptionDto,
+  ) {
+    this.logger.log(`Cancelling subscription ${dto.subscriptionId} for session: ${sessionId}`);
+    return this.portalService.cancelSubscription(sessionId, dto);
+  }
+
+  @Patch(':sessionId/customer')
+  @ApiOperation({ summary: 'Update customer account details' })
+  @ApiResponse({ status: 200, description: 'Customer updated successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Customer not found' })
+  async updateCustomer(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: UpdateCustomerDto,
+  ) {
+    this.logger.log(`Updating customer for session: ${sessionId}`);
+    return this.portalService.updateCustomer(sessionId, dto);
   }
 }

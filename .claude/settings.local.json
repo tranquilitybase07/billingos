@@ -52,7 +52,8 @@
       "Bash(chmod:*)",
       "Bash(node /Users/ankushkumar/Code/billingos/test-realtime-updates.js:*)",
       "Bash(pnpm dev)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(timeout 60 pnpm build:api:*)"
     ],
     "deny": [],
     "ask": []

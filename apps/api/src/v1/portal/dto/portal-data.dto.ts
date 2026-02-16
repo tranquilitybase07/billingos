@@ -29,6 +29,7 @@ export interface PortalSubscription {
 
 export interface PortalInvoice {
   id: string;
+  number?: string;
   status: string;
   amount: number;
   currency: string;
@@ -63,11 +64,21 @@ export interface PortalCustomer {
   };
 }
 
+export interface UsageMetric {
+  featureId: string;
+  featureName: string;
+  used: number;
+  limit: number | null;
+  percentage: number;
+  unit: string;
+}
+
 export interface PortalData {
   sessionId: string;
   customer: PortalCustomer;
   subscriptions: PortalSubscription[];
   invoices: PortalInvoice[];
   paymentMethods: PortalPaymentMethod[];
+  usageMetrics: UsageMetric[];
   organizationName?: string;
 }
