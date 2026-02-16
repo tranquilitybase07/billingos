@@ -55,7 +55,8 @@
       "Bash(mkdir:*)",
       "Bash(timeout 60 pnpm build:api:*)",
       "Bash(supabase status:*)",
-      "Bash(supabase start:*)"
+      "Bash(supabase start:*)",
+      "Bash(timeout 60 pnpm build:web:*)"
     ],
     "deny": [],
     "ask": []

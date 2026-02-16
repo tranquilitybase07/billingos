@@ -122,7 +122,7 @@ export function MetricAreaChart({
                         <YAxis hide domain={['dataMin', 'auto']} />
                         <ChartTooltip
                             cursor={false}
-                            content={<ChartTooltipContent indicator="line" />}
+                            content={(props) => <ChartTooltipContent {...props} indicator="line" />}
                         />
                         <Area
                             dataKey={dataKey}

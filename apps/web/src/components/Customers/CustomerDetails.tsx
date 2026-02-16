@@ -48,6 +48,7 @@ interface Customer {
   orders: number;
   balance: number;
   subscriptions?: any[];
+  external_id?: string;
 }
 
 interface CustomerDetailsProps {
@@ -130,6 +131,15 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
 
   const handleSaveCustomer = async () => {
     try {
+      if (!organizationId) {
+        toast({
+          title: "Error",
+          description: "Organization ID is required",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Convert metadata array to object
       const metadata = metadataFields.reduce((acc, field) => {
         if (field.key && field.value) {
