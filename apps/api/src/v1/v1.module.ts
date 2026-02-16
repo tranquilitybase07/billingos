@@ -5,6 +5,7 @@ import { FeaturesModule } from '../features/features.module';
 import { SessionTokensModule } from '../session-tokens/session-tokens.module';
 import { V1ProductsModule } from './products/products.module';
 import { CheckoutModule } from './checkout/checkout.module';
+import { PortalModule } from './portal/portal.module';
 import { CustomerController } from './customer/customer.controller';
 import { V1FeaturesController } from './features/features.controller';
 
@@ -18,6 +19,7 @@ import { V1FeaturesController } from './features/features.controller';
  * - /v1/customer/*     Customer self-service endpoints
  * - /v1/products       Pricing table products
  * - /v1/checkout/*     Payment intent creation and processing
+ * - /v1/portal/*       Customer portal session management
  * - /v1/subscriptions/* Customer subscription management
  * - /v1/features/*     Feature gating and usage tracking
  */
@@ -29,6 +31,7 @@ import { V1FeaturesController } from './features/features.controller';
     SessionTokensModule,
     V1ProductsModule,
     CheckoutModule,
+    PortalModule,
   ],
   controllers: [
     CustomerController,
