@@ -76,7 +76,7 @@ export function RevenueChart() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <DropdownMenu>
+        {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="secondary"
@@ -98,7 +98,9 @@ export function RevenueChart() {
             <DropdownMenuItem>One-Time Products</DropdownMenuItem>
             <DropdownMenuItem>One-Time Products Revenue</DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> */}
+
+        <h2 className="text-lg font-semibold">Revenue</h2>
 
         <TooltipProvider>
           <Tooltip>
@@ -109,7 +111,7 @@ export function RevenueChart() {
                 className="hover:bg-base hover:cursor-pointer"
                 onClick={() => setIsShareModalOpen(true)}
               >
-                <ArrowUpRight className="h-4 w-4" />
+                <ArrowUpRight className="h-5 w-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -149,7 +151,7 @@ export function RevenueChart() {
                   top: `${tooltipPosition.y}px`,
                   transform:
                     hoveredIndex >= dates.length - 2
-                      ? "translate(calc(-100% - 2px), -30%)"
+                      ? "translate(calc(-100% - 10px), -30%)"
                       : "translate(10px, -50%)",
                 }}
               >

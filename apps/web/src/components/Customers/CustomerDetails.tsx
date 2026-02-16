@@ -104,7 +104,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" size="icon" className="bg-base">
+            {/* <Button variant="outline" size="icon" className="bg-base">
               <Calendar className="h-4 w-4" />
             </Button>
 
@@ -126,7 +126,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                 <DropdownMenuItem>Last Year</DropdownMenuItem>
                 <DropdownMenuItem>All Time</DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu> */}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -137,6 +137,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem>
                 <DropdownMenuItem>Contact Customer</DropdownMenuItem>
+                <DropdownMenuItem>Attach Subscription</DropdownMenuItem>
                 <DropdownMenuItem className="border-b pb-3">
                   Edit Customer
                 </DropdownMenuItem>
@@ -190,7 +191,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* <div className="grid grid-cols-3 gap-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-normal text-muted-foreground">
@@ -221,7 +222,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                   <div className="text-2xl">-</div>
                 </CardContent>
               </Card>
-            </div>
+            </div> */}
 
             {/* Revenue Chart */}
             <Card>
@@ -230,6 +231,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               </CardContent>
             </Card>
 
+              {/*subscriptions table */}
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-popover-foreground">Subscriptions</h2>
               <DataTable
@@ -295,7 +297,8 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
               />
             </div>
 
-            <TableSection
+            {/*orders table */}
+            {/* <TableSection
               title="Orders"
               columns={[
                 { title: "Description", key: "description" },
@@ -303,7 +306,7 @@ export function CustomerDetails({ customer }: CustomerDetailsProps) {
                 { title: "Amount", key: "amount" },
               ]}
               data={[]}
-            />
+            /> */}
 
             <TableSection
               title="Features"
