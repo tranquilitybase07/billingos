@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -88,5 +89,39 @@ export class PortalController {
   ) {
     this.logger.log(`Updating customer for session: ${sessionId}`);
     return this.portalService.updateCustomer(sessionId, dto);
+  }
+
+  @Post(':sessionId/setup-intent')
+  @ApiOperation({ summary: 'Create a SetupIntent for adding payment method' })
+  @ApiResponse({ status: 200, description: 'SetupIntent created successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  async createSetupIntent(@Param('sessionId') sessionId: string) {
+    this.logger.log(`Creating SetupIntent for session: ${sessionId}`);
+    return this.portalService.createSetupIntent(sessionId);
+  }
+
+  @Delete(':sessionId/payment-methods/:paymentMethodId')
+  @ApiOperation({ summary: 'Remove a payment method' })
+  @ApiResponse({ status: 200, description: 'Payment method removed successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Payment method not found' })
+  async removePaymentMethod(
+    @Param('sessionId') sessionId: string,
+    @Param('paymentMethodId') paymentMethodId: string,
+  ) {
+    this.logger.log(`Removing payment method ${paymentMethodId} for session: ${sessionId}`);
+    return this.portalService.removePaymentMethod(sessionId, paymentMethodId);
+  }
+
+  @Patch(':sessionId/default-payment-method')
+  @ApiOperation({ summary: 'Set default payment method' })
+  @ApiResponse({ status: 200, description: 'Default payment method updated successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  async setDefaultPaymentMethod(
+    @Param('sessionId') sessionId: string,
+    @Body() body: { paymentMethodId: string },
+  ) {
+    this.logger.log(`Setting default payment method for session: ${sessionId}`);
+    return this.portalService.setDefaultPaymentMethod(sessionId, body.paymentMethodId);
   }
 }

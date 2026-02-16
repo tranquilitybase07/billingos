@@ -350,9 +350,68 @@ export class PortalService {
       this.logger.warn(`⚠️ No Stripe customer ID found for customer ${customerId} - skipping invoice fetch`);
     }
 
-    // 5. Get payment methods (mock data for now - would integrate with Stripe)
-    // TODO: Fetch real payment methods from Stripe
+    // 5. Get payment methods from Stripe
     const portalPaymentMethods: PortalPaymentMethod[] = [];
+
+    if (!stripeCustomerError && customerWithStripe?.stripe_customer_id) {
+      const stripeCustomerId = customerWithStripe.stripe_customer_id;
+
+      // Get organization's Stripe account (reuse logic from invoices)
+      const { data: org2 } = await supabase
+        .from('organizations')
+        .select('account_id')
+        .eq('id', customerWithStripe.organization_id)
+        .single();
+
+      if (org2?.account_id) {
+        const { data: account2 } = await supabase
+          .from('accounts')
+          .select('stripe_id')
+          .eq('id', org2.account_id)
+          .single();
+
+        const stripeAccountId2 = account2?.stripe_id;
+
+        if (stripeAccountId2) {
+          try {
+            this.logger.debug(`Fetching payment methods from Stripe for customer ${stripeCustomerId}`);
+
+            const paymentMethods = await this.stripeService.listPaymentMethods(
+              stripeCustomerId,
+              'card',
+              stripeAccountId2,
+            );
+
+            // Get customer to check default payment method
+            const stripe = this.stripeService.getClient();
+            const stripeCustomer = await stripe.customers.retrieve(
+              stripeCustomerId,
+              { stripeAccount: stripeAccountId2 }
+            );
+
+            const defaultPaymentMethodId = (stripeCustomer as any).invoice_settings?.default_payment_method;
+
+            this.logger.debug(`Stripe returned ${paymentMethods.data.length} payment methods`);
+
+            for (const pm of paymentMethods.data) {
+              portalPaymentMethods.push({
+                id: pm.id,
+                type: pm.type,
+                last4: pm.card?.last4 || '',
+                brand: pm.card?.brand,
+                expiryMonth: pm.card?.exp_month,
+                expiryYear: pm.card?.exp_year,
+                isDefault: pm.id === defaultPaymentMethodId,
+              });
+            }
+
+            this.logger.log(`✅ Fetched ${portalPaymentMethods.length} payment methods for customer ${customerId}`);
+          } catch (error) {
+            this.logger.error(`❌ Failed to fetch payment methods from Stripe: ${error.message}`);
+          }
+        }
+      }
+    }
 
     // 6. Get usage metrics for metered features
     const usageMetrics: any[] = [];
@@ -676,5 +735,205 @@ export class PortalService {
         billingAddress: updatedCustomer.billing_address,
       },
     };
+  }
+
+  /**
+   * Create a SetupIntent for adding a payment method
+   */
+  async createSetupIntent(sessionId: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Validate session
+    const sessionStatus = await this.getPortalSessionStatus(sessionId);
+    if (!sessionStatus.isValid) {
+      throw new UnauthorizedException('Portal session is invalid or expired');
+    }
+
+    const customerId = sessionStatus.customerId!;
+
+    // 2. Get customer and Stripe account
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('stripe_customer_id, organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (!customer?.stripe_customer_id) {
+      throw new BadRequestException('Customer does not have a Stripe customer ID');
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', customer.organization_id)
+      .single();
+
+    if (!org?.account_id) {
+      throw new NotFoundException('Organization account not found');
+    }
+
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('stripe_id')
+      .eq('id', org.account_id)
+      .single();
+
+    if (!account?.stripe_id) {
+      throw new BadRequestException('Stripe account not found');
+    }
+
+    // 3. Create SetupIntent in Stripe
+    try {
+      const stripe = this.stripeService.getClient();
+      const setupIntent = await stripe.setupIntents.create(
+        {
+          customer: customer.stripe_customer_id,
+          payment_method_types: ['card'],
+          usage: 'off_session',
+        },
+        { stripeAccount: account.stripe_id }
+      );
+
+      this.logger.log(`Created SetupIntent ${setupIntent.id} for customer ${customerId}`);
+
+      return {
+        clientSecret: setupIntent.client_secret,
+        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+        stripeAccount: account.stripe_id,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create SetupIntent: ${error.message}`);
+      throw new BadRequestException(`Failed to create SetupIntent: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove a payment method
+   */
+  async removePaymentMethod(sessionId: string, paymentMethodId: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Validate session
+    const sessionStatus = await this.getPortalSessionStatus(sessionId);
+    if (!sessionStatus.isValid) {
+      throw new UnauthorizedException('Portal session is invalid or expired');
+    }
+
+    const customerId = sessionStatus.customerId!;
+
+    // 2. Get customer and Stripe account
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('stripe_customer_id, organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (!customer?.stripe_customer_id) {
+      throw new BadRequestException('Customer does not have a Stripe customer ID');
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', customer.organization_id)
+      .single();
+
+    if (!org?.account_id) {
+      throw new NotFoundException('Organization account not found');
+    }
+
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('stripe_id')
+      .eq('id', org.account_id)
+      .single();
+
+    if (!account?.stripe_id) {
+      throw new BadRequestException('Stripe account not found');
+    }
+
+    // 3. Detach payment method from Stripe
+    try {
+      await this.stripeService.detachPaymentMethod(paymentMethodId, account.stripe_id);
+
+      this.logger.log(`Removed payment method ${paymentMethodId} for customer ${customerId}`);
+
+      return {
+        success: true,
+        message: 'Payment method removed successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to remove payment method: ${error.message}`);
+      throw new BadRequestException(`Failed to remove payment method: ${error.message}`);
+    }
+  }
+
+  /**
+   * Set default payment method
+   */
+  async setDefaultPaymentMethod(sessionId: string, paymentMethodId: string) {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Validate session
+    const sessionStatus = await this.getPortalSessionStatus(sessionId);
+    if (!sessionStatus.isValid) {
+      throw new UnauthorizedException('Portal session is invalid or expired');
+    }
+
+    const customerId = sessionStatus.customerId!;
+
+    // 2. Get customer and Stripe account
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('stripe_customer_id, organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (!customer?.stripe_customer_id) {
+      throw new BadRequestException('Customer does not have a Stripe customer ID');
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', customer.organization_id)
+      .single();
+
+    if (!org?.account_id) {
+      throw new NotFoundException('Organization account not found');
+    }
+
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('stripe_id')
+      .eq('id', org.account_id)
+      .single();
+
+    if (!account?.stripe_id) {
+      throw new BadRequestException('Stripe account not found');
+    }
+
+    // 3. Update customer's default payment method in Stripe
+    try {
+      await this.stripeService.updateCustomer(
+        customer.stripe_customer_id,
+        {
+          invoice_settings: {
+            default_payment_method: paymentMethodId,
+          },
+        },
+        account.stripe_id,
+      );
+
+      this.logger.log(`Set default payment method to ${paymentMethodId} for customer ${customerId}`);
+
+      return {
+        success: true,
+        message: 'Default payment method updated successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to set default payment method: ${error.message}`);
+      throw new BadRequestException(`Failed to set default payment method: ${error.message}`);
+    }
   }
 }

@@ -143,6 +143,7 @@ export function PortalContent({ sessionId, defaultTab = 'subscription' }: Portal
         <TabsContent value="payments" className="space-y-4">
           <PaymentMethodsTab
             paymentMethods={data.paymentMethods}
+            sessionId={sessionId}
             onUpdate={() => {
               refresh()
               sendMessage({ type: 'PAYMENT_METHOD_UPDATED' })
@@ -542,18 +543,298 @@ function InvoicesTab({ invoices }: any) {
   )
 }
 
-function PaymentMethodsTab({ paymentMethods, onUpdate, onAdd }: any) {
-  if (paymentMethods.length === 0) {
-    return (
-      <Alert>
-        <AlertDescription>
-          No payment methods on file.
-        </AlertDescription>
-      </Alert>
-    )
+function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }: any) {
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [stripePromise, setStripePromise] = useState<any>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [stripeAccount, setStripeAccount] = useState<string | null>(null)
+  const [elements, setElements] = useState<any>(null)
+  const [paymentMethodToRemove, setPaymentMethodToRemove] = useState<any>(null)
+
+  // Load Stripe.js when modal opens
+  useEffect(() => {
+    if (showAddModal && !stripePromise) {
+      loadStripe()
+    }
+  }, [showAddModal])
+
+  const loadStripe = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/setup-intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create SetupIntent')
+      }
+
+      const data = await response.json()
+      setClientSecret(data.clientSecret)
+      setStripeAccount(data.stripeAccount)
+
+      // Dynamically import Stripe
+      const { loadStripe: loadStripeLib } = await import('@stripe/stripe-js')
+      const stripe = await loadStripeLib(data.publishableKey, {
+        stripeAccount: data.stripeAccount,
+      })
+
+      setStripePromise(stripe)
+    } catch (err) {
+      console.error('Error loading Stripe:', err)
+      setError('Failed to initialize payment form')
+    }
   }
 
-  return <div>Payment Methods Tab (Coming soon)</div>
+  const handleAddCard = async (event: React.FormEvent) => {
+    event.preventDefault()
+
+    if (!stripePromise || !clientSecret || !elements) {
+      setError('Stripe not initialized')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { error: submitError } = await stripePromise.confirmSetup({
+        elements,
+        confirmParams: {
+          return_url: window.location.href,
+        },
+        redirect: 'if_required',
+      })
+
+      if (submitError) {
+        setError(submitError.message || 'Failed to add payment method')
+        setIsLoading(false)
+        return
+      }
+
+      // Success - close modal and refresh
+      setShowAddModal(false)
+      setClientSecret(null)
+      setStripePromise(null)
+      setElements(null)
+      if (onAdd) onAdd()
+
+      console.log('Payment method added successfully')
+    } catch (err: any) {
+      console.error('Error adding payment method:', err)
+      setError(err.message || 'Failed to add payment method')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRemove = async (paymentMethodId: string) => {
+    if (!confirm('Are you sure you want to remove this payment method?')) {
+      return
+    }
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const response = await fetch(
+        `${apiUrl}/v1/portal/${sessionId}/payment-methods/${paymentMethodId}`,
+        {
+          method: 'DELETE',
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to remove payment method')
+      }
+
+      if (onUpdate) onUpdate()
+      console.log('Payment method removed')
+    } catch (err) {
+      console.error('Error removing payment method:', err)
+      alert('Failed to remove payment method')
+    }
+  }
+
+  const handleSetDefault = async (paymentMethodId: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const response = await fetch(
+        `${apiUrl}/v1/portal/${sessionId}/default-payment-method`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ paymentMethodId }),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to set default payment method')
+      }
+
+      if (onUpdate) onUpdate()
+      console.log('Default payment method updated')
+    } catch (err) {
+      console.error('Error setting default:', err)
+      alert('Failed to set default payment method')
+    }
+  }
+
+  const getCardIcon = (brand: string) => {
+    const icons: Record<string, string> = {
+      visa: '💳',
+      mastercard: '💳',
+      amex: '💳',
+      discover: '💳',
+    }
+    return icons[brand.toLowerCase()] || '💳'
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        <Button onClick={() => setShowAddModal(true)}>
+          Add Payment Method
+        </Button>
+
+        {paymentMethods.length === 0 ? (
+          <Alert>
+            <AlertDescription>
+              No payment methods on file. Add a card to manage your subscription.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="space-y-3">
+            {paymentMethods.map((pm: any) => (
+              <div key={pm.id} className="border rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{getCardIcon(pm.brand || 'card')}</span>
+                  <div>
+                    <p className="font-medium">
+                      {pm.brand?.toUpperCase() || 'Card'} •••• {pm.last4}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Expires {pm.expiryMonth}/{pm.expiryYear}
+                    </p>
+                    {pm.isDefault && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {!pm.isDefault && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSetDefault(pm.id)}
+                    >
+                      Set Default
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleRemove(pm.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Payment Method Modal */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Payment Method</DialogTitle>
+            <DialogDescription>
+              Add a new card to your account
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddCard}>
+            <div className="space-y-4 py-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {clientSecret && stripePromise && (
+                <StripePaymentElement
+                  stripePromise={stripePromise}
+                  clientSecret={clientSecret}
+                  onElementsReady={setElements}
+                />
+              )}
+
+              {!clientSecret && !error && (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAddModal(false)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || !clientSecret}>
+                {isLoading ? 'Adding...' : 'Add Card'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// Stripe Payment Element Component
+function StripePaymentElement({ stripePromise, clientSecret, onElementsReady }: any) {
+  const [localElements, setLocalElements] = useState<any>(null)
+
+  useEffect(() => {
+    if (!stripePromise || !clientSecret) return
+
+    const setupElements = async () => {
+      const stripe = await stripePromise
+      const elementsInstance = stripe.elements({ clientSecret })
+      const paymentElement = elementsInstance.create('payment')
+      paymentElement.mount('#payment-element')
+      setLocalElements(elementsInstance)
+
+      // Notify parent component that elements are ready
+      if (onElementsReady) {
+        onElementsReady(elementsInstance)
+      }
+    }
+
+    setupElements()
+
+    return () => {
+      if (localElements) {
+        localElements.unmount()
+      }
+    }
+  }, [stripePromise, clientSecret])
+
+  return <div id="payment-element" className="min-h-[200px]"></div>
 }
 
 function SettingsTab({ customer, usageMetrics, sessionId, onUpdate }: any) {
