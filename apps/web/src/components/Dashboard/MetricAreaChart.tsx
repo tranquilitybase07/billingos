@@ -126,7 +126,7 @@ export function MetricAreaChart({
                         />
                         <Area
                             dataKey={dataKey}
-                            type="natural"
+                            type="monotone"
                             fill={`url(#fill${title.replace(/\s+/g, '')})`}
                             fillOpacity={0.4}
                             stroke={`var(--color-${dataKey})`}
@@ -198,7 +198,7 @@ export function MetricAreaChart({
                                                 </defs>
                                                 <Area
                                                     dataKey={dataKey}
-                                                    type="natural"
+                                                    type="monotone"
                                                     fill={`url(#fillPreview${title.replace(/\s+/g, '')})`}
                                                     fillOpacity={0.4}
                                                     stroke={config[dataKey]?.color || `var(--color-${dataKey})`}
