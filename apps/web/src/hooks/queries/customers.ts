@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { Subscription } from './subscriptions'
 
@@ -65,5 +65,40 @@ export function useCustomerState(
       return response
     },
     enabled: options?.enabled !== false && !!customerId,
+  })
+}
+
+/**
+ * Mutation hook to update a customer
+ */
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ 
+      customerId, 
+      organizationId, 
+      data 
+    }: { 
+      customerId: string
+      organizationId: string
+      data: {
+        name?: string
+        email?: string
+        external_id?: string
+        metadata?: Record<string, any>
+      }
+    }) => {
+      const url = `/customers/${customerId}?organization_id=${organizationId}`
+      return await api.patch(url, data)
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate customer queries to refetch updated data
+      queryClient.invalidateQueries({ queryKey: ['customer', variables.customerId] })
+      queryClient.invalidateQueries({ queryKey: ['customer-features', variables.customerId] })
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      // Also invalidate subscriptions since customer data comes from there
+      queryClient.invalidateQueries({ queryKey: ['organization-subscriptions'] })
+    },
   })
 }

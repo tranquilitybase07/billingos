@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, MoreVertical, ChevronDown, X, Plus } from "lucide-react";
+import { Calendar, MoreVertical, ChevronDown, X, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,17 @@ import {
   DataTableColumnHeader,
 } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
-import { useCustomerState } from "@/hooks/queries/customers";
+import { useCustomerState, useUpdateCustomer } from "@/hooks/queries/customers";
+import { useProducts } from "@/hooks/queries/products";
+import { useCreateSubscription } from "@/hooks/queries/subscriptions";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Customer {
   id: string;
@@ -58,6 +68,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
   );
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAttachSubscriptionOpen, setIsAttachSubscriptionOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [editFormData, setEditFormData] = useState({
     name: customer.name,
     email: customer.email,
@@ -66,6 +78,11 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
   const [metadataFields, setMetadataFields] = useState<Array<{ key: string; value: string }>>([
     { key: '', value: '' }
   ]);
+
+  const { toast } = useToast();
+  const updateCustomer = useUpdateCustomer();
+  const createSubscription = useCreateSubscription();
+  const { data: products, isLoading: isLoadingProducts } = useProducts(organizationId);
 
   const { data: customerState, isLoading: isLoadingState } = useCustomerState(
     customer.id,
@@ -101,10 +118,47 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
     setMetadataFields(updated);
   };
 
-  const handleSaveCustomer = () => {
-    // TODO: Implement save customer logic
-    console.log('Saving customer:', { ...editFormData, metadata: metadataFields });
-    setIsEditDialogOpen(false);
+  const handleSaveCustomer = async () => {
+    try {
+      // Convert metadata array to object
+      const metadata = metadataFields.reduce((acc, field) => {
+        if (field.key && field.value) {
+          acc[field.key] = field.value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      await updateCustomer.mutateAsync({
+        customerId: customer.id,
+        organizationId,
+        data: {
+          name: editFormData.name,
+          email: editFormData.email,
+          ...(editFormData.external_id && { external_id: editFormData.external_id }),
+          ...(Object.keys(metadata).length > 0 && { metadata }),
+        }
+      });
+
+      toast({
+        title: "Customer updated",
+        description: "Customer details have been successfully updated.",
+      });
+
+      // Update the customer prop directly for immediate feedback
+      customer.name = editFormData.name;
+      customer.email = editFormData.email;
+      if (editFormData.external_id) {
+        customer.external_id = editFormData.external_id;
+      }
+
+      setIsEditDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error updating customer",
+        description: error.message || "Failed to update customer details.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Dummy customer details data
@@ -195,9 +249,20 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem>
-                <DropdownMenuItem>Contact Customer</DropdownMenuItem>
-                <DropdownMenuItem>Attach Subscription</DropdownMenuItem>
+                {/* <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem> */}
+                {/* <DropdownMenuItem>Contact Customer</DropdownMenuItem> */}
+                <DropdownMenuItem onClick={() => {
+                  // Pre-select the product if customer has a subscription
+                  const existingSubscription = customer.subscriptions?.[0];
+                  if (existingSubscription?.product_id) {
+                    setSelectedProductId(existingSubscription.product_id);
+                  } else {
+                    setSelectedProductId("");
+                  }
+                  setIsAttachSubscriptionOpen(true);
+                }}>
+                  Attach Subscription
+                </DropdownMenuItem>
                 <DropdownMenuItem 
                   className="border-b pb-3" 
                   onClick={() => {
@@ -673,6 +738,108 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           </div>
         )}
       </div>
+
+      {/* Attach Subscription Sheet */}
+      <Sheet open={isAttachSubscriptionOpen} onOpenChange={setIsAttachSubscriptionOpen}>
+        <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-2xl font-semibold">Attach Subscription</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-8 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="product" className="text-sm font-medium">
+                Select Product
+              </Label>
+              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <SelectTrigger className="w-full text-foreground">
+                  <SelectValue placeholder="Choose a product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingProducts ? (
+                    <SelectItem value="loading" disabled>Loading products...</SelectItem>
+                  ) : products?.items && products.items.length > 0 ? (
+                    products.items.map((product: any) => {
+                      // Determine version display
+                      let versionLabel = '';
+                      if (product.version) {
+                        if (product.version_status === 'current') {
+                          versionLabel = ` - v${product.version}`;
+                        } else if (product.version_status === 'superseded') {
+                          versionLabel = ' - Old Version';
+                        } else {
+                          versionLabel = ` - v${product.version}`;
+                        }
+                      }
+                      
+                      // Check if customer is already subscribed to this product
+                      const isSubscribed = customer.subscriptions?.some(
+                        (sub: any) => sub.product_id === product.id
+                      );
+                      
+                      return (
+                        <SelectItem key={product.id} value={product.id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span className="flex-1">{product.name}{versionLabel}</span>
+                            {isSubscribed && (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })
+                  ) : (
+                    <SelectItem value="no-products" disabled>No products available</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Attach Button */}
+            <Button
+              onClick={async () => {
+                try {
+                  if (!selectedProductId || !organizationId) return;
+
+                  // Find the selected product to get its first price
+                  const selectedProduct = products?.items.find(p => p.id === selectedProductId);
+                  const priceId = selectedProduct?.prices?.[0]?.id;
+
+                  await createSubscription.mutateAsync({
+                    organization_id: organizationId,
+                    customer_id: customer.id,
+                    product_id: selectedProductId,
+                    price_id: priceId,
+                  });
+
+                  toast({
+                    title: "Subscription attached",
+                    description: "Customer has been successfully attached to the selected product.",
+                  });
+
+                  setIsAttachSubscriptionOpen(false);
+                  setSelectedProductId("");
+                } catch (error: any) {
+                  toast({
+                    title: "Error attaching subscription",
+                    description: error.message || "Failed to attach subscription.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={
+                !selectedProductId || 
+                selectedProductId === "loading" || 
+                selectedProductId === "no-products" ||
+                (customer.subscriptions && customer.subscriptions.length > 0) // Disable if customer already has a subscription
+              }
+            >
+              Attach Subscription
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Edit Customer Sheet */}
       <Sheet open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
