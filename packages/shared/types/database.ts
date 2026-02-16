@@ -254,63 +254,106 @@ export type Database = {
           },
         ]
       }
+      discount_products: {
+        Row: {
+          created_at: string
+          discount_id: string
+          id: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_id: string
+          id?: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_id?: string
+          id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_products_discount_id_fkey"
+            columns: ["discount_id"]
+            isOneToOne: false
+            referencedRelation: "discounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discounts: {
         Row: {
-          id: string
-          organization_id: string
-          name: string
-          code: string | null
-          type: string
-          basis_points: number | null
           amount: number | null
+          basis_points: number | null
+          code: string | null
+          created_at: string
           currency: string | null
+          deleted_at: string | null
           duration: string
           duration_in_months: number | null
+          id: string
           max_redemptions: number | null
+          name: string
+          organization_id: string
           redemptions_count: number
           stripe_coupon_id: string | null
           stripe_promotion_code_id: string | null
-          created_at: string
+          type: string
           updated_at: string | null
-          deleted_at: string | null
         }
         Insert: {
-          id?: string
-          organization_id: string
-          name: string
-          code?: string | null
-          type: string
-          basis_points?: number | null
           amount?: number | null
+          basis_points?: number | null
+          code?: string | null
+          created_at?: string
           currency?: string | null
+          deleted_at?: string | null
           duration?: string
           duration_in_months?: number | null
+          id?: string
           max_redemptions?: number | null
+          name: string
+          organization_id: string
           redemptions_count?: number
           stripe_coupon_id?: string | null
           stripe_promotion_code_id?: string | null
-          created_at?: string
+          type: string
           updated_at?: string | null
-          deleted_at?: string | null
         }
         Update: {
-          id?: string
-          organization_id?: string
-          name?: string
-          code?: string | null
-          type?: string
-          basis_points?: number | null
           amount?: number | null
+          basis_points?: number | null
+          code?: string | null
+          created_at?: string
           currency?: string | null
+          deleted_at?: string | null
           duration?: string
           duration_in_months?: number | null
+          id?: string
           max_redemptions?: number | null
+          name?: string
+          organization_id?: string
           redemptions_count?: number
           stripe_coupon_id?: string | null
           stripe_promotion_code_id?: string | null
-          created_at?: string
+          type?: string
           updated_at?: string | null
-          deleted_at?: string | null
         }
         Relationships: [
           {
@@ -323,7 +366,6 @@ export type Database = {
         ]
       }
       feature_grants: {
-
         Row: {
           created_at: string | null
           customer_id: string
@@ -640,6 +682,60 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_sessions: {
+        Row: {
+          accessed_at: string | null
+          created_at: string
+          customer_id: string
+          expires_at: string
+          external_user_id: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          organization_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          accessed_at?: string | null
+          created_at?: string
+          customer_id: string
+          expires_at: string
+          external_user_id?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          organization_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          accessed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          expires_at?: string
+          external_user_id?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          organization_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1461,6 +1557,7 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_expired_portal_sessions: { Args: never; Returns: number }
       cleanup_expired_session_tokens: { Args: never; Returns: undefined }
       get_latest_product_version: {
         Args: { p_organization_id: string; p_product_name: string }

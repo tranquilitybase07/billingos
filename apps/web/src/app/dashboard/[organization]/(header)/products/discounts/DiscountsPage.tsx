@@ -280,7 +280,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
               onDiscountUpdated={() => setShowEditModal(false)}
               hideModal={() => setShowEditModal(false)}
             />
-          ) : null
+          ) : <></>
         }
       />
 

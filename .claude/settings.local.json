@@ -51,7 +51,11 @@
       "Bash(pnpm remove:*)",
       "Bash(chmod:*)",
       "Bash(node /Users/ankushkumar/Code/billingos/test-realtime-updates.js:*)",
-      "Bash(pnpm dev)"
+      "Bash(pnpm dev)",
+      "Bash(mkdir:*)",
+      "Bash(timeout 60 pnpm build:api:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase start:*)"
     ],
     "deny": [],
     "ask": []
