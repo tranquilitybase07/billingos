@@ -29,6 +29,16 @@ export interface CheckoutSession {
   customer: CheckoutCustomer;
   stripeAccountId?: string;
   trialDays?: number;
+  subscription?: {
+    id: string;
+    customerId: string;
+    productId: string;
+    priceId: string;
+    status: string;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+  };
 }
 
 export interface CheckoutStatus {
@@ -449,6 +459,18 @@ export class CheckoutService {
 
     const features = (productFeatures || []).map((pf: any) => pf.features.title);
 
+    // Check if subscription exists for this payment intent
+    let subscription: any = null;
+    if (paymentIntent.stripe_payment_intent_id) {
+      const { data: subscriptionData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('payment_intent_id', paymentIntent.id)
+        .single();
+
+      subscription = subscriptionData;
+    }
+
     // Map Stripe status to our status
     let status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired' = 'pending';
     if (isExpired) {
@@ -494,6 +516,16 @@ export class CheckoutService {
       },
       stripeAccountId: paymentIntent.stripe_account_id || undefined,
       trialDays: product.trial_days || 0,
+      subscription: subscription ? {
+        id: subscription.id,
+        customerId: subscription.customer_id,
+        productId: subscription.product_id,
+        priceId: subscription.price_id,
+        status: subscription.status,
+        currentPeriodStart: subscription.current_period_start,
+        currentPeriodEnd: subscription.current_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+      } : undefined,
     };
   }
 

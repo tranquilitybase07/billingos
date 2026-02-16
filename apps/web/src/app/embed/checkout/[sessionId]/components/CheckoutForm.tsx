@@ -166,18 +166,45 @@ function CheckoutFormInner({
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        // Payment successful - notify parent
-        // In a real implementation, you'd fetch the subscription from your backend
-        onSuccess({
-          id: 'sub_' + Math.random().toString(36).substr(2, 9),
-          customerId: session.customer.id,
-          productId: session.product.id,
-          priceId: session.priceId,
-          status: 'active',
-          currentPeriodStart: new Date().toISOString(),
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          cancelAtPeriodEnd: false
-        })
+        console.log('[CheckoutForm] Payment SUCCEEDED! Starting subscription polling...')
+
+        // Payment successful - poll for subscription data
+        // The webhook creates subscription asynchronously, so we need to poll for it
+        let attempts = 0;
+        const maxAttempts = 20; // Poll for up to 10 seconds (20 * 500ms)
+
+        const pollForSubscription = async () => {
+          try {
+            console.log(`[CheckoutForm] Polling attempt ${attempts + 1}/${maxAttempts}`)
+            const response = await fetch(`/api/v1/checkout/${session.id}/status`)
+            const data = await response.json()
+
+            if (data.subscription) {
+              console.log('[CheckoutForm] Subscription found!', data.subscription)
+              // Subscription created, notify parent with real data
+              onSuccess(data.subscription)
+            } else if (attempts < maxAttempts) {
+              // Subscription not created yet, keep polling
+              attempts++
+              console.log('[CheckoutForm] No subscription yet, polling again...')
+              setTimeout(pollForSubscription, 500) // Poll every 500ms
+            } else {
+              console.log('[CheckoutForm] Polling timeout, sending success without subscription')
+              // Timeout - send success without subscription data
+              // The parent can still show success and refetch products
+              onSuccess(undefined)
+            }
+          } catch (error) {
+            console.error('[CheckoutForm] Error polling for subscription:', error)
+            // On error, still notify success so payment isn't lost
+            onSuccess(undefined)
+          }
+        }
+
+        // Start polling immediately
+        pollForSubscription()
+      } else {
+        console.log('[CheckoutForm] Payment intent status:', paymentIntent?.status)
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Payment failed')

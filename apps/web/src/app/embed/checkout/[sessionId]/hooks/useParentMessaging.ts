@@ -37,20 +37,26 @@ export function useParentMessaging(): UseParentMessagingReturn {
    * Send message to parent window
    */
   const sendMessage = useCallback((message: IframeMessage) => {
+    console.log('[useParentMessaging] 📤 Sending message to parent:', message.type, message)
+
     // Get allowed parent origins from environment
     const allowedOrigins = getAllowedOrigins()
+    console.log('[useParentMessaging] Allowed origins:', allowedOrigins)
 
     // Send to all allowed origins (parent will validate)
     allowedOrigins.forEach(origin => {
       try {
+        console.log(`[useParentMessaging] Posting message to parent at origin: ${origin}`)
         window.parent.postMessage(message, origin)
+        console.log(`[useParentMessaging] ✅ Message sent to ${origin}`)
       } catch (error) {
-        console.error(`Failed to send message to ${origin}:`, error)
+        console.error(`[useParentMessaging] ❌ Failed to send message to ${origin}:`, error)
       }
     })
 
     // Also send to wildcard for development
     if (process.env.NODE_ENV === 'development') {
+      console.log('[useParentMessaging] 🔧 Dev mode: Also sending with wildcard origin')
       window.parent.postMessage(message, '*')
     }
   }, [])

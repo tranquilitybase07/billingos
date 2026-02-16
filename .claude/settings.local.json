@@ -48,7 +48,10 @@
       "Bash(pnpm start:dev)",
       "Bash(pkill:*)",
       "Bash(pnpm update:*)",
-      "Bash(pnpm remove:*)"
+      "Bash(pnpm remove:*)",
+      "Bash(chmod:*)",
+      "Bash(node /Users/ankushkumar/Code/billingos/test-realtime-updates.js:*)",
+      "Bash(pnpm dev)"
     ],
     "deny": [],
     "ask": []
