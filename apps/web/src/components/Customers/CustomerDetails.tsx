@@ -43,6 +43,7 @@ interface Customer {
   name: string;
   email: string;
   avatar: string;
+  created_at?: string;
   lifetimeRevenue: number;
   orders: number;
   balance: number;
@@ -55,10 +56,18 @@ interface CustomerDetailsProps {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatTime(dateStr: string) {
+  return new Date(dateStr).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
   });
 }
 
@@ -670,9 +679,15 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       System
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Jan 06, 2026 {expandedEventId === "event-1" ? (<span>
-                        <span>,</span><span className="ml-2">11:34:53 AM</span>
-                      </span>) : ("")}
+                      {customer.created_at ? formatDate(customer.created_at) : "Unknown date"}{" "}
+                      {expandedEventId === "event-1" && customer.created_at ? (
+                        <span>
+                          <span>,</span>
+                          <span className="ml-2">{formatTime(customer.created_at)}</span>
+                        </span>
+                      ) : (
+                        ""
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
