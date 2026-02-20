@@ -9,6 +9,7 @@ import {
   Granularity,
 } from './dto/analytics-query.dto';
 import { MRRResponseDto } from './dto/mrr-response.dto';
+import { MRRTrendResponseDto } from './dto/mrr-trend-response.dto';
 import { ActiveSubscriptionsResponseDto } from './dto/active-subscriptions-response.dto';
 import { RevenueTrendResponseDto } from './dto/revenue-trend-response.dto';
 import { SubscriptionGrowthResponseDto } from './dto/subscription-growth-response.dto';
@@ -33,6 +34,31 @@ export class AnalyticsController {
     @Query('organization_id') organizationId: string,
   ): Promise<MRRResponseDto> {
     return this.analyticsService.getMRR(organizationId);
+  }
+
+  /**
+   * Get MRR trend over time
+   * GET /analytics/mrr/trend?organization_id=xxx&start_date=2025-01-01&end_date=2026-02-19&granularity=month
+   */
+  @Get('mrr/trend')
+  async getMRRTrend(
+    @CurrentUser() user: User,
+    @Query() query: AnalyticsQueryDto,
+  ): Promise<MRRTrendResponseDto> {
+    // Default to last 12 months if no dates provided
+    const endDate = query.end_date || new Date().toISOString().split('T')[0];
+    const startDate =
+      query.start_date ||
+      new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+    return this.analyticsService.getMRRTrend(
+      query.organization_id,
+      startDate,
+      endDate,
+      query.granularity || Granularity.MONTH,
+    );
   }
 
   /**

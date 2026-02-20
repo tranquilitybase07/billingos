@@ -8,6 +8,10 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { SupabaseService } from '../supabase/supabase.service';
 import { MRRResponseDto } from './dto/mrr-response.dto';
+import {
+  MRRTrendResponseDto,
+  MRRTrendDataPoint,
+} from './dto/mrr-trend-response.dto';
 import { ActiveSubscriptionsResponseDto } from './dto/active-subscriptions-response.dto';
 import {
   RevenueTrendResponseDto,
@@ -123,6 +127,181 @@ export class AnalyticsService {
 
     this.logger.log(
       `Calculated MRR for organization ${organizationId}: ${mrr}`,
+    );
+
+    return response;
+  }
+
+  /**
+   * Get MRR trend over time
+   * Reconstructs historical MRR by checking which subscriptions were active at each month-end
+   */
+  async getMRRTrend(
+    organizationId: string,
+    startDate: string,
+    endDate: string,
+    granularity: Granularity = Granularity.MONTH,
+  ): Promise<MRRTrendResponseDto> {
+    const cacheKey = `analytics:${organizationId}:mrr-trend:${startDate}:${endDate}:${granularity}`;
+
+    // Try cache first
+    const cached = await this.cacheManager.get<MRRTrendResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `MRR trend cache HIT for organization ${organizationId}`,
+      );
+      return cached;
+    }
+
+    this.logger.log(
+      `MRR trend cache MISS for organization ${organizationId}`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+
+    // Fetch ALL subscriptions (including canceled) with their product info
+    const { data: subscriptions, error } = await supabase
+      .from('subscriptions')
+      .select(
+        `
+        id,
+        amount,
+        created_at,
+        canceled_at,
+        status,
+        cancel_at_period_end,
+        products!inner (
+          recurring_interval,
+          recurring_interval_count
+        )
+      `,
+      )
+      .eq('organization_id', organizationId);
+
+    if (error) {
+      this.logger.error(
+        `Failed to fetch subscriptions for MRR trend: ${error.message}`,
+        error,
+      );
+      throw new BadRequestException('Failed to calculate MRR trend');
+    }
+
+    // Generate boundaries
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const data: MRRTrendDataPoint[] = [];
+    let currentMrr = 0;
+
+    let current = new Date(start);
+    if (granularity === Granularity.MONTH) {
+      current = new Date(current.getFullYear(), current.getMonth(), 1);
+    } else if (granularity === Granularity.WEEK) {
+      const day = current.getDay();
+      const diff = current.getDate() - day + (day === 0 ? -6 : 1);
+      current = new Date(current.setDate(diff));
+    }
+    current.setHours(0, 0, 0, 0);
+
+    const endBoundary = new Date(end);
+    endBoundary.setHours(23, 59, 59, 999);
+
+    while (current <= endBoundary) {
+      let periodEnd: Date;
+      let dateKey: string;
+
+      if (granularity === Granularity.DAY) {
+        periodEnd = new Date(current);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateKey = current.toISOString().split('T')[0];
+      } else if (granularity === Granularity.WEEK) {
+        periodEnd = new Date(current);
+        periodEnd.setDate(current.getDate() + 6);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateKey = current.toISOString().split('T')[0];
+      } else {
+        periodEnd = new Date(
+          current.getFullYear(),
+          current.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+        dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      let monthMrr = 0;
+      let activeCount = 0;
+
+      if (subscriptions && subscriptions.length > 0) {
+        for (const sub of subscriptions) {
+          if (!sub.created_at) continue;
+
+          const createdAt = new Date(sub.created_at);
+
+          if (createdAt > periodEnd) continue;
+
+          if (sub.canceled_at) {
+            const canceledAt = new Date(sub.canceled_at);
+            if (canceledAt <= periodEnd) continue;
+          }
+
+          const product = sub.products as any;
+          let normalizedAmount = sub.amount || 0;
+
+          switch (product.recurring_interval) {
+            case 'year':
+              normalizedAmount = Math.round(normalizedAmount / 12);
+              break;
+            case 'month':
+              break;
+            case 'week':
+              normalizedAmount = Math.round(normalizedAmount * 4);
+              break;
+            case 'day':
+              normalizedAmount = Math.round(normalizedAmount * 30);
+              break;
+          }
+
+          monthMrr += normalizedAmount;
+          activeCount++;
+        }
+      }
+
+      data.push({
+        date: dateKey,
+        mrr: monthMrr,
+        active_subscriptions: activeCount,
+      });
+
+      currentMrr = monthMrr;
+
+      if (granularity === Granularity.DAY) {
+        current.setDate(current.getDate() + 1);
+      } else if (granularity === Granularity.WEEK) {
+        current.setDate(current.getDate() + 7);
+      } else {
+        current.setMonth(current.getMonth() + 1);
+      }
+    }
+
+    const response: MRRTrendResponseDto = {
+      data,
+      current_mrr: currentMrr,
+      currency: 'usd',
+      period: {
+        start: startDate,
+        end: endDate,
+      },
+      granularity,
+    };
+
+    // Cache for 15 minutes
+    await this.cacheManager.set(cacheKey, response, 900000);
+
+    this.logger.log(
+      `MRR trend for organization ${organizationId}: ${data.length} data points`,
     );
 
     return response;

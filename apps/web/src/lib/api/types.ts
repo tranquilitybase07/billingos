@@ -200,6 +200,23 @@ export interface MRRResponse {
   cached_at: string
 }
 
+export interface MRRTrendDataPoint {
+  date: string
+  mrr: number
+  active_subscriptions: number
+}
+
+export interface MRRTrendResponse {
+  data: MRRTrendDataPoint[]
+  current_mrr: number
+  currency: string
+  period: {
+    start: string
+    end: string
+  }
+  granularity: string
+}
+
 export interface RevenueTrendDataPoint {
   date: string
   revenue: number

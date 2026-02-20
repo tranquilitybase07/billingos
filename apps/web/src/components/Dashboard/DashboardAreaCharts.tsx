@@ -1,30 +1,42 @@
 'use client'
 
 import { useOrganization } from '@/providers/OrganizationProvider'
-import { useMRR, useRevenueTrend, useSubscriptionGrowth, useChurnRate } from '@/hooks/queries/analytics'
+import { useMRR, useMRRTrend, useRevenueTrend, useSubscriptionGrowth, useChurnRate } from '@/hooks/queries/analytics'
 import { MetricAreaChart } from './MetricAreaChart'
 import { ChartConfig } from '@/components/ui/chart'
 
 export function DashboardAreaCharts() {
     const { organization } = useOrganization()
 
-    // Calculate date range for the last 12 months
+    // Calculate date ranges
     const endDate = new Date().toISOString().split('T')[0]
-    const startDate = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0]
+    // 12 months for high-level trends
+    const startDate12m = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0]
+    // 90 days for detailed trends (daily)
+    const startDate90d = new Date(new Date().setDate(new Date().getDate() - 90)).toISOString().split('T')[0]
 
     // Fetch current snapshot metrics
     const { data: mrrData, isLoading: isLoadingMRR } = useMRR(organization.id)
 
-    // Fetch trend metrics with 12 month range
-    const queryParams = {
+    // Detailed trend metrics (90 days, daily)
+    const detailedParams = {
         organization_id: organization.id,
-        granularity: 'month' as const,
-        start_date: startDate,
+        granularity: 'day' as const,
+        start_date: startDate90d,
         end_date: endDate
     }
-    const { data: revenueTrend, isLoading: isLoadingRev } = useRevenueTrend(queryParams)
-    const { data: growthTrend, isLoading: isLoadingGrowth } = useSubscriptionGrowth(queryParams)
-    const { data: churnTrend, isLoading: isLoadingChurn } = useChurnRate(queryParams)
+    const { data: mrrDetailedTrend, isLoading: isLoadingMRRTrend } = useMRRTrend(detailedParams)
+
+    // High-level trend metrics (12 months, monthly)
+    const summaryParams = {
+        organization_id: organization.id,
+        granularity: 'month' as const,
+        start_date: startDate12m,
+        end_date: endDate
+    }
+    const { data: revenueTrend, isLoading: isLoadingRev } = useRevenueTrend(summaryParams)
+    const { data: growthTrend, isLoading: isLoadingGrowth } = useSubscriptionGrowth(summaryParams)
+    const { data: churnTrend, isLoading: isLoadingChurn } = useChurnRate(summaryParams)
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -38,42 +50,59 @@ export function DashboardAreaCharts() {
     }
 
     // Helper to fill gaps in time-series data
-    const fillGaps = (data: { date: string; value: number }[] | undefined, defaultValue = 0) => {
+    const fillGaps = (
+        data: { date: string; value: number }[] | undefined,
+        granularity: 'day' | 'month' = 'month',
+        defaultValue = 0
+    ) => {
         if (!data) return []
 
         const result: { date: string; value: number }[] = []
         const dateMap = new Map(data.map(d => [d.date, d.value]))
 
-        // Generate last 12 months
-        for (let i = 11; i >= 0; i--) {
-            const d = new Date()
-            d.setMonth(d.getMonth() - i)
-            const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        if (granularity === 'month') {
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date()
+                d.setMonth(d.getMonth() - i)
+                const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
-            result.push({
-                date: dateKey,
-                value: dateMap.get(dateKey) ?? defaultValue
-            })
+                // For trends, we often want to carry forward the last value if data is missing
+                const value = dateMap.get(dateKey) ?? (result.length > 0 ? result[result.length - 1].value : defaultValue)
+                result.push({ date: dateKey, value })
+            }
+        } else {
+            // Day granularity for last 90 days
+            for (let i = 89; i >= 0; i--) {
+                const d = new Date()
+                d.setDate(d.getDate() - i)
+                const dateKey = d.toISOString().split('T')[0]
+
+                const value = dateMap.get(dateKey) ?? (result.length > 0 ? result[result.length - 1].value : defaultValue)
+                result.push({ date: dateKey, value })
+            }
         }
 
         return result
     }
 
-    // Map API data to chart format
-    const revData = fillGaps(revenueTrend?.data.map(d => ({ date: d.date, value: d.revenue / 100 })))
+    // Map MRR trend data (from daily endpoint)
+    const mrrTrendData = fillGaps(
+        mrrDetailedTrend?.data.map(d => ({ date: d.date, value: d.mrr / 100 })),
+        'day'
+    )
 
-    // For MRR trend, we use revenue as proxy but append the current MRR as the last point if it's more accurate
-    let mrrTrendData = [...revData]
-    if (mrrTrendData.length > 0 && mrrData) {
-        // Update the last point with current real MRR
-        mrrTrendData[mrrTrendData.length - 1].value = mrrData.mrr / 100
-    }
+    // Active subscriptions from daily endpoint
+    const activeSubData = fillGaps(
+        mrrDetailedTrend?.data.map(d => ({ date: d.date, value: d.active_subscriptions })),
+        'day'
+    )
 
-    const growthData = fillGaps(growthTrend?.data.map(d => ({ date: d.date, value: d.net_growth })))
-    const activeSubData = growthData // Simple proxy
-    const churnData = fillGaps(churnTrend?.data.map(d => ({ date: d.date, value: d.churn_rate })))
+    // Revenue trend data (monthly)
+    const revData = fillGaps(revenueTrend?.data.map(d => ({ date: d.date, value: d.revenue / 100 })), 'month')
 
-    const isLoading = isLoadingMRR || isLoadingRev || isLoadingGrowth || isLoadingChurn
+    // Churn and Growth (monthly)
+    const growthData = fillGaps(growthTrend?.data.map(d => ({ date: d.date, value: d.new_subscriptions })), 'month')
+    const churnData = fillGaps(churnTrend?.data.map(d => ({ date: d.date, value: d.churn_rate })), 'month')
 
     // Chart configurations and data
     const charts = [
@@ -92,7 +121,7 @@ export function DashboardAreaCharts() {
         {
             title: 'MRR',
             value: isLoadingMRR ? 'Loading...' : formatCurrency(mrrData?.mrr || 0),
-            description: 'Monthly Recurring Revenue',
+            description: 'Monthly Recurring Revenue (90d trend)',
             data: mrrTrendData,
             config: {
                 value: {
@@ -104,7 +133,7 @@ export function DashboardAreaCharts() {
         {
             title: 'ARR',
             value: isLoadingMRR ? 'Loading...' : formatCurrency((mrrData?.mrr || 0) * 12),
-            description: 'Annual Recurring Revenue',
+            description: 'Annual Recurring Revenue (90d trend)',
             data: mrrTrendData.map(d => ({ ...d, value: d.value * 12 })),
             config: {
                 value: {
@@ -117,7 +146,7 @@ export function DashboardAreaCharts() {
             title: 'New Customers',
             value: isLoadingGrowth ? '...' : `+${growthTrend?.summary.total_new || 0}`,
             description: 'New customers (last 12 months)',
-            data: fillGaps(growthTrend?.data.map(d => ({ date: d.date, value: d.new_subscriptions }))),
+            data: growthData,
             config: {
                 value: {
                     label: 'Customers',
@@ -128,7 +157,7 @@ export function DashboardAreaCharts() {
         {
             title: 'Active Subscriptions',
             value: isLoadingMRR ? '...' : (mrrData?.active_subscriptions || 0).toString(),
-            description: 'Current active subscriptions',
+            description: 'Current active subscriptions (90d trend)',
             data: activeSubData,
             config: {
                 value: {
@@ -140,7 +169,7 @@ export function DashboardAreaCharts() {
         {
             title: 'Churn Rate',
             value: isLoadingChurn ? '...' : formatPercent(churnTrend?.summary.avg_churn_rate || 0),
-            description: 'Average churn rate',
+            description: 'Average churn rate (last 12 months)',
             data: churnData,
             config: {
                 value: {

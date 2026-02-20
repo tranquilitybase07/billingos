@@ -40,6 +40,33 @@ interface MetricAreaChartProps {
     dataKey?: string
 }
 
+const CustomizedDot = (props: any) => {
+    const { cx, cy, stroke, payload, index, data } = props
+    if (!data || data.length === 0) return null
+
+    // Determine if we should show a dot
+    // Show if: first point, last point, or value changed from previous or will change in next
+    const isFirst = index === 0
+    const isLast = index === data.length - 1
+    const valueChangedFromPrev = !isFirst && data[index].value !== data[index - 1].value
+    const valueWillChangeInNext = !isLast && data[index].value !== data[index + 1].value
+
+    if (!isFirst && !isLast && !valueChangedFromPrev && !valueWillChangeInNext) {
+        return null
+    }
+
+    return (
+        <circle
+            cx={cx}
+            cy={cy}
+            r={isFirst || isLast ? 3 : 4}
+            fill="white"
+            stroke={stroke}
+            strokeWidth={2}
+        />
+    )
+}
+
 export function MetricAreaChart({
     title,
     value,
@@ -115,7 +142,13 @@ export function MetricAreaChart({
                             tickLine={false}
                             axisLine={false}
                             tickMargin={8}
-                            tickFormatter={(value) => value.slice(0, 3)}
+                            tickFormatter={(value) => {
+                                const date = new Date(value)
+                                if (value.length <= 7) {
+                                    return date.toLocaleDateString('en-US', { month: 'short' })
+                                }
+                                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            }}
                             hide
                         />
                         {/* Hide Y Axis for cleaner look in small cards, or keep if needed */}
@@ -130,6 +163,8 @@ export function MetricAreaChart({
                             fill={`url(#fill${title.replace(/\s+/g, '')})`}
                             fillOpacity={0.4}
                             stroke={`var(--color-${dataKey})`}
+                            dot={<CustomizedDot data={data} />}
+                            activeDot={{ r: 6 }}
                         />
                     </AreaChart>
                 </ChartContainer>
@@ -203,6 +238,8 @@ export function MetricAreaChart({
                                                     fillOpacity={0.4}
                                                     stroke={config[dataKey]?.color || `var(--color-${dataKey})`}
                                                     strokeWidth={2}
+                                                    dot={<CustomizedDot data={data} />}
+                                                    activeDot={{ r: 6 }}
                                                 />
                                             </AreaChart>
                                         </ChartContainer>
