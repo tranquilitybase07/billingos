@@ -52,6 +52,19 @@ export class V1ProductsService {
 
   constructor(private readonly supabaseService: SupabaseService) {}
 
+  /**
+   * Get products for SDK pricing table display
+   *
+   * Filters:
+   * - Only visible products (visible_in_pricing_table = true)
+   * - Only current/latest versions (excludes superseded versions)
+   * - Only active products (is_archived = false)
+   * - Only active prices (prices.is_archived = false)
+   *
+   * @param organizationId Organization to fetch products for
+   * @param externalUserId Optional external user ID to check current subscription
+   * @param planIds Optional specific plan IDs to fetch
+   */
   async getProducts(
     organizationId: string,
     externalUserId?: string,
@@ -59,7 +72,8 @@ export class V1ProductsService {
   ): Promise<GetProductsResponse> {
     const supabase = this.supabaseService.getClient();
 
-    // 1. Fetch active products for organization
+    // 1. Fetch active products for organization that are visible in the pricing table
+    // Only fetch current versions (exclude superseded versions)
     let query = supabase
       .from('products')
       .select(
@@ -75,6 +89,8 @@ export class V1ProductsService {
       )
       .eq('organization_id', organizationId)
       .eq('is_archived', false)
+      .eq('visible_in_pricing_table', true)  // Only show products marked as visible
+      .or('version_status.is.null,version_status.neq.superseded') // Include products without versioning OR current versions
       .eq('prices.is_archived', false)
       .order('created_at', { ascending: true });
 
@@ -89,6 +105,11 @@ export class V1ProductsService {
       this.logger.error('Failed to fetch products:', productsError);
       throw new Error('Failed to fetch products');
     }
+
+    // Log the number of products fetched
+    this.logger.log(
+      `Fetched ${products?.length || 0} visible products (excluding superseded versions) for organization ${organizationId}`,
+    );
 
     // 2. Fetch customer's current subscription if externalUserId provided
     let currentSubscription: PricingCurrentSubscription | null = null;

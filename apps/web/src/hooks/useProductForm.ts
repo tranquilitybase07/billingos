@@ -13,6 +13,7 @@ export interface ProductFormData {
   prices: PriceConfig[];
   features: SelectedFeature[];
   is_archived?: boolean;
+  visible_in_pricing_table?: boolean; // Only for create, not update
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
 }

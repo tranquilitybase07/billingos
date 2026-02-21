@@ -7,9 +7,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, Sparkles, Eye, EyeOff, Info } from 'lucide-react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useProductForm } from '@/hooks/useProductForm'
@@ -31,6 +39,9 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
   // Form state management
   const form = useProductForm(organization.id)
 
+  // Visibility state (separate from form)
+  const [visibleInPricingTable, setVisibleInPricingTable] = useState(true)
+
   // Fetch available features
   const { data: features = [], isLoading: isFeaturesLoading } = useFeatures(organization.id)
 
@@ -51,7 +62,10 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
     }
 
     try {
-      const payload = form.buildPayload()
+      const payload = {
+        ...form.buildPayload(),
+        visible_in_pricing_table: visibleInPricingTable,
+      }
       const product = await createProduct.mutateAsync(payload)
 
       toast({
@@ -71,7 +85,45 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
   }
 
   return (
-    <DashboardBody title='Create Product' wide>
+    <DashboardBody
+      title={
+        <div className="flex items-center justify-between w-full">
+          <span>Create Product</span>
+
+          {/* Visibility Toggle in Header */}
+          <TooltipProvider>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {visibleInPricingTable ? (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {visibleInPricingTable ? 'Will be visible in pricing' : 'Will be hidden from pricing'}
+                </span>
+                <Switch
+                  checked={visibleInPricingTable}
+                  onCheckedChange={setVisibleInPricingTable}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="font-medium mb-1">Pricing Table Visibility</p>
+                    <p className="text-sm">
+                      Controls whether this product will appear in your public pricing table.
+                      You can hide products for internal testing, legacy plans, or custom enterprise deals.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </TooltipProvider>
+        </div>
+      }
+      wide>
       {/* Header */}
       {/* <div className="mb-6 flex items-center gap-4">
         <Link href={`/dashboard/${organizationSlug}/products`}>

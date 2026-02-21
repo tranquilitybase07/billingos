@@ -40,6 +40,7 @@ export function PricingEngineSection({
   currency,
   onCurrencyChange,
 }: PricingEngineSectionProps) {
+  const [isFreeProduct, setIsFreeProduct] = useState(false)
   const [isRecurring, setIsRecurring] = useState(true)
   const [selectedIntervals, setSelectedIntervals] = useState<Set<RecurringInterval>>(
     new Set(['month'])
@@ -51,6 +52,12 @@ export function PricingEngineSection({
   // Initialize state from props
   useEffect(() => {
     if (prices.length > 0) {
+      // Check if this is a free product
+      const firstPrice = prices[0]
+      if (firstPrice?.amount_type === 'free') {
+        setIsFreeProduct(true)
+      }
+
       const intervals = new Set(
         prices.map((p) => p.recurring_interval).filter(Boolean) as RecurringInterval[]
       )
@@ -62,14 +69,31 @@ export function PricingEngineSection({
     setHasFreeTrial(trialDays > 0)
   }, [])
 
+  const handleFreeProductToggle = (checked: boolean) => {
+    setIsFreeProduct(checked)
+    if (checked) {
+      // Free product: single price with no amount
+      onPricesChange([
+        {
+          amount_type: 'free',
+          price_currency: currency,
+          recurring_interval: 'month',
+        },
+      ])
+    } else {
+      // Paid product: restore to fixed pricing
+      updatePrices(selectedIntervals, prices)
+    }
+  }
+
   const handleRecurringToggle = (checked: boolean) => {
     setIsRecurring(checked)
     if (!checked) {
       // One-time: single price with month interval
       onPricesChange([
         {
-          amount_type: 'fixed',
-          price_amount: prices[0]?.price_amount,
+          amount_type: isFreeProduct ? 'free' : 'fixed',
+          price_amount: isFreeProduct ? undefined : prices[0]?.price_amount,
           price_currency: currency,
           recurring_interval: 'month',
         },
@@ -111,17 +135,19 @@ export function PricingEngineSection({
         (p) => p.recurring_interval === interval
       )
       newPrices.push({
-        amount_type: 'fixed',
-        price_amount: existing?.price_amount,
+        amount_type: isFreeProduct ? 'free' : 'fixed',
+        price_amount: isFreeProduct ? undefined : existing?.price_amount,
         price_currency: currency,
         recurring_interval: interval,
       })
 
       // Preserve input value if it exists, otherwise format from cents
-      if (inputValues[interval] !== undefined) {
-        newInputValues[interval] = inputValues[interval]
-      } else if (existing?.price_amount) {
-        newInputValues[interval] = (existing.price_amount / 100).toFixed(2)
+      if (!isFreeProduct) {
+        if (inputValues[interval] !== undefined) {
+          newInputValues[interval] = inputValues[interval]
+        } else if (existing?.price_amount) {
+          newInputValues[interval] = (existing.price_amount / 100).toFixed(2)
+        }
       }
     })
 
@@ -173,27 +199,48 @@ export function PricingEngineSection({
 
   return (
     <div className="space-y-6">
-      {/* Recurring Toggle */}
-      <div className="flex items-center justify-between rounded-lg border p-4">
+      {/* Free Product Toggle */}
+      <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/50">
         <div className="space-y-0.5">
-          <Label htmlFor="recurring-toggle" className="text-base font-medium">
-            Recurring Billing
+          <Label htmlFor="free-product-toggle" className="text-base font-medium">
+            Free Product
           </Label>
           <p className="text-sm text-muted-foreground">
-            {isRecurring
-              ? 'Charge customers on a recurring basis'
-              : 'One-time payment only'}
+            {isFreeProduct
+              ? 'This product is free for customers'
+              : 'This product requires payment'}
           </p>
         </div>
         <Switch
-          id="recurring-toggle"
-          checked={isRecurring}
-          onCheckedChange={handleRecurringToggle}
+          id="free-product-toggle"
+          checked={isFreeProduct}
+          onCheckedChange={handleFreeProductToggle}
         />
       </div>
 
-      {/* Interval Selection (for recurring) */}
-      {isRecurring && (
+      {/* Recurring Toggle - Only show for paid products */}
+      {!isFreeProduct && (
+        <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="recurring-toggle" className="text-base font-medium">
+              Recurring Billing
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              {isRecurring
+                ? 'Charge customers on a recurring basis'
+                : 'One-time payment only'}
+            </p>
+          </div>
+          <Switch
+            id="recurring-toggle"
+            checked={isRecurring}
+            onCheckedChange={handleRecurringToggle}
+          />
+        </div>
+      )}
+
+      {/* Interval Selection (for recurring and not free) */}
+      {isRecurring && !isFreeProduct && (
         <div className="space-y-3">
           <Label>Billing Intervals</Label>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -237,6 +284,25 @@ export function PricingEngineSection({
         </div>
       )}
 
+      {/* Free Product Info */}
+      {isFreeProduct && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-950/20">
+          <div className="flex items-start space-x-3">
+            <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+              FREE
+            </Badge>
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-medium text-green-900 dark:text-green-400">
+                This product is free for customers
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-500">
+                No payment will be required at checkout. You can still set features and entitlements for this product.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Currency Selection */}
       <div className="space-y-2">
         <Label htmlFor="currency">Currency</Label>
@@ -255,11 +321,12 @@ export function PricingEngineSection({
         </Select>
       </div>
 
-      {/* Price Inputs */}
-      <div className="space-y-3">
-        <Label>Price Amount *</Label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {Array.from(selectedIntervals).map((interval) => {
+      {/* Price Inputs - Only show for paid products */}
+      {!isFreeProduct && (
+        <div className="space-y-3">
+          <Label>Price Amount *</Label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Array.from(selectedIntervals).map((interval) => {
             const price = prices.find((p) => p.recurring_interval === interval)
             // Use raw input value if available, otherwise format from cents
             const displayValue = inputValues[interval] !== undefined
@@ -303,6 +370,7 @@ export function PricingEngineSection({
           })}
         </div>
       </div>
+      )}
 
       {/* Free Trial */}
       {isRecurring && (

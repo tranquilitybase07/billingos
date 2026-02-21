@@ -93,7 +93,7 @@
   --color-black: #000000;
 
   /* Custom Colors */
-  --color-base: rgb(0 0 0 / 0.1);
+  --color-base: var(--color-gray-700);  /* Updated to use readable text color */
 
   /* shadcn/ui Color Aliases */
   --color-border: var(--border);
@@ -283,7 +283,7 @@
     --destructive-light: var(--color-red-950);
     --destructive-border: var(--color-red-900);
 
-    --base: rgb(255 255 255 / 0.04);
+    --color-base: var(--color-dark-200);  /* Updated to use readable text color in dark mode (#9a9a9a) */
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;

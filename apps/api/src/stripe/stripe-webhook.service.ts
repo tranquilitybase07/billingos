@@ -1341,42 +1341,56 @@ export class StripeWebhookService {
 
       const stripeAccountId = (organization.accounts as any).stripe_id;
 
-      // Check if subscription already exists (idempotency check)
-      // Look for any non-cancelled subscription to avoid duplicates
-      const { data: existingSubscriptions } = await supabase
+      // Check for ANY existing subscription (including canceled/ended) for reactivation
+      const { data: allSubscriptions } = await supabase
         .from('subscriptions')
-        .select('id, stripe_subscription_id, status, created_at')
+        .select('id, stripe_subscription_id, status, created_at, price_id')
         .eq('customer_id', customerId)
         .eq('product_id', productId)
-        .in('status', ['active', 'trialing', 'incomplete', 'past_due'])
         .order('created_at', { ascending: false });
 
-      if (existingSubscriptions && existingSubscriptions.length > 0) {
-        const existing = existingSubscriptions[0];
+      let shouldCreateNewSubscription = true;
+      let reactivatedSubscriptionId: string | null = null;
 
-        // Check if any has a valid Stripe subscription ID
-        const hasValidStripeSubscription = existingSubscriptions.some(
-          sub => sub.stripe_subscription_id && sub.stripe_subscription_id.startsWith('sub_')
+      if (allSubscriptions && allSubscriptions.length > 0) {
+        // Check for active/trialing subscriptions first
+        const activeSubscription = allSubscriptions.find(
+          sub => ['active', 'trialing', 'incomplete', 'past_due'].includes(sub.status) &&
+                 sub.stripe_subscription_id?.startsWith('sub_')
         );
 
-        if (hasValidStripeSubscription) {
+        if (activeSubscription) {
           this.logger.log(
-            `Subscription already exists for customer ${customerId} and product ${productId}: ${existing.id}`,
+            `Subscription already exists for customer ${customerId} and product ${productId}: ${activeSubscription.id}`,
           );
-          return;
+          return; // Already has active subscription
         }
 
-        // Clean up any invalid subscription records (e.g., ones with PaymentIntent ID as stripe_subscription_id)
-        const invalidSubs = existingSubscriptions.filter(
-          sub => !sub.stripe_subscription_id || !sub.stripe_subscription_id.startsWith('sub_')
+        // Check for canceled/ended subscriptions to reactivate
+        const canceledSubscription = allSubscriptions.find(
+          sub => ['canceled', 'ended'].includes(sub.status)
+        );
+
+        if (canceledSubscription) {
+          this.logger.log(`Reactivating canceled subscription: ${canceledSubscription.id}`);
+
+          // We need to create a NEW Stripe subscription (can't reuse canceled one)
+          // But we'll update the existing database record
+          shouldCreateNewSubscription = true;
+          reactivatedSubscriptionId = canceledSubscription.id;
+        }
+
+        // Clean up any invalid subscription records
+        const invalidSubs = allSubscriptions.filter(
+          sub => sub.status === 'incomplete' &&
+                 (!sub.stripe_subscription_id || !sub.stripe_subscription_id.startsWith('sub_'))
         );
 
         if (invalidSubs.length > 0) {
           this.logger.warn(
-            `Found ${invalidSubs.length} invalid subscription(s) without proper Stripe ID. Will clean up and create proper subscription.`,
+            `Found ${invalidSubs.length} invalid subscription(s). Will clean up.`,
           );
 
-          // Delete invalid subscription records
           for (const invalidSub of invalidSubs) {
             await supabase
               .from('subscriptions')
@@ -1520,12 +1534,47 @@ export class StripeWebhookService {
         },
       };
 
-      // Create subscription record in database
-      const { data: subscription, error: subError } = await supabase
-        .from('subscriptions')
-        .insert(subscriptionData)
-        .select()
-        .single();
+      // Either update existing (reactivation) or create new subscription
+      let subscription: any;
+      let subError: any;
+
+      if (reactivatedSubscriptionId) {
+        // Reactivate existing subscription
+        this.logger.log(`Updating subscription ${reactivatedSubscriptionId} with new Stripe subscription`);
+
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .update({
+            ...subscriptionData,
+            canceled_at: null,
+            ended_at: null,
+            metadata: {
+              ...subscriptionData.metadata,
+              reactivatedAt: new Date().toISOString(),
+              previousCancellation: 'reactivated',
+            },
+          })
+          .eq('id', reactivatedSubscriptionId)
+          .select()
+          .single();
+
+        subscription = data;
+        subError = error;
+
+        if (!error) {
+          this.logger.log(`Subscription ${reactivatedSubscriptionId} reactivated successfully`);
+        }
+      } else {
+        // Create new subscription record
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .insert(subscriptionData)
+          .select()
+          .single();
+
+        subscription = data;
+        subError = error;
+      }
 
       if (subError) {
         this.logger.error('Failed to save subscription to database:', subError);

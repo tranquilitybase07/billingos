@@ -9,9 +9,17 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { Save } from 'lucide-react'
+import { Save, Eye, EyeOff, Info } from 'lucide-react'
+import { useProductVisibility } from '@/hooks/useProductVisibility'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useProductForm } from '@/hooks/useProductForm'
@@ -101,6 +109,7 @@ function EditProductForm({
   const form = useProductForm(organizationId, product)
   const { data: features = [], isLoading: isFeaturesLoading } = useFeatures(organizationId)
   const updateProduct = useUpdateProduct()
+  const { isVisible, toggleVisibility, isUpdating } = useProductVisibility(product)
 
   // Version warning modal state
   const [showVersionWarning, setShowVersionWarning] = useState(false)
@@ -228,14 +237,50 @@ function EditProductForm({
   return (
     <DashboardBody
       title={
-        <div className="flex items-center gap-2">
-          <span>Edit Product</span>
-          {product?.version && product.version > 1 && (
-            <Badge variant="outline" className="text-xs">v{product.version}</Badge>
-          )}
-          {product?.version_status === 'superseded' && (
-            <Badge variant="secondary" className="text-xs">Old Version</Badge>
-          )}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2">
+            <span>Edit Product</span>
+            {product?.version && product.version > 1 && (
+              <Badge variant="outline" className="text-xs">v{product.version}</Badge>
+            )}
+            {product?.version_status === 'superseded' && (
+              <Badge variant="secondary" className="text-xs">Old Version</Badge>
+            )}
+          </div>
+
+          {/* Visibility Toggle in Header */}
+          <TooltipProvider>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {isVisible ? (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {isVisible ? 'Visible in pricing' : 'Hidden from pricing'}
+                </span>
+                <Switch
+                  checked={isVisible}
+                  onCheckedChange={toggleVisibility}
+                  disabled={isUpdating}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="font-medium mb-1">Pricing Table Visibility</p>
+                    <p className="text-sm">
+                      Controls whether this product appears in your public pricing table.
+                      Hidden products can still be used for direct checkout links,
+                      internal testing, or custom enterprise deals.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </TooltipProvider>
         </div>
       }
       wide>

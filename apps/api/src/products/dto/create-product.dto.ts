@@ -8,6 +8,7 @@ import {
   IsArray,
   ValidateNested,
   IsObject,
+  IsBoolean,
   ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -63,4 +64,8 @@ export class CreateProductDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsBoolean()
+  @IsOptional()
+  visible_in_pricing_table?: boolean = true; // Defaults to true - products are visible by default
 }
