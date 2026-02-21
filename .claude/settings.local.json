@@ -56,7 +56,9 @@
       "Bash(timeout 60 pnpm build:api:*)",
       "Bash(supabase status:*)",
       "Bash(supabase start:*)",
-      "Bash(timeout 60 pnpm build:web:*)"
+      "Bash(timeout 60 pnpm build:web:*)",
+      "Bash(timeout 10 pnpm ladle:*)",
+      "Bash(pnpm ladle:*)"
     ],
     "deny": [],
     "ask": []

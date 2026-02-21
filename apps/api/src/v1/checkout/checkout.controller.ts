@@ -65,6 +65,18 @@ export class CheckoutController {
     return this.checkoutService.getCheckoutStatus(sessionId);
   }
 
+  @Post(':sessionId/confirm-free')
+  // No auth guard - session ID acts as bearer token for free product confirmations
+  // This is safe because:
+  // 1. Session ID is cryptographically secure UUID
+  // 2. Only creates subscription for already-validated session
+  // 3. User has already authenticated when creating the session
+  async confirmFreeCheckout(@Param('sessionId') sessionId: string) {
+    this.logger.log(`Confirming free checkout for session: ${sessionId}`);
+
+    return this.checkoutService.confirmFreeCheckout(sessionId);
+  }
+
   @Sse(':sessionId/stream')
   streamCheckoutStatus(
     @Param('sessionId') sessionId: string,

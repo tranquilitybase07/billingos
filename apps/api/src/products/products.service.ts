@@ -150,6 +150,7 @@ export class ProductsService {
           trial_days: createDto.trial_days || 0,
           metadata: createDto.metadata || {},
           is_archived: false,
+          visible_in_pricing_table: createDto.visible_in_pricing_table ?? true,
         })
         .select()
         .single();
@@ -1013,7 +1014,8 @@ export class ProductsService {
         updateDto.name ||
         updateDto.description !== undefined ||
         updateDto.trial_days !== undefined ||
-        updateDto.metadata
+        updateDto.metadata ||
+        updateDto.visible_in_pricing_table !== undefined
       ) {
         const updateData: any = {};
         if (updateDto.name) updateData.name = updateDto.name;
@@ -1022,6 +1024,8 @@ export class ProductsService {
         if (updateDto.trial_days !== undefined)
           updateData.trial_days = updateDto.trial_days;
         if (updateDto.metadata) updateData.metadata = updateDto.metadata;
+        if (updateDto.visible_in_pricing_table !== undefined)
+          updateData.visible_in_pricing_table = updateDto.visible_in_pricing_table;
 
         const { error } = await supabase
           .from('products')

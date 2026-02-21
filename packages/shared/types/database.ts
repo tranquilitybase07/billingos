@@ -154,6 +154,7 @@ export type Database = {
           organization_id: string
           payment_intent_id: string | null
           session_token: string
+          subscription_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -168,6 +169,7 @@ export type Database = {
           organization_id: string
           payment_intent_id?: string | null
           session_token: string
+          subscription_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -182,6 +184,7 @@ export type Database = {
           organization_id?: string
           payment_intent_id?: string | null
           session_token?: string
+          subscription_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -197,6 +200,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_sessions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -879,6 +889,7 @@ export type Database = {
           version_created_at: string | null
           version_created_reason: string | null
           version_status: string | null
+          visible_in_pricing_table: boolean
         }
         Insert: {
           created_at?: string | null
@@ -899,6 +910,7 @@ export type Database = {
           version_created_at?: string | null
           version_created_reason?: string | null
           version_status?: string | null
+          visible_in_pricing_table?: boolean
         }
         Update: {
           created_at?: string | null
@@ -919,6 +931,7 @@ export type Database = {
           version_created_at?: string | null
           version_created_reason?: string | null
           version_status?: string | null
+          visible_in_pricing_table?: boolean
         }
         Relationships: [
           {
@@ -1557,6 +1570,14 @@ export type Database = {
       }
     }
     Functions: {
+      can_reactivate_subscription: {
+        Args: { p_customer_id: string; p_product_id: string }
+        Returns: {
+          can_reactivate: boolean
+          reason: string
+          subscription_id: string
+        }[]
+      }
       cleanup_expired_portal_sessions: { Args: never; Returns: number }
       cleanup_expired_session_tokens: { Args: never; Returns: undefined }
       get_latest_product_version: {

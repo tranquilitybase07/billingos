@@ -64,6 +64,10 @@ export class UpdateProductDto {
   @IsOptional()
   metadata?: Record<string, any>;
 
+  @IsBoolean()
+  @IsOptional()
+  visible_in_pricing_table?: boolean;
+
   @ValidateNested()
   @Type(() => PriceOperationsDto)
   @IsOptional()

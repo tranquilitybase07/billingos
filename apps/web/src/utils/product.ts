@@ -10,11 +10,34 @@ export interface ProductPrice {
   price_currency?: string
 }
 
+export interface ProductFeature {
+  product_id: string
+  feature_id: string
+  display_order: number
+  config: Record<string, any>
+  created_at: string
+  features?: {
+    id: string
+    name: string
+    title: string
+    description?: string
+    type: string
+  }
+  feature?: {
+    id: string
+    name: string
+    title: string
+    description?: string
+    type: string
+  }
+}
+
 export interface Product {
   id: string
   name: string
   description?: string
   prices: ProductPrice[]
+  features: ProductFeature[]
   is_archived: boolean
   is_recurring?: boolean
   recurring_interval?: 'day' | 'week' | 'month' | 'year'
@@ -25,6 +48,7 @@ export interface Product {
   modified_at?: string
   version?: number
   version_status?: 'current' | 'superseded' | null
+  visible_in_pricing_table?: boolean
 }
 
 export const hasIntervals = (
