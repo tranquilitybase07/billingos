@@ -271,7 +271,10 @@ export class CheckoutService {
         customer_name: customerName,
         customer_external_id: externalUserId,
         expires_at: expiresAt.toISOString(),
-        metadata: dto.metadata,
+        metadata: {
+          ...dto.metadata,
+          existingSubscriptionId: dto.existingSubscriptionId, // Store for upgrade/downgrade flow
+        },
       })
       .select()
       .single();

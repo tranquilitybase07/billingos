@@ -6,11 +6,14 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtOrSessionAuthGuard } from './guards/jwt-or-session-auth.guard';
 import { SupabaseModule } from '../supabase/supabase.module';
+import { SessionTokensModule } from '../session-tokens/session-tokens.module';
 
 @Module({
   imports: [
     SupabaseModule,
+    SessionTokensModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -23,8 +26,8 @@ import { SupabaseModule } from '../supabase/supabase.module';
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, JwtOrSessionAuthGuard],
   controllers: [AuthController],
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, JwtOrSessionAuthGuard, SessionTokensModule, JwtModule],
 })
 export class AuthModule {}

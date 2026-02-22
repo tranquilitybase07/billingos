@@ -58,7 +58,11 @@
       "Bash(supabase start:*)",
       "Bash(timeout 60 pnpm build:web:*)",
       "Bash(timeout 10 pnpm ladle:*)",
-      "Bash(pnpm ladle:*)"
+      "Bash(pnpm ladle:*)",
+      "Bash(timeout 10 pnpm dev:api:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(sed:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

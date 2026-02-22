@@ -1223,13 +1223,15 @@ export class StripeWebhookService {
         return;
       }
 
-      // Mark checkout session as completed
-      await supabase
+      // Mark checkout session as completed and fetch metadata
+      const { data: checkoutSession } = await supabase
         .from('checkout_sessions')
         .update({
           completed_at: new Date().toISOString(),
         })
-        .eq('payment_intent_id', paymentIntentRecord.id);
+        .eq('payment_intent_id', paymentIntentRecord.id)
+        .select()
+        .single();
 
       // Extract metadata
       const metadata = paymentIntent.metadata || {};
@@ -1477,6 +1479,70 @@ export class StripeWebhookService {
             ? paymentIntent.payment_method
             : paymentIntent.payment_method.id;
         subscriptionParams.default_payment_method = paymentMethodId;
+      }
+
+      // Cancel existing subscription if this is an upgrade/downgrade
+      const checkoutMetadata = checkoutSession?.metadata as any;
+      if (checkoutMetadata?.existingSubscriptionId) {
+        this.logger.log(
+          `This is an upgrade/downgrade. Canceling existing subscription: ${checkoutMetadata.existingSubscriptionId}`,
+        );
+
+        try {
+          // Get the existing subscription
+          const { data: existingSubscription } = await supabase
+            .from('subscriptions')
+            .select('id, stripe_subscription_id, status, metadata')
+            .eq('id', checkoutMetadata.existingSubscriptionId)
+            .single();
+
+          if (existingSubscription) {
+            // Cancel in Stripe if it has a Stripe subscription ID
+            if (existingSubscription.stripe_subscription_id?.startsWith('sub_')) {
+              try {
+                await this.stripeService.cancelSubscription(
+                  existingSubscription.stripe_subscription_id,
+                  stripeAccountId,
+                  false, // Cancel immediately, not at period end
+                );
+                this.logger.log(
+                  `Canceled Stripe subscription immediately: ${existingSubscription.stripe_subscription_id}`,
+                );
+              } catch (stripeError) {
+                this.logger.warn(
+                  `Failed to cancel Stripe subscription ${existingSubscription.stripe_subscription_id}:`,
+                  stripeError,
+                );
+                // Continue anyway - we'll mark it canceled in our database
+              }
+            }
+
+            // Mark as canceled in our database
+            await supabase
+              .from('subscriptions')
+              .update({
+                status: 'canceled',
+                canceled_at: new Date().toISOString(),
+                cancel_at_period_end: false,
+                updated_at: new Date().toISOString(),
+                metadata: {
+                  ...(existingSubscription.metadata as any || {}),
+                  canceledReason: 'upgraded_or_downgraded',
+                  newSubscriptionCheckoutSessionId: checkoutSession?.id,
+                },
+              })
+              .eq('id', existingSubscription.id);
+
+            this.logger.log(`Marked subscription ${existingSubscription.id} as canceled in database`);
+          } else {
+            this.logger.warn(
+              `Existing subscription ${checkoutMetadata.existingSubscriptionId} not found`,
+            );
+          }
+        } catch (error) {
+          this.logger.error('Error canceling existing subscription:', error);
+          // Continue anyway - we still want to create the new subscription
+        }
       }
 
       // Create Stripe subscription

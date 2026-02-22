@@ -1093,6 +1093,101 @@ export type Database = {
           },
         ]
       }
+      subscription_changes: {
+        Row: {
+          change_type: string
+          completed_at: string | null
+          created_at: string | null
+          failed_reason: string | null
+          from_amount: number | null
+          from_price_id: string | null
+          id: string
+          metadata: Json | null
+          net_amount: number | null
+          organization_id: string
+          proration_charge: number | null
+          proration_credit: number | null
+          scheduled_for: string | null
+          status: string
+          stripe_invoice_id: string | null
+          subscription_id: string
+          to_amount: number | null
+          to_price_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          change_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          failed_reason?: string | null
+          from_amount?: number | null
+          from_price_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount?: number | null
+          organization_id: string
+          proration_charge?: number | null
+          proration_credit?: number | null
+          scheduled_for?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          subscription_id: string
+          to_amount?: number | null
+          to_price_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          change_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          failed_reason?: string | null
+          from_amount?: number | null
+          from_price_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount?: number | null
+          organization_id?: string
+          proration_charge?: number | null
+          proration_credit?: number | null
+          scheduled_for?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          subscription_id?: string
+          to_amount?: number | null
+          to_price_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_changes_from_price_id_fkey"
+            columns: ["from_price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_to_price_id_fkey"
+            columns: ["to_price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           amount: number
@@ -1115,6 +1210,7 @@ export type Database = {
           trial_end: string | null
           trial_start: string | null
           updated_at: string | null
+          version: number
         }
         Insert: {
           amount: number
@@ -1137,6 +1233,7 @@ export type Database = {
           trial_end?: string | null
           trial_start?: string | null
           updated_at?: string | null
+          version?: number
         }
         Update: {
           amount?: number
@@ -1159,6 +1256,7 @@ export type Database = {
           trial_end?: string | null
           trial_start?: string | null
           updated_at?: string | null
+          version?: number
         }
         Relationships: [
           {
