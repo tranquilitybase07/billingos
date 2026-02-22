@@ -1,0 +1,8 @@
+<svg width="120" height="32" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon/Badge -->
+  <rect x="0" y="4" width="24" height="24" rx="6" fill="#3B82F6"/>
+  <text x="12" y="21" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" fill="white" text-anchor="middle">B</text>
+
+  <!-- Text -->
+  <text x="32" y="21" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="currentColor">BillingOS</text>
+</svg>

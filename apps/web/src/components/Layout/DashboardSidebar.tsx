@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
+import { useState } from 'react'
 import {
   Sidebar,
   SidebarContent,
@@ -20,17 +22,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { 
-  Building2, 
-  LogOut, 
-  Plus, 
-  ChevronDown, 
+import {
+  Building2,
+  LogOut,
+  Plus,
+  ChevronDown,
 } from 'lucide-react'
-import { 
+import {
   Home01Icon,
   CubeIcon,
   StarIcon,
-  CreditCardIcon, 
+  CreditCardIcon,
   Ticket01Icon,
   Target01Icon,
   ChartBarLineIcon,
@@ -42,6 +44,7 @@ import {
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 interface MenuItem {
   title: string
@@ -61,6 +64,7 @@ export const DashboardSidebar = () => {
   const router = useRouter()
   const pathname = usePathname()
   const isCollapsed = state === 'collapsed'
+  const [logoError, setLogoError] = useState(false)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -162,13 +166,32 @@ export const DashboardSidebar = () => {
           "group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0"
         )}>
           <Link href={`/dashboard/${organization.slug}`} className="flex items-center gap-2">
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground h-8 w-8 rounded-lg flex items-center justify-center font-bold text-lg shrink-0">
-              B
-            </div>
-            <span className="font-semibold text-sidebar-foreground whitespace-nowrap">BillingOS</span>
+            {/* Logo with fallback */}
+            {!logoError ? (
+              <Image
+                src="/Logo.png"
+                alt="BillingOS Logo"
+                width={32}
+                height={32}
+                className="h-8 w-auto object-contain"
+                onError={() => setLogoError(true)}
+                priority
+              />
+            ) : (
+              // Fallback to icon + text when image fails to load
+              <>
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground h-8 w-8 rounded-lg flex items-center justify-center font-bold text-lg shrink-0">
+                  B
+                </div>
+                <span className="font-semibold text-sidebar-foreground whitespace-nowrap">BillingOS</span>
+              </>
+            )}
           </Link>
         </div>
-        <SidebarTrigger className="text-muted-foreground hover:text-sidebar-foreground shrink-0" />
+        <div className="flex items-center gap-1">
+          <ThemeSwitcher variant="dropdown" />
+          <SidebarTrigger className="text-muted-foreground hover:text-sidebar-foreground shrink-0" />
+        </div>
       </SidebarHeader>
 
       {/* Navigation Content */}
@@ -181,7 +204,7 @@ export const DashboardSidebar = () => {
                   {group.label}
                 </div>
               )}
-              
+
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const isItemActive = activeItem?.href === item.href
@@ -201,12 +224,12 @@ export const DashboardSidebar = () => {
                           {/* {isItemActive && (
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-sidebar-primary" />
                           )} */}
-                          
-                          <item.icon 
+
+                          <item.icon
                             className={cn(
-                              "h-5 w-5 shrink-0 transition-colors", 
+                              "h-5 w-5 shrink-0 transition-colors",
                               isItemActive ? "text-sidebar-primary" : "text-muted-foreground group-hover/item:text-sidebar-foreground"
-                            )} 
+                            )}
                             strokeWidth={1.5}
                           />
                           <span className={cn(

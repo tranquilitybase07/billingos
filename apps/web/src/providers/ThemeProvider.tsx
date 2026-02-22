@@ -9,9 +9,11 @@ export function ThemeProvider({
 }) {
   return (
     <NextThemesProvider
-      defaultTheme="dark"
-      enableSystem={false}
+      defaultTheme="system"
+      enableSystem={true}
       attribute="class"
+      storageKey="billingos-theme"
+      disableTransitionOnChange
     >
       {children}
     </NextThemesProvider>
