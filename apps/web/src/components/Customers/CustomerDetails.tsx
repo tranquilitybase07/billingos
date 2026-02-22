@@ -283,8 +283,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 }}>
                   Attach Subscription
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className="border-b pb-3" 
+                <DropdownMenuItem
+                  className="border-b pb-3"
                   onClick={() => {
                     // Reset form with current customer data
                     setEditFormData({
@@ -312,31 +312,28 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
         <div className="flex gap-8 px-6">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${
-              activeTab === "overview"
+            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "overview"
                 ? "border-primary text-popover-foreground font-medium"
                 : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
-            }`}
+              }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab("events")}
-            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${
-              activeTab === "events"
+            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "events"
                 ? "border-primary text-popover-foreground font-medium"
                 : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
-            }`}
+              }`}
           >
             Events
           </button>
           <button
             onClick={() => setActiveTab("usage")}
-            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${
-              activeTab === "usage"
+            className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "usage"
                 ? "border-primary text-popover-foreground font-medium"
                 : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
-            }`}
+              }`}
           >
             Usage
           </button>
@@ -388,19 +385,19 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
               </CardContent>
             </Card>
 
-              {/*subscriptions table */}
+            {/*subscriptions table */}
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-popover-foreground">Subscriptions</h2>
               <DataTable
                 data={customer.subscriptions || []}
                 columns={[
                   {
-                    accessorKey: 'products',
+                    accessorKey: 'product',
                     header: ({ column }) => (
                       <DataTableColumnHeader column={column} title="Product Name" />
                     ),
                     cell: ({ row: { original: sub } }) => {
-                      const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
+                      const product = Array.isArray(sub.product) ? sub.product[0] : sub.product;
                       return (
                         <span className="text-sm">{product?.name || "Unknown Product"}</span>
                       );
@@ -424,23 +421,23 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
                       const productPrice = Array.isArray(sub.product_prices) ? sub.product_prices[0] : sub.product_prices;
                       const amount = `${sub.currency?.toUpperCase() || "USD"} ${(sub.amount / 100).toFixed(2)}`;
-                      
+
                       // Format duration (e.g., "monthly", "yearly", "every 3 months")
                       let duration = "";
                       if (productPrice?.recurring_interval) {
                         const count = productPrice.recurring_interval_count || 1;
                         const interval = productPrice.recurring_interval;
-                        
+
                         if (count === 1) {
-                          duration = interval === "month" ? "monthly" : 
-                                   interval === "year" ? "yearly" : 
-                                   interval === "week" ? "weekly" : 
-                                   interval === "day" ? "daily" : interval;
+                          duration = interval === "month" ? "monthly" :
+                            interval === "year" ? "yearly" :
+                              interval === "week" ? "weekly" :
+                                interval === "day" ? "daily" : interval;
                         } else {
                           duration = `every ${count} ${interval}s`;
                         }
                       }
-                      
+
                       return (
                         <span className="text-sm">
                           {amount}
@@ -711,26 +708,25 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                         )
                       }
                     >
-                      {expandedEventId === "event-1" ? (<span>Hide</span>):(<span>View</span>)}
+                      {expandedEventId === "event-1" ? (<span>Hide</span>) : (<span>View</span>)}
                     </Button>
                     {/* {expandedEventId === "event-1" ? (""):(<div className="h-8 w-8 rounded-full flex items-center justify-center bg-accent-foreground">
                       <span className="text-xs font-medium">{customer.avatar}</span>
                     </div>)} */}
 
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center bg-accent-foreground ${expandedEventId === "event-1" ? "opacity-0 transition-opacity duration-100":"opacity-100 transition-opacity duration-100"}`}>
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center bg-accent-foreground ${expandedEventId === "event-1" ? "opacity-0 transition-opacity duration-100" : "opacity-100 transition-opacity duration-100"}`}>
                       <span className="text-xs font-medium">{customer.avatar}</span>
                     </div>
-                    
+
                   </div>
                 </div>
 
                 {/* Expanded User Info */}
                 <div
-                  className={`border-t border-border bg-base/50 overflow-hidden transition-all duration-300 ease-in-out ${
-                    expandedEventId === "event-1"
+                  className={`border-t border-border bg-base/50 overflow-hidden transition-all duration-300 ease-in-out ${expandedEventId === "event-1"
                       ? "max-h-20 opacity-100"
                       : "max-h-0 opacity-0"
-                  }`}
+                    }`}
                 >
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -771,7 +767,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <SheetHeader>
             <SheetTitle className="text-2xl font-semibold">Attach Subscription</SheetTitle>
           </SheetHeader>
-          
+
           <div className="mt-8 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="product" className="text-sm font-medium">
@@ -797,12 +793,12 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                           versionLabel = ` - v${product.version}`;
                         }
                       }
-                      
+
                       // Check if customer is already subscribed to this product
                       const isSubscribed = customer.subscriptions?.some(
                         (sub: any) => sub.product_id === product.id
                       );
-                      
+
                       return (
                         <SelectItem key={product.id} value={product.id}>
                           <div className="flex items-center gap-2 w-full">
@@ -855,8 +851,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               disabled={
-                !selectedProductId || 
-                selectedProductId === "loading" || 
+                !selectedProductId ||
+                selectedProductId === "loading" ||
                 selectedProductId === "no-products" ||
                 (customer.subscriptions && customer.subscriptions.length > 0) // Disable if customer already has a subscription
               }
@@ -873,7 +869,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <SheetHeader>
             <SheetTitle className="text-2xl font-semibold">Edit Customer</SheetTitle>
           </SheetHeader>
-          
+
           <div className="mt-8 space-y-6">
             {/* Name Field */}
             <div className="space-y-2">

@@ -4,10 +4,19 @@ import { useModal } from '@/components/Modal/useModal'
 import ProductPriceLabel from '@/components/Products/ProductPriceLabel'
 import { ProductThumbnail } from '@/components/Products/ProductThumbnail'
 import { useUpdateProduct } from '@/hooks/queries/products'
+import { useProductVisibility } from '@/hooks/useProductVisibility'
 import { Product, isMeteredPrice, isSeatBasedPrice } from '@/utils/product'
 import { MoreVert as MoreVertOutlined } from '@mui/icons-material'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +55,9 @@ export const ProductListItem = ({
     hide: hideModal,
     isShown: isConfirmModalShown,
   } = useModal()
+
+  // Use the visibility hook for debounced updates
+  const { isVisible, toggleVisibility, isUpdating } = useProductVisibility(product)
 
   const handleContextMenuCallback = (
     callback: (e: React.MouseEvent) => void,
@@ -88,6 +100,10 @@ export const ProductListItem = ({
     isSeatBasedPrice(price),
   )
 
+  const isFreeProduct = product.prices.some((price) =>
+    price.amount_type === 'free',
+  )
+
   return (
     <>
       <Link
@@ -117,6 +133,11 @@ export const ProductListItem = ({
             <Badge variant="destructive">Archived</Badge>
           ) : (
             <>
+              {isFreeProduct && (
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">
+                  FREE
+                </Badge>
+              )}
               {isUsageBasedProduct && (
                 <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">
                   Metered Pricing
@@ -130,18 +151,34 @@ export const ProductListItem = ({
               <span className="text-sm leading-snug">
                 <ProductPriceLabel product={product} />
               </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={(e) => {
-                  e.preventDefault()
-                  router.push(
-                    `/dashboard/${organization.slug}/products/checkout-links?productId=${product.id}`,
-                  )
-                }}
-              >
-                Share
-              </Button>
+              {/* Visibility Toggle */}
+              <TooltipProvider>
+                <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        {isVisible ? (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <Switch
+                          checked={isVisible}
+                          onCheckedChange={toggleVisibility}
+                          disabled={isUpdating}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">
+                        {isVisible
+                          ? 'Product is visible in pricing table'
+                          : 'Product is hidden from pricing table'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -182,6 +219,15 @@ export const ProductListItem = ({
                     })}
                   >
                     Duplicate Product
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleContextMenuCallback(() => {
+                      router.push(
+                        `/dashboard/${organization.slug}/products/checkout-links?productId=${product.id}`,
+                      )
+                    })}
+                  >
+                    Get Checkout Link
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

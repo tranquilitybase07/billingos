@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { usePortalData } from '../hooks/usePortalData'
 import { useParentMessaging } from '../hooks/useParentMessaging'
@@ -121,6 +122,7 @@ export function PortalContent({ sessionId, defaultTab = 'subscription' }: Portal
         <TabsContent value="subscription" className="space-y-4">
           <SubscriptionTab
             subscriptions={data.subscriptions}
+            customer={data.customer}
             sessionId={sessionId}
             onUpdate={() => {
               refresh()
@@ -169,7 +171,8 @@ export function PortalContent({ sessionId, defaultTab = 'subscription' }: Portal
 }
 
 // Placeholder tab components (will be implemented next)
-function SubscriptionTab({ subscriptions, onUpdate, onCancel, sessionId }: any) {
+function SubscriptionTab({ subscriptions, customer, onUpdate, onCancel, sessionId }: any) {
+  const { sendMessage } = useParentMessaging()
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [subscriptionToCancel, setSubscriptionToCancel] = useState<any>(null)
   const [cancelTiming, setCancelTiming] = useState<'end_of_period' | 'immediate'>('end_of_period')
@@ -297,7 +300,28 @@ function SubscriptionTab({ subscriptions, onUpdate, onCancel, sessionId }: any) 
               </div>
             )}
             {subscription.status !== 'canceled' && !subscription.cancelAtPeriodEnd && (
-              <div className="mt-4 pt-4 border-t">
+              <div className="mt-4 pt-4 border-t flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    console.log('[PortalContent] Sending OPEN_PRICING_TABLE message to SDK with customer data:', {
+                      email: customer?.email,
+                      name: customer?.name
+                    })
+                    sendMessage({
+                      type: 'OPEN_PRICING_TABLE',
+                      payload: {
+                        customer: {
+                          email: customer?.email,
+                          name: customer?.name
+                        }
+                      }
+                    })
+                  }}
+                >
+                  Change Plan
+                </Button>
                 <Button
                   variant="destructive"
                   size="sm"

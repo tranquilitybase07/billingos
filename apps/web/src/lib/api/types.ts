@@ -267,3 +267,96 @@ export interface AnalyticsQueryParams {
   end_date?: string
   granularity?: Granularity
 }
+
+// Subscription Upgrade/Downgrade Types
+export type ChangeEffectiveTiming = 'immediate' | 'period_end'
+export type ChangeType = 'upgrade' | 'downgrade'
+
+export interface PlanInfo {
+  name: string
+  amount: number
+  currency: string
+  interval: string
+}
+
+export interface ProrationInfo {
+  unused_credit: number
+  new_plan_charge: number
+  immediate_payment: number
+}
+
+export interface PreviewChangeResponse {
+  current_plan: PlanInfo
+  new_plan: PlanInfo
+  proration: ProrationInfo
+  change_type: ChangeType
+  effective_date: string
+  next_billing_date: string
+  notes: string[]
+}
+
+export interface PreviewChangeDTO {
+  new_price_id: string
+  effective_date?: ChangeEffectiveTiming
+}
+
+export interface ChangePlanDTO {
+  new_price_id: string
+  confirm_amount?: number
+  effective_date?: ChangeEffectiveTiming
+}
+
+export interface SubscriptionChange {
+  id: string
+  subscription_id: string
+  organization_id: string
+  change_type: 'upgrade' | 'downgrade' | 'cancel' | 'reactivate'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'scheduled'
+  from_price_id: string | null
+  to_price_id: string | null
+  from_amount: number
+  to_amount: number
+  proration_credit: number
+  proration_charge: number
+  net_amount: number
+  scheduled_for: string | null
+  completed_at: string | null
+  failed_reason: string | null
+  stripe_invoice_id: string | null
+  metadata: any
+  created_at: string
+  updated_at: string
+}
+
+export interface ChangePlanResponse {
+  subscription: any
+  change: SubscriptionChange
+  invoice_id?: string
+  scheduled_for?: string
+  message?: string
+}
+
+export interface AvailablePlan {
+  product_id: string
+  product_name: string
+  description: string | null
+  price_id: string
+  amount: number
+  currency: string
+  interval: string
+  is_free: boolean
+}
+
+export interface AvailablePlansResponse {
+  current_plan: {
+    product_id: string
+    product_name: string
+    price_id: string
+    amount: number
+    currency: string
+    interval: string
+  } | null
+  available_upgrades: AvailablePlan[]
+  available_downgrades: AvailablePlan[]
+  restrictions: string[]
+}

@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import type { AvailablePlansResponse } from './types'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
@@ -19,7 +20,19 @@ async function getAuthToken(): Promise<string | null> {
   const supabase = createClient()
   const {
     data: { session },
+    error
   } = await supabase.auth.getSession()
+
+  // Debug logging
+  if (error) {
+    console.error('Error getting Supabase session:', error)
+  }
+  if (!session) {
+    console.warn('No Supabase session found - user may need to log in')
+  } else {
+    console.log('Session found, token exists:', !!session.access_token)
+  }
+
   return session?.access_token ?? null
 }
 
@@ -40,6 +53,14 @@ async function request<T>(
 
   const url = `${API_URL}${endpoint}`
 
+  // Debug logging
+  console.log('API Request:', {
+    url,
+    method: options.method || 'GET',
+    hasToken: !!token,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : 'none'
+  })
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -54,6 +75,11 @@ async function request<T>(
     const data = await response.json()
 
     if (!response.ok) {
+      console.error('API Error Response:', {
+        status: response.status,
+        data,
+        endpoint
+      })
       throw new APIError(
         data.message || 'An error occurred',
         response.status,
@@ -102,4 +128,24 @@ export const api = {
 
   delete: <T>(endpoint: string, options?: RequestInit) =>
     request<T>(endpoint, { ...options, method: 'DELETE' }),
+
+  // Subscription upgrade/downgrade methods
+  subscriptions: {
+    previewChange: (subscriptionId: string, body: { new_price_id: string; effective_date?: 'immediate' | 'period_end' }) =>
+      request(`/subscriptions/${subscriptionId}/preview-change`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    changePlan: (subscriptionId: string, body: { new_price_id: string; confirm_amount?: number; effective_date?: 'immediate' | 'period_end' }) =>
+      request(`/subscriptions/${subscriptionId}/change-plan`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    getAvailablePlans: (subscriptionId: string): Promise<AvailablePlansResponse> =>
+      request<AvailablePlansResponse>(`/subscriptions/${subscriptionId}/available-plans`, {
+        method: 'GET',
+      }),
+  },
 }

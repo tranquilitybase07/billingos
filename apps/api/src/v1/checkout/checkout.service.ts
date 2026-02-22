@@ -8,6 +8,7 @@ import Stripe from 'stripe';
 
 export interface CheckoutProduct {
   name: string;
+  description?: string;
   interval: string;
   intervalCount: number;
   features: string[];
@@ -160,9 +161,25 @@ export class CheckoutService {
       customerId = customerResult.id;
     }
 
-    // 4. Create payment intent on the CONNECTED ACCOUNT with platform fee
+    // 4. Check if this is a free product
     const amount = price.price_amount || 0;
     const currency = price.price_currency || 'usd';
+    const isFreeProduct = price.amount_type === 'free' || amount === 0;
+
+    // Handle free products differently
+    if (isFreeProduct) {
+      return this.handleFreeCheckout(
+        organizationId,
+        externalUserId,
+        product,
+        price,
+        stripeCustomerId,
+        customerId,
+        customerEmail,
+        customerName,
+        dto.metadata,
+      );
+    }
 
     // Calculate platform fee (e.g., 5% of the transaction)
     const platformFeePercentage = 0.05; // 5% platform fee
@@ -254,7 +271,10 @@ export class CheckoutService {
         customer_name: customerName,
         customer_external_id: externalUserId,
         expires_at: expiresAt.toISOString(),
-        metadata: dto.metadata,
+        metadata: {
+          ...dto.metadata,
+          existingSubscriptionId: dto.existingSubscriptionId, // Store for upgrade/downgrade flow
+        },
       })
       .select()
       .single();
@@ -313,6 +333,17 @@ export class CheckoutService {
     dto: ConfirmCheckoutDto,
   ): Promise<{ status: string; requiresAction: boolean; actionUrl?: string; success: boolean; subscriptionId?: string; message?: string }> {
     try {
+      // Handle free checkouts (empty client secret)
+      if (!clientSecret || clientSecret === '') {
+        // For free products, just return success
+        return {
+          status: 'succeeded',
+          requiresAction: false,
+          success: true,
+          message: 'Free product activated successfully!',
+        };
+      }
+
       // Extract payment intent ID from client secret
       const paymentIntentId = clientSecret.split('_secret_')[0];
 
@@ -435,6 +466,134 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
+    // Handle free product sessions (no payment intent)
+    const metadata = session.metadata as any;
+    const sessionWithSubscription = session as any; // Type cast for new subscription_id field
+    if (!session.payment_intent && metadata?.isFreeProduct) {
+      // Check if subscription has been created (after user confirmation)
+      if (sessionWithSubscription.subscription_id) {
+        // Subscription exists - return full subscription data
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select(`
+            *,
+            product:products(*),
+            price:product_prices(*)
+          `)
+          .eq('id', sessionWithSubscription.subscription_id)
+          .single();
+
+        if (subscription) {
+          const product = subscription.product;
+          const price = subscription.price;
+
+          if (!product || !price) {
+            throw new NotFoundException('Product or price not found for free subscription');
+          }
+
+          // Fetch product features
+          const { data: productFeatures } = await supabase
+            .from('product_features')
+            .select('features(title, properties)')
+            .eq('product_id', product.id)
+            .order('display_order', { ascending: true });
+
+          const features = (productFeatures || []).map((pf: any) => pf.features.title);
+
+          // Return free checkout session status with subscription
+          return {
+            id: sessionId,
+            clientSecret: '',
+            paymentIntentId: '',
+            amount: 0,
+            currency: price.price_currency || 'usd',
+            totalAmount: 0,
+            product: {
+              name: product.name,
+              description: product.description || undefined,
+              interval: price.recurring_interval || 'month',
+              intervalCount: price.recurring_interval_count || 1,
+              features,
+            },
+            customer: {
+              email: session.customer_email || undefined,
+              name: session.customer_name || undefined,
+            },
+            stripeAccountId: undefined,
+            trialDays: 0,
+            subscription: {
+              id: subscription.id,
+              customerId: subscription.customer_id,
+              productId: subscription.product_id,
+              priceId: subscription.price_id || '',
+              status: subscription.status,
+              currentPeriodStart: subscription.current_period_start,
+              currentPeriodEnd: subscription.current_period_end,
+              cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+            },
+          };
+        }
+      } else {
+        // No subscription yet (user hasn't confirmed) - return session data from metadata
+        const productId = metadata.productId;
+        const priceId = metadata.priceId;
+
+        if (!productId || !priceId) {
+          throw new BadRequestException('Product or price ID missing in session metadata');
+        }
+
+        // Fetch product and price details
+        const { data: product } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', productId)
+          .single();
+
+        const { data: price } = await supabase
+          .from('product_prices')
+          .select('*')
+          .eq('id', priceId)
+          .single();
+
+        if (!product || !price) {
+          throw new NotFoundException('Product or price not found');
+        }
+
+        // Fetch product features
+        const { data: productFeatures } = await supabase
+          .from('product_features')
+          .select('features(title, properties)')
+          .eq('product_id', product.id)
+          .order('display_order', { ascending: true });
+
+        const features = (productFeatures || []).map((pf: any) => pf.features.title);
+
+        // Return free checkout session WITHOUT subscription (pending user confirmation)
+        return {
+          id: sessionId,
+          clientSecret: '',
+          paymentIntentId: '',
+          amount: 0,
+          currency: price.price_currency || 'usd',
+          totalAmount: 0,
+          product: {
+            name: product.name,
+            description: product.description || undefined,
+            interval: price.recurring_interval || 'month',
+            intervalCount: price.recurring_interval_count || 1,
+            features,
+          },
+          customer: {
+            email: session.customer_email || undefined,
+            name: session.customer_name || undefined,
+          },
+          stripeAccountId: undefined,
+          trialDays: 0,
+          // No subscription field - user hasn't confirmed yet
+        };
+      }
+    }
+
     const paymentIntent = session.payment_intent;
     if (!paymentIntent) {
       throw new NotFoundException('Payment intent not found for session');
@@ -541,5 +700,300 @@ export class CheckoutService {
       })
       .lt('expires_at', new Date().toISOString())
       .is('completed_at', null);
+  }
+
+  /**
+   * Handle checkout for free products - no payment required
+   */
+  private async handleFreeCheckout(
+    organizationId: string,
+    externalUserId: string,
+    product: any,
+    price: any,
+    stripeCustomerId: string,
+    customerId: string,
+    customerEmail?: string,
+    customerName?: string,
+    metadata?: any,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+
+    // Create a "free" checkout session record (NO subscription yet - wait for user confirmation)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    const { data: checkoutSession, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .insert({
+        organization_id: organizationId,
+        session_token: externalUserId,
+        payment_intent_id: null, // No payment intent for free products
+        customer_email: customerEmail,
+        customer_name: customerName,
+        customer_external_id: externalUserId,
+        expires_at: expiresAt.toISOString(),
+        completed_at: null, // Will be set when user confirms
+        metadata: {
+          ...metadata,
+          isFreeProduct: true,
+          customerId, // Store for later confirmation
+          productId: product.id,
+          priceId: price.id,
+        },
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      this.logger.error('Failed to create free checkout session:', sessionError);
+      throw new BadRequestException('Failed to create checkout session');
+    }
+
+    // Fetch product features for display
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+
+    // Return checkout session WITHOUT subscription (subscription will be created on confirmation)
+    return {
+      id: checkoutSession.id,
+      clientSecret: '', // No client secret for free products
+      paymentIntentId: '', // No payment intent for free products
+      amount: 0,
+      currency: price.price_currency || 'usd',
+      totalAmount: 0,
+      product: {
+        name: product.name,
+        description: product.description,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: customerEmail,
+        name: customerName,
+      },
+      stripeAccountId: undefined, // No Stripe account needed for free
+      trialDays: 0, // No trial for free products
+      // NO subscription field - will be created on confirmation
+    };
+  }
+
+  /**
+   * Confirm and activate a free product checkout by creating the subscription
+   * Called when user clicks "Get Started for Free" button
+   */
+  async confirmFreeCheckout(sessionId: string): Promise<any> {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Fetch the checkout session
+    const { data: checkoutSession, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !checkoutSession) {
+      this.logger.error('Checkout session not found:', sessionError);
+      throw new NotFoundException('Checkout session not found');
+    }
+
+    // 2. Validate it's a free product session
+    const sessionMetadata = checkoutSession.metadata as any;
+    if (!sessionMetadata?.isFreeProduct) {
+      throw new BadRequestException('This endpoint is only for free product confirmations');
+    }
+
+    // 3. Check if already confirmed/completed
+    if (checkoutSession.completed_at) {
+      // Already completed - return existing subscription
+      if ((checkoutSession as any).subscription_id) {
+        const { data: existingSubscription } = await supabase
+          .from('subscriptions')
+          .select('*, product:products(*), price:product_prices(*)')
+          .eq('id', (checkoutSession as any).subscription_id)
+          .single();
+
+        if (existingSubscription) {
+          this.logger.log(`Checkout session already completed, returning existing subscription: ${existingSubscription.id}`);
+          return existingSubscription;
+        }
+      }
+    }
+
+    // 4. Extract metadata
+    const customerId = sessionMetadata.customerId;
+    const productId = sessionMetadata.productId;
+    const priceId = sessionMetadata.priceId;
+    const organizationId = checkoutSession.organization_id;
+    const metadata = sessionMetadata;
+
+    if (!customerId || !productId || !priceId) {
+      throw new BadRequestException('Missing required data in checkout session');
+    }
+
+    // 5. Fetch product and price details
+    const { data: product } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+
+    const { data: price } = await supabase
+      .from('product_prices')
+      .select('*')
+      .eq('id', priceId)
+      .single();
+
+    if (!product || !price) {
+      throw new NotFoundException('Product or price not found');
+    }
+
+    // 6. Check for existing subscription (idempotency + reactivation logic)
+    const { data: existingSubscription } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('customer_id', customerId)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let subscription: any;
+
+    if (existingSubscription) {
+      // Subscription exists - check status
+      if (existingSubscription.status === 'active' || existingSubscription.status === 'trialing') {
+        // Already has active subscription - return it
+        this.logger.log(`Customer already has active subscription: ${existingSubscription.id}`);
+        subscription = existingSubscription;
+      } else if (existingSubscription.status === 'canceled' || existingSubscription.status === 'ended') {
+        // Reactivate cancelled/ended subscription
+        this.logger.log(`Reactivating subscription: ${existingSubscription.id}`);
+
+        const { data: reactivated, error: reactivateError } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'active',
+            current_period_start: new Date().toISOString(),
+            current_period_end: this.calculatePeriodEnd(
+              new Date(),
+              price.recurring_interval,
+              price.recurring_interval_count || 1,
+            ),
+            cancel_at_period_end: false,
+            canceled_at: null,
+            ended_at: null,
+            updated_at: new Date().toISOString(),
+            metadata: {
+              ...(existingSubscription.metadata as any || {}),
+              isFreeProduct: true,
+              reactivatedAt: new Date().toISOString(),
+              checkoutSessionId: checkoutSession.id,
+            },
+          })
+          .eq('id', existingSubscription.id)
+          .select('*, product:products(*), price:product_prices(*)')
+          .single();
+
+        if (reactivateError) {
+          this.logger.error('Failed to reactivate subscription:', reactivateError);
+          throw new BadRequestException('Failed to reactivate subscription');
+        }
+
+        subscription = reactivated;
+      } else {
+        // Other status - create new (shouldn't happen often)
+        throw new BadRequestException(`Cannot subscribe: existing subscription in ${existingSubscription.status} status`);
+      }
+    } else {
+      // No existing subscription - create new
+      const { data: newSubscription, error: subscriptionError } = await supabase
+        .from('subscriptions')
+        .insert({
+          organization_id: organizationId,
+          customer_id: customerId,
+          product_id: productId,
+          price_id: priceId,
+          stripe_subscription_id: null, // No Stripe subscription for free products
+          status: 'active',
+          amount: 0, // Free product
+          currency: price.price_currency || 'usd',
+          current_period_start: new Date().toISOString(),
+          current_period_end: this.calculatePeriodEnd(
+            new Date(),
+            price.recurring_interval,
+            price.recurring_interval_count || 1,
+          ),
+          trial_start: null, // No trial for free products
+          trial_end: null,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          ended_at: null,
+          metadata: {
+            ...metadata,
+            isFreeProduct: true,
+            checkoutSessionId: checkoutSession.id,
+          },
+        })
+        .select('*, product:products(*), price:product_prices(*)')
+        .single();
+
+      if (subscriptionError) {
+        this.logger.error('Failed to create free subscription:', subscriptionError);
+        throw new BadRequestException('Failed to create subscription');
+      }
+
+      subscription = newSubscription;
+    }
+
+    // 7. Update checkout session as completed
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        subscription_id: subscription.id,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checkoutSession.id);
+
+    this.logger.log(`Free checkout confirmed, subscription created/reactivated: ${subscription.id}`);
+
+    return subscription;
+  }
+
+  /**
+   * Calculate the end date for a subscription period
+   */
+  private calculatePeriodEnd(
+    startDate: Date,
+    interval: string,
+    intervalCount: number,
+  ): string {
+    const endDate = new Date(startDate);
+
+    switch (interval) {
+      case 'day':
+        endDate.setDate(endDate.getDate() + intervalCount);
+        break;
+      case 'week':
+        endDate.setDate(endDate.getDate() + (7 * intervalCount));
+        break;
+      case 'month':
+        endDate.setMonth(endDate.getMonth() + intervalCount);
+        break;
+      case 'year':
+        endDate.setFullYear(endDate.getFullYear() + intervalCount);
+        break;
+      default:
+        // Default to monthly
+        endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    return endDate.toISOString();
   }
 }

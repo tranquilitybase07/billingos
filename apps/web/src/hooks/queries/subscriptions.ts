@@ -153,3 +153,76 @@ export function useCreateSubscription() {
     },
   })
 }
+
+// ============================================
+// SUBSCRIPTION UPGRADE/DOWNGRADE HOOKS
+// ============================================
+
+import type {
+  PreviewChangeResponse,
+  PreviewChangeDTO,
+  ChangePlanDTO,
+  ChangePlanResponse,
+  AvailablePlansResponse,
+} from '@/lib/api/types'
+
+/**
+ * Hook to fetch available plans for upgrade/downgrade
+ */
+export function useAvailablePlans(
+  subscriptionId: string | undefined,
+  options?: {
+    enabled?: boolean
+  }
+) {
+  return useQuery<AvailablePlansResponse>({
+    queryKey: ['available-plans', subscriptionId],
+    queryFn: async () => {
+      if (!subscriptionId) throw new Error('Subscription ID is required')
+      return await api.subscriptions.getAvailablePlans(subscriptionId)
+    },
+    enabled: options?.enabled !== false && !!subscriptionId,
+  })
+}
+
+/**
+ * Mutation hook to preview a plan change
+ */
+export function usePreviewPlanChange() {
+  return useMutation({
+    mutationFn: async (params: {
+      subscriptionId: string
+      data: PreviewChangeDTO
+    }) => {
+      return await api.subscriptions.previewChange(params.subscriptionId, params.data)
+    },
+  })
+}
+
+/**
+ * Mutation hook to execute a plan change (upgrade/downgrade)
+ */
+export function useChangePlan() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (params: {
+      subscriptionId: string
+      data: ChangePlanDTO
+    }) => {
+      return await api.subscriptions.changePlan(params.subscriptionId, params.data) as Promise<ChangePlanResponse>
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate subscription queries to refetch updated data
+      queryClient.invalidateQueries({ queryKey: ['subscription', variables.subscriptionId] })
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['organization-subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['available-plans', variables.subscriptionId] })
+
+      // Invalidate the specific subscription
+      if (data.subscription) {
+        queryClient.setQueryData(['subscription', variables.subscriptionId], data.subscription)
+      }
+    },
+  })
+}

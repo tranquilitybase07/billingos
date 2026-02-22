@@ -911,4 +911,100 @@ export class StripeService {
       },
     );
   }
+
+  // ================================================
+  // SUBSCRIPTION UPGRADE/DOWNGRADE METHODS
+  // ================================================
+
+  /**
+   * Retrieve upcoming invoice preview for subscription changes
+   * Used to show customers what they'll be charged before upgrading/downgrading
+   * https://docs.stripe.com/api/invoices/upcoming
+   */
+  async retrieveUpcomingInvoice(
+    subscriptionId: string,
+    customerId: string,
+    newPriceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Invoice> {
+    this.logger.log(
+      `Retrieving upcoming invoice preview for subscription ${subscriptionId} with new price ${newPriceId}`,
+    );
+
+    // First, get the current subscription to find the subscription item ID
+    const subscription = await this.getSubscription(
+      subscriptionId,
+      stripeAccountId,
+    );
+
+    if (!subscription.items?.data?.[0]) {
+      throw new Error('Subscription has no items');
+    }
+
+    const subscriptionItemId = subscription.items.data[0].id;
+
+    // Preview the upcoming invoice with the new price
+    // Note: Using type assertion as retrieveUpcoming may not be in all Stripe SDK versions
+    return await (this.stripe.invoices as any).retrieveUpcoming(
+      {
+        customer: customerId,
+        subscription: subscriptionId,
+        subscription_items: [
+          {
+            id: subscriptionItemId,
+            price: newPriceId,
+          },
+        ],
+        subscription_proration_behavior: 'create_prorations',
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    ) as Promise<Stripe.Invoice>;
+  }
+
+  /**
+   * Update subscription to a new price (upgrade/downgrade)
+   * Stripe handles proration automatically
+   * https://docs.stripe.com/api/subscriptions/update
+   */
+  async updateSubscriptionPrice(
+    subscriptionId: string,
+    newPriceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Updating subscription ${subscriptionId} to new price ${newPriceId}`,
+    );
+
+    // First, get the current subscription to find the subscription item ID
+    const subscription = await this.getSubscription(
+      subscriptionId,
+      stripeAccountId,
+    );
+
+    if (!subscription.items?.data?.[0]) {
+      throw new Error('Subscription has no items');
+    }
+
+    const subscriptionItemId = subscription.items.data[0].id;
+
+    // Update the subscription with new price
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      {
+        items: [
+          {
+            id: subscriptionItemId,
+            price: newPriceId,
+          },
+        ],
+        proration_behavior: 'create_prorations', // Create proration items
+        billing_cycle_anchor: 'unchanged', // Keep existing billing cycle
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
+  }
 }

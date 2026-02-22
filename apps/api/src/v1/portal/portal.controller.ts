@@ -14,6 +14,8 @@ import { PortalService } from './portal.service';
 import { CreatePortalSessionDto } from './dto/create-portal-session.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpdateCustomerDto } from '../../customers/dto/update-customer.dto';
+import { PreviewChangeDto } from '../../subscriptions/dto/preview-change.dto';
+import { ChangePlanDto } from '../../subscriptions/dto/change-plan.dto';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import {
   CurrentCustomer,
@@ -123,5 +125,47 @@ export class PortalController {
   ) {
     this.logger.log(`Setting default payment method for session: ${sessionId}`);
     return this.portalService.setDefaultPaymentMethod(sessionId, body.paymentMethodId);
+  }
+
+  @Get(':sessionId/subscriptions/:subscriptionId/available-plans')
+  @ApiOperation({ summary: 'Get available plans for subscription upgrade/downgrade' })
+  @ApiResponse({ status: 200, description: 'Available plans retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async getAvailablePlans(
+    @Param('sessionId') sessionId: string,
+    @Param('subscriptionId') subscriptionId: string,
+  ) {
+    this.logger.log(`Getting available plans for subscription ${subscriptionId}, session: ${sessionId}`);
+    return this.portalService.getAvailablePlans(sessionId, subscriptionId);
+  }
+
+  @Post(':sessionId/subscriptions/:subscriptionId/preview-change')
+  @ApiOperation({ summary: 'Preview subscription plan change with proration' })
+  @ApiResponse({ status: 200, description: 'Preview calculated successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async previewPlanChange(
+    @Param('sessionId') sessionId: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() dto: PreviewChangeDto,
+  ) {
+    this.logger.log(`Previewing plan change for subscription ${subscriptionId}, session: ${sessionId}`);
+    return this.portalService.previewPlanChange(sessionId, subscriptionId, dto);
+  }
+
+  @Post(':sessionId/subscriptions/:subscriptionId/change-plan')
+  @ApiOperation({ summary: 'Execute subscription plan change' })
+  @ApiResponse({ status: 200, description: 'Plan changed successfully' })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  @ApiResponse({ status: 400, description: 'Invalid plan change request' })
+  async changePlan(
+    @Param('sessionId') sessionId: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() dto: ChangePlanDto,
+  ) {
+    this.logger.log(`Changing plan for subscription ${subscriptionId}, session: ${sessionId}`);
+    return this.portalService.changePlan(sessionId, subscriptionId, dto);
   }
 }

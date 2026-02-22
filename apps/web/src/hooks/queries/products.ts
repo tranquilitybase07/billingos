@@ -49,6 +49,7 @@ export interface Product {
   trial_days?: number
   stripe_product_id?: string
   is_archived: boolean
+  visible_in_pricing_table?: boolean // Controls visibility in SDK pricing table
   created_at: string
   updated_at?: string
   prices: ProductPrice[]

@@ -154,6 +154,7 @@ export type Database = {
           organization_id: string
           payment_intent_id: string | null
           session_token: string
+          subscription_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -168,6 +169,7 @@ export type Database = {
           organization_id: string
           payment_intent_id?: string | null
           session_token: string
+          subscription_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -182,6 +184,7 @@ export type Database = {
           organization_id?: string
           payment_intent_id?: string | null
           session_token?: string
+          subscription_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -197,6 +200,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_sessions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -879,6 +889,7 @@ export type Database = {
           version_created_at: string | null
           version_created_reason: string | null
           version_status: string | null
+          visible_in_pricing_table: boolean
         }
         Insert: {
           created_at?: string | null
@@ -899,6 +910,7 @@ export type Database = {
           version_created_at?: string | null
           version_created_reason?: string | null
           version_status?: string | null
+          visible_in_pricing_table?: boolean
         }
         Update: {
           created_at?: string | null
@@ -919,6 +931,7 @@ export type Database = {
           version_created_at?: string | null
           version_created_reason?: string | null
           version_status?: string | null
+          visible_in_pricing_table?: boolean
         }
         Relationships: [
           {
@@ -1080,6 +1093,101 @@ export type Database = {
           },
         ]
       }
+      subscription_changes: {
+        Row: {
+          change_type: string
+          completed_at: string | null
+          created_at: string | null
+          failed_reason: string | null
+          from_amount: number | null
+          from_price_id: string | null
+          id: string
+          metadata: Json | null
+          net_amount: number | null
+          organization_id: string
+          proration_charge: number | null
+          proration_credit: number | null
+          scheduled_for: string | null
+          status: string
+          stripe_invoice_id: string | null
+          subscription_id: string
+          to_amount: number | null
+          to_price_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          change_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          failed_reason?: string | null
+          from_amount?: number | null
+          from_price_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount?: number | null
+          organization_id: string
+          proration_charge?: number | null
+          proration_credit?: number | null
+          scheduled_for?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          subscription_id: string
+          to_amount?: number | null
+          to_price_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          change_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          failed_reason?: string | null
+          from_amount?: number | null
+          from_price_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount?: number | null
+          organization_id?: string
+          proration_charge?: number | null
+          proration_credit?: number | null
+          scheduled_for?: string | null
+          status?: string
+          stripe_invoice_id?: string | null
+          subscription_id?: string
+          to_amount?: number | null
+          to_price_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_changes_from_price_id_fkey"
+            columns: ["from_price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_changes_to_price_id_fkey"
+            columns: ["to_price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           amount: number
@@ -1102,6 +1210,7 @@ export type Database = {
           trial_end: string | null
           trial_start: string | null
           updated_at: string | null
+          version: number
         }
         Insert: {
           amount: number
@@ -1124,6 +1233,7 @@ export type Database = {
           trial_end?: string | null
           trial_start?: string | null
           updated_at?: string | null
+          version?: number
         }
         Update: {
           amount?: number
@@ -1146,6 +1256,7 @@ export type Database = {
           trial_end?: string | null
           trial_start?: string | null
           updated_at?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -1557,6 +1668,14 @@ export type Database = {
       }
     }
     Functions: {
+      can_reactivate_subscription: {
+        Args: { p_customer_id: string; p_product_id: string }
+        Returns: {
+          can_reactivate: boolean
+          reason: string
+          subscription_id: string
+        }[]
+      }
       cleanup_expired_portal_sessions: { Args: never; Returns: number }
       cleanup_expired_session_tokens: { Args: never; Returns: undefined }
       get_latest_product_version: {
