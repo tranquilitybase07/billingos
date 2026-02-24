@@ -55,7 +55,7 @@ export class SubscriptionSchedulerService {
             organization_id
           )
         ),
-        to_price:product_prices (
+        to_price:product_prices!subscription_changes_to_price_id_fkey (
           *,
           product:products (*)
         )

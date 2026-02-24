@@ -62,7 +62,8 @@
       "Bash(timeout 10 pnpm dev:api:*)",
       "WebFetch(domain:www.npmjs.com)",
       "Bash(sed:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(supabase db push:*)"
     ],
     "deny": [],
     "ask": []

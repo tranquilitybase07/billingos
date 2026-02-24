@@ -4,6 +4,7 @@ import { StripeService } from './stripe.service';
 import { StripeController } from './stripe.controller';
 import { StripeWebhookService } from './stripe-webhook.service';
 import { StripFeesService } from './stripe-fees.service';
+import { RefundService } from './refund.service';
 import { SupabaseModule } from '../supabase/supabase.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
@@ -14,7 +15,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     forwardRef(() => SubscriptionsModule),
   ],
   controllers: [StripeController],
-  providers: [StripeService, StripeWebhookService, StripFeesService],
-  exports: [StripeService, StripFeesService], // Export for use in other modules
+  providers: [StripeService, StripeWebhookService, StripFeesService, RefundService],
+  exports: [StripeService, StripFeesService, RefundService], // Export for use in other modules
 })
 export class StripeModule {}

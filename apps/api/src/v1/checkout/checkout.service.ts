@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
+import { CheckoutMetadataService } from './checkout-metadata.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
 import Stripe from 'stripe';
@@ -59,6 +60,7 @@ export class CheckoutService {
     private readonly stripeService: StripeService,
     private readonly supabaseService: SupabaseService,
     private readonly customersService: CustomersService,
+    private readonly metadataService: CheckoutMetadataService,
   ) {}
 
   async createCheckout(
@@ -185,6 +187,31 @@ export class CheckoutService {
     const platformFeePercentage = 0.05; // 5% platform fee
     const applicationFeeAmount = Math.round(amount * platformFeePercentage);
 
+    // Create metadata record (Autum pattern - store data separately from Stripe)
+    const checkoutMetadata = await this.metadataService.createMetadata({
+      organizationId,
+      customerId,
+      productId: product.id,
+      priceId: price.id,
+      customerEmail: customerEmail || '',
+      customerName: customerName || undefined,
+      productName: product.name,
+      priceAmount: amount,
+      currency,
+      billingInterval: price.recurring_interval as 'month' | 'year' | undefined,
+      billingIntervalCount: price.recurring_interval_count || 1,
+      trialPeriodDays: product.trial_days || undefined,
+      shouldGrantTrial: false, // Will be determined later based on eligibility
+      featuresToGrant: [], // Will be populated from product features
+      successUrl: dto.successUrl || `${process.env.APP_URL}/dashboard/billing/success`,
+      cancelUrl: dto.cancelUrl || `${process.env.APP_URL}/dashboard/billing/cancel`,
+      metadata: {
+        externalUserId,
+        ...dto.metadata,
+      },
+    });
+
+    // Only pass metadata ID to Stripe (not all our internal data)
     const paymentIntent = await this.stripeService.getClient().paymentIntents.create({
       amount,
       currency,
@@ -192,21 +219,17 @@ export class CheckoutService {
       setup_future_usage: 'off_session', // Save payment method for future subscriptions
       application_fee_amount: applicationFeeAmount, // Platform fee
       metadata: {
-        organizationId,
+        metadataId: checkoutMetadata.id, // Primary reference to our metadata
+        organizationId, // Keep these for backward compatibility
         externalUserId,
         productId: product.id,
-        priceId: price.id,
-        productName: product.name,
-        interval: price.recurring_interval,
-        intervalCount: price.recurring_interval_count?.toString() || '1',
-        trialDays: product.trial_days?.toString() || '0',
-        customerEmail: dto.customerEmail || null,
-        customerName: dto.customerName || null,
-        ...dto.metadata,
       },
     }, {
       stripeAccount: stripeAccountId, // Create payment intent on connected account
     });
+
+    // Link metadata to payment intent
+    await this.metadataService.linkToCheckoutSession(checkoutMetadata.id, paymentIntent.id);
 
     // 5. Store payment intent in database
     const { data: paymentIntentRecord, error: piError } = await supabase
@@ -225,6 +248,7 @@ export class CheckoutService {
         product_id: product.id,
         price_id: price.id,
         metadata: {
+          metadataId: checkoutMetadata.id, // Reference to metadata record
           externalUserId,
           productName: product.name,
           ...dto.metadata,

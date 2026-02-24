@@ -21,6 +21,8 @@ import { SessionTokensModule } from './session-tokens/session-tokens.module';
 import { V1Module } from './v1/v1.module';
 import { JwtDebugMiddleware } from './middleware/jwt-debug.middleware';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { RedisModule } from './redis/redis.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
       }),
       inject: [ConfigService],
     }),
+    RedisModule, // Add our custom Redis module for idempotency
     SupabaseModule,
     AuthModule,
     UserModule,

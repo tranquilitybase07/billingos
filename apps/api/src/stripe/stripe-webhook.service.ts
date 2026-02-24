@@ -5,10 +5,13 @@ import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from './stripe.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { RedisService } from '../redis/redis.service';
+import { RefundService } from './refund.service';
 
 @Injectable()
 export class StripeWebhookService {
   private readonly logger = new Logger(StripeWebhookService.name);
+  private readonly IDEMPOTENCY_TTL_MS = 300000; // 5 minutes
 
   constructor(
     private readonly supabaseService: SupabaseService,
@@ -16,6 +19,8 @@ export class StripeWebhookService {
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptionsService: SubscriptionsService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly redisService: RedisService,
+    private readonly refundService: RefundService,
   ) {}
 
   /**
@@ -27,9 +32,25 @@ export class StripeWebhookService {
       `Processing webhook event: ${event.type} (livemode: ${event.livemode}, id: ${event.id})`,
     );
 
+    // Redis-based idempotency check (Autum pattern)
+    // Key includes event ID and environment (livemode)
+    const idempotencyKey = `stripe:webhook:${event.livemode ? 'live' : 'test'}:${event.id}`;
+    const isFirstRequest = await this.redisService.setIdempotencyKey(
+      idempotencyKey,
+      Date.now().toString(),
+      this.IDEMPOTENCY_TTL_MS,
+    );
+
+    if (!isFirstRequest) {
+      this.logger.warn(
+        `Duplicate webhook event ${event.id} detected via Redis idempotency. Skipping.`,
+      );
+      return;
+    }
+
     const supabase = this.supabaseService.getClient();
 
-    // Check for duplicate events (idempotency)
+    // Secondary database check (for audit trail and Redis failure scenarios)
     const { data: existingEvent } = await supabase
       .from('webhook_events')
       .select('id, status')
@@ -38,7 +59,7 @@ export class StripeWebhookService {
 
     if (existingEvent) {
       this.logger.warn(
-        `Duplicate webhook event ${event.id} - already ${existingEvent.status}. Skipping.`,
+        `Duplicate webhook event ${event.id} found in database - already ${existingEvent.status}. Skipping.`,
       );
       return;
     }
@@ -1467,9 +1488,22 @@ export class StripeWebhookService {
         expand: ['latest_invoice.payment_intent'],
       };
 
-      // Add trial period if applicable
+      // Check trial eligibility before granting trial (simple approach from Autum)
+      let shouldGrantTrial = false;
       if (trialDays > 0) {
-        subscriptionParams.trial_period_days = trialDays;
+        // Check if customer has ever had a trial or subscription for this product
+        const { data: trialEligible } = await supabase.rpc('check_trial_eligibility', {
+          p_customer_id: customerId,
+          p_product_id: productId,
+        });
+
+        if (trialEligible) {
+          subscriptionParams.trial_period_days = trialDays;
+          shouldGrantTrial = true;
+          this.logger.log(`Granting ${trialDays}-day trial for customer ${customerId} on product ${productId}`);
+        } else {
+          this.logger.warn(`Trial not granted for customer ${customerId} - already had trial or subscription for product ${productId}`);
+        }
       }
 
       // Set default payment method if available
@@ -1644,6 +1678,13 @@ export class StripeWebhookService {
 
       if (subError) {
         this.logger.error('Failed to save subscription to database:', subError);
+
+        // CRITICAL: Refund the payment since we can't provide service
+        await this.refundService.refundPaymentOnFailure({
+          paymentIntentId: paymentIntent.id,
+          stripeAccountId,
+          reason: `subscription_creation_failed: ${subError.message}`,
+        });
 
         // Cancel Stripe subscription if database save fails
         try {

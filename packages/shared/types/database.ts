@@ -141,6 +141,142 @@ export type Database = {
           },
         ]
       }
+      checkout_metadata: {
+        Row: {
+          billing_interval: string | null
+          billing_interval_count: number | null
+          cancel_url: string | null
+          checkout_session_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          currency: string
+          customer_email: string
+          customer_id: string | null
+          customer_name: string | null
+          discount_code: string | null
+          discount_percentage: number | null
+          expires_at: string | null
+          features_to_grant: Json | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          payment_method_types: Json | null
+          price_amount: number
+          price_id: string
+          product_id: string
+          product_name: string
+          should_grant_trial: boolean | null
+          status: string | null
+          subscription_id: string | null
+          success_url: string | null
+          trial_period_days: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          billing_interval?: string | null
+          billing_interval_count?: number | null
+          cancel_url?: string | null
+          checkout_session_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string
+          customer_email: string
+          customer_id?: string | null
+          customer_name?: string | null
+          discount_code?: string | null
+          discount_percentage?: number | null
+          expires_at?: string | null
+          features_to_grant?: Json | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          payment_method_types?: Json | null
+          price_amount: number
+          price_id: string
+          product_id: string
+          product_name: string
+          should_grant_trial?: boolean | null
+          status?: string | null
+          subscription_id?: string | null
+          success_url?: string | null
+          trial_period_days?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          billing_interval?: string | null
+          billing_interval_count?: number | null
+          cancel_url?: string | null
+          checkout_session_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string
+          customer_email?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          discount_code?: string | null
+          discount_percentage?: number | null
+          expires_at?: string | null
+          features_to_grant?: Json | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          payment_method_types?: Json | null
+          price_amount?: number
+          price_id?: string
+          product_id?: string
+          product_name?: string
+          should_grant_trial?: boolean | null
+          status?: string | null
+          subscription_id?: string | null
+          success_url?: string | null
+          trial_period_days?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_metadata_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_metadata_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_metadata_price_id_fkey"
+            columns: ["price_id"]
+            isOneToOne: false
+            referencedRelation: "product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_metadata_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_metadata_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_metadata_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checkout_sessions: {
         Row: {
           completed_at: string | null
@@ -150,10 +286,14 @@ export type Database = {
           customer_name: string | null
           expires_at: string
           id: string
+          idempotency_key: string | null
           metadata: Json | null
+          metadata_id: string | null
           organization_id: string
           payment_intent_id: string | null
+          product_id: string | null
           session_token: string
+          status: string | null
           subscription_id: string | null
           updated_at: string | null
         }
@@ -165,10 +305,14 @@ export type Database = {
           customer_name?: string | null
           expires_at: string
           id?: string
+          idempotency_key?: string | null
           metadata?: Json | null
+          metadata_id?: string | null
           organization_id: string
           payment_intent_id?: string | null
+          product_id?: string | null
           session_token: string
+          status?: string | null
           subscription_id?: string | null
           updated_at?: string | null
         }
@@ -180,14 +324,25 @@ export type Database = {
           customer_name?: string | null
           expires_at?: string
           id?: string
+          idempotency_key?: string | null
           metadata?: Json | null
+          metadata_id?: string | null
           organization_id?: string
           payment_intent_id?: string | null
+          product_id?: string | null
           session_token?: string
+          status?: string | null
           subscription_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "checkout_sessions_metadata_id_fkey"
+            columns: ["metadata_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_metadata"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "checkout_sessions_organization_id_fkey"
             columns: ["organization_id"]
@@ -200,6 +355,20 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_sessions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_sessions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -971,6 +1140,139 @@ export type Database = {
           },
         ]
       }
+      reconciliation_queue: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          error_count: number | null
+          error_message: string | null
+          id: string
+          next_retry_at: string | null
+          priority: number | null
+          processed_at: string | null
+          reference_id: string
+          resolution_notes: string | null
+          resolved_by: string | null
+          status: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          error_count?: number | null
+          error_message?: string | null
+          id?: string
+          next_retry_at?: string | null
+          priority?: number | null
+          processed_at?: string | null
+          reference_id: string
+          resolution_notes?: string | null
+          resolved_by?: string | null
+          status?: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          error_count?: number | null
+          error_message?: string | null
+          id?: string
+          next_retry_at?: string | null
+          priority?: number | null
+          processed_at?: string | null
+          reference_id?: string
+          resolution_notes?: string | null
+          resolved_by?: string | null
+          status?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      refunds: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string | null
+          currency: string
+          customer_id: string | null
+          error_message: string | null
+          failed_at: string | null
+          id: string
+          initiated_by: string
+          metadata: Json | null
+          organization_id: string | null
+          payment_intent_id: string
+          reason: string
+          status: string
+          stripe_account_id: string | null
+          stripe_refund_id: string | null
+          subscription_id: string | null
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string
+          customer_id?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json | null
+          organization_id?: string | null
+          payment_intent_id: string
+          reason: string
+          status?: string
+          stripe_account_id?: string | null
+          stripe_refund_id?: string | null
+          subscription_id?: string | null
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string
+          customer_id?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json | null
+          organization_id?: string | null
+          payment_intent_id?: string
+          reason?: string
+          status?: string
+          stripe_account_id?: string | null
+          stripe_refund_id?: string | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_tokens: {
         Row: {
           allowed_operations: Json | null
@@ -1299,6 +1601,93 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trial_history: {
+        Row: {
+          cancellation_reason: string | null
+          conversion_date: string | null
+          converted: boolean | null
+          created_at: string | null
+          customer_id: string
+          id: string
+          metadata: Json | null
+          organization_id: string
+          product_id: string
+          subscription_id: string | null
+          trial_days: number
+          trial_end: string
+          trial_start: string
+          updated_at: string | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          conversion_date?: string | null
+          converted?: boolean | null
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          product_id: string
+          subscription_id?: string | null
+          trial_days: number
+          trial_end: string
+          trial_start: string
+          updated_at?: string | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          conversion_date?: string | null
+          converted?: boolean | null
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          product_id?: string
+          subscription_id?: string | null
+          trial_days?: number
+          trial_end?: string
+          trial_start?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_history_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_history_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -1676,8 +2065,23 @@ export type Database = {
           subscription_id: string
         }[]
       }
+      check_trial_eligibility: {
+        Args: { p_customer_id: string; p_product_id: string }
+        Returns: boolean
+      }
+      cleanup_expired_checkout_metadata: { Args: never; Returns: number }
       cleanup_expired_portal_sessions: { Args: never; Returns: number }
       cleanup_expired_session_tokens: { Args: never; Returns: undefined }
+      create_subscription_atomic: {
+        Args: {
+          p_customer_id: string
+          p_features: Json[]
+          p_organization_id: string
+          p_product_id: string
+          p_subscription: Json
+        }
+        Returns: Json
+      }
       get_latest_product_version: {
         Args: { p_organization_id: string; p_product_name: string }
         Returns: number
@@ -1723,6 +2127,40 @@ export type Database = {
       mark_feature_synced: {
         Args: { p_feature_id: string; p_stripe_feature_id: string }
         Returns: undefined
+      }
+      mark_trial_converted: {
+        Args: { p_customer_id: string; p_product_id: string }
+        Returns: undefined
+      }
+      process_reconciliation_queue: {
+        Args: { p_limit?: number }
+        Returns: {
+          failed_count: number
+          processed_count: number
+        }[]
+      }
+      record_trial_usage: {
+        Args: {
+          p_customer_id: string
+          p_organization_id: string
+          p_product_id: string
+          p_subscription_id: string
+          p_trial_days: number
+          p_trial_end: string
+          p_trial_start: string
+        }
+        Returns: string
+      }
+      upsert_customer_atomic: {
+        Args: {
+          p_email: string
+          p_external_id?: string
+          p_metadata?: Json
+          p_name?: string
+          p_organization_id: string
+          p_stripe_customer_id?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
