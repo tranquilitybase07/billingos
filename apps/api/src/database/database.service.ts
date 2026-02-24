@@ -82,7 +82,7 @@ export class DatabaseService {
   ): Promise<T> {
     const supabase = this.supabaseService.getClient();
 
-    const { data, error } = await supabase.rpc(functionName, params);
+    const { data, error } = await supabase.rpc(functionName as any, params);
 
     if (error) {
       this.logger.error(`Atomic operation ${functionName} failed:`, error);
@@ -171,7 +171,7 @@ export class DatabaseService {
     for (let i = 0; i < records.length; i += chunkSize) {
       const chunk = records.slice(i, i + chunkSize);
 
-      const query = supabase.from(table).insert(chunk as any);
+      const query = supabase.from(table as any).insert(chunk as any);
 
       if (options?.onConflict) {
         // Note: Supabase doesn't support ON CONFLICT directly in JS client
@@ -204,7 +204,7 @@ export class DatabaseService {
 
       const { data, error } = await this.supabaseService
         .getClient()
-        .rpc('pg_try_advisory_lock', { key: lockId });
+        .rpc('pg_try_advisory_lock' as any, { key: lockId });
 
       if (error) {
         this.logger.warn(`Failed to acquire lock for ${key}:`, error);
@@ -227,7 +227,7 @@ export class DatabaseService {
 
       await this.supabaseService
         .getClient()
-        .rpc('pg_advisory_unlock', { key: lockId });
+        .rpc('pg_advisory_unlock' as any, { key: lockId });
     } catch (error) {
       this.logger.warn(`Failed to release lock for ${key}:`, error);
     }
