@@ -11,16 +11,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
-    try {
-      const host = this.configService.get('REDIS_HOST', 'localhost');
-      const port = this.configService.get('REDIS_PORT', '6379');
+    const redisUrl = this.configService.get('REDIS_URL');
+    const host = this.configService.get('REDIS_HOST');
+    const port = this.configService.get('REDIS_PORT');
 
-      this.client = createClient({
-        socket: {
-          host,
-          port: parseInt(port, 10),
-        },
-      });
+    // Skip Redis connection entirely if no Redis config is provided
+    if (!redisUrl && !host) {
+      this.logger.warn('No Redis configuration found (REDIS_URL or REDIS_HOST). Running in degraded mode without Redis.');
+      this.isConnected = false;
+      return;
+    }
+
+    try {
+      if (redisUrl) {
+        this.client = createClient({ url: redisUrl });
+      } else {
+        this.client = createClient({
+          socket: {
+            host,
+            port: parseInt(port || '6379', 10),
+          },
+        });
+      }
 
       this.client.on('error', (err) => {
         this.logger.error('Redis Client Error:', err);
@@ -28,7 +40,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       });
 
       this.client.on('connect', () => {
-        this.logger.log(`Redis connected to ${host}:${port}`);
+        this.logger.log('Redis connected successfully');
         this.isConnected = true;
       });
 
