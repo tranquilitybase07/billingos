@@ -170,7 +170,16 @@ export default function ClientPage({
             </Button>
           </Link>
         </div>
-        {products.data && products.data.items.length > 0 ? (
+        {products.isLoading ? (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-20 w-full animate-pulse rounded-lg border bg-muted"
+              />
+            ))}
+          </div>
+        ) : products.data && products.data.items.length > 0 ? (
           <Pagination
             currentPage={pagination.pageIndex + 1}
             pageSize={pagination.pageSize}
