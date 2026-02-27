@@ -234,11 +234,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Don't send in development unless it's an error or higher
+    // In development, only skip debug/info level events
     if (
       process.env.NODE_ENV === 'development' &&
       severity !== 'error' &&
-      severity !== 'fatal'
+      severity !== 'fatal' &&
+      severity !== 'warning'
     ) {
       return;
     }
