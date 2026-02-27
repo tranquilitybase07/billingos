@@ -223,6 +223,7 @@ export class CheckoutService {
         organizationId, // Keep these for backward compatibility
         externalUserId,
         productId: product.id,
+        priceId: price.id,
       },
     }, {
       stripeAccount: stripeAccountId, // Create payment intent on connected account

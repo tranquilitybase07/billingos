@@ -15,6 +15,10 @@ import { SubscriptionGrowthResponseDto } from './dto/subscription-growth-respons
 import { ChurnRateResponseDto } from './dto/churn-rate-response.dto';
 import { TopCustomersResponseDto } from './dto/top-customers-response.dto';
 import { ARPUResponseDto } from './dto/arpu-response.dto';
+import { UsageOverviewResponseDto } from './dto/usage-overview-response.dto';
+import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
+import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
+import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 
 @ApiTags('Analytics')
 
@@ -155,5 +159,63 @@ export class AnalyticsController {
     @Query('organization_id') organizationId: string,
   ): Promise<ARPUResponseDto> {
     return this.analyticsService.getARPU(organizationId);
+  }
+
+  /**
+   * Get usage overview (total consumption, active metered customers, etc.)
+   * GET /analytics/usage/overview?organization_id=xxx
+   */
+  @Get('usage/overview')
+  async getUsageOverview(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<UsageOverviewResponseDto> {
+    return this.analyticsService.getUsageOverview(organizationId);
+  }
+
+  /**
+   * Get usage breakdown by feature
+   * GET /analytics/usage/by-feature?organization_id=xxx
+   */
+  @Get('usage/by-feature')
+  async getUsageByFeature(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<UsageByFeatureResponseDto> {
+    return this.analyticsService.getUsageByFeature(organizationId);
+  }
+
+  /**
+   * Get customers at risk of hitting usage limits
+   * GET /analytics/usage/at-risk?organization_id=xxx&threshold=80
+   */
+  @Get('usage/at-risk')
+  async getAtRiskCustomers(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+    @Query('threshold') threshold?: number,
+  ): Promise<AtRiskCustomersResponseDto> {
+    return this.analyticsService.getAtRiskCustomers(
+      organizationId,
+      threshold || 80,
+    );
+  }
+
+  /**
+   * Get usage trends for a specific feature over time
+   * GET /analytics/usage/trends?organization_id=xxx&feature_name=api_calls&period=30
+   */
+  @Get('usage/trends')
+  async getUsageTrends(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+    @Query('feature_name') featureName: string,
+    @Query('period') period?: number,
+  ): Promise<UsageTrendsResponseDto> {
+    return this.analyticsService.getUsageTrends(
+      organizationId,
+      featureName,
+      period || 30,
+    );
   }
 }

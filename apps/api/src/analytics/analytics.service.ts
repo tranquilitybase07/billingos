@@ -26,6 +26,10 @@ import {
   TopCustomerDto,
 } from './dto/top-customers-response.dto';
 import { ARPUResponseDto } from './dto/arpu-response.dto';
+import { UsageOverviewResponseDto } from './dto/usage-overview-response.dto';
+import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
+import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
+import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 import { Granularity } from './dto/analytics-query.dto';
 
 @Injectable()
@@ -845,6 +849,291 @@ export class AnalyticsService {
       `ARPU for organization ${organizationId}: ${arpu} (MRR: ${mrr}, Customers: ${activeCustomers})`,
     );
 
+    return response;
+  }
+
+  /**
+   * Get usage overview for an organization
+   * Aggregates total consumption, active metered customers, at-limit count, features tracked
+   */
+  async getUsageOverview(organizationId: string): Promise<UsageOverviewResponseDto> {
+    const cacheKey = `analytics:${organizationId}:usage-overview`;
+
+    const cached = await this.cacheManager.get<UsageOverviewResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    // Get current period usage records for this org's features
+    const { data: records, error } = await supabase
+      .from('usage_records')
+      .select(`
+        consumed_units,
+        limit_units,
+        customer_id,
+        feature_id,
+        features!inner (
+          id,
+          organization_id
+        )
+      `)
+      .eq('features.organization_id', organizationId)
+      .gte('period_end', new Date().toISOString());
+
+    if (error) {
+      this.logger.error(`Failed to fetch usage overview: ${error.message}`);
+      throw new BadRequestException('Failed to fetch usage overview');
+    }
+
+    const totalConsumption = (records || []).reduce((sum, r) => sum + (r.consumed_units || 0), 0);
+    const uniqueCustomers = new Set((records || []).map(r => r.customer_id));
+    const atLimitCount = (records || []).filter(
+      r => r.limit_units && r.limit_units > 0 && (r.consumed_units || 0) >= r.limit_units,
+    ).length;
+    const uniqueFeatures = new Set((records || []).map(r => r.feature_id));
+
+    const response: UsageOverviewResponseDto = {
+      total_consumption: totalConsumption,
+      active_metered_customers: uniqueCustomers.size,
+      at_limit_count: atLimitCount,
+      features_tracked: uniqueFeatures.size,
+      as_of: new Date().toISOString(),
+    };
+
+    await this.cacheManager.set(cacheKey, response, 300000);
+    return response;
+  }
+
+  /**
+   * Get usage breakdown by feature for an organization
+   */
+  async getUsageByFeature(organizationId: string): Promise<UsageByFeatureResponseDto> {
+    const cacheKey = `analytics:${organizationId}:usage-by-feature`;
+
+    const cached = await this.cacheManager.get<UsageByFeatureResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    const { data: records, error } = await supabase
+      .from('usage_records')
+      .select(`
+        consumed_units,
+        limit_units,
+        customer_id,
+        features!inner (
+          id,
+          name,
+          title,
+          organization_id
+        )
+      `)
+      .eq('features.organization_id', organizationId)
+      .gte('period_end', new Date().toISOString());
+
+    if (error) {
+      this.logger.error(`Failed to fetch usage by feature: ${error.message}`);
+      throw new BadRequestException('Failed to fetch usage by feature');
+    }
+
+    // Group by feature
+    const featureMap = new Map<string, {
+      feature_key: string;
+      feature_title: string;
+      total_consumed: number;
+      customers: Set<string>;
+      at_limit: number;
+    }>();
+
+    (records || []).forEach((r: any) => {
+      const featureId = r.features?.id;
+      if (!featureId) return;
+
+      const existing = featureMap.get(featureId) || {
+        feature_key: r.features.name,
+        feature_title: r.features.title || r.features.name,
+        total_consumed: 0,
+        customers: new Set<string>(),
+        at_limit: 0,
+      };
+
+      existing.total_consumed += r.consumed_units || 0;
+      existing.customers.add(r.customer_id);
+      if (r.limit_units && r.limit_units > 0 && (r.consumed_units || 0) >= r.limit_units) {
+        existing.at_limit += 1;
+      }
+
+      featureMap.set(featureId, existing);
+    });
+
+    const data = Array.from(featureMap.values()).map(f => ({
+      feature_key: f.feature_key,
+      feature_title: f.feature_title,
+      total_consumed: f.total_consumed,
+      avg_per_customer: f.customers.size > 0 ? Math.round(f.total_consumed / f.customers.size) : 0,
+      customer_count: f.customers.size,
+      at_limit_count: f.at_limit,
+    }));
+
+    const response: UsageByFeatureResponseDto = {
+      data,
+      organization_id: organizationId,
+      as_of: new Date().toISOString(),
+    };
+
+    await this.cacheManager.set(cacheKey, response, 300000);
+    return response;
+  }
+
+  /**
+   * Get customers at risk of hitting their usage limits
+   */
+  async getAtRiskCustomers(
+    organizationId: string,
+    threshold: number = 80,
+  ): Promise<AtRiskCustomersResponseDto> {
+    const cacheKey = `analytics:${organizationId}:at-risk:${threshold}`;
+
+    const cached = await this.cacheManager.get<AtRiskCustomersResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    // Step 1: Get usage records with features for this org
+    const { data: records, error } = await supabase
+      .from('usage_records')
+      .select(`
+        consumed_units,
+        limit_units,
+        period_end,
+        customer_id,
+        feature_id,
+        features!inner (
+          name,
+          organization_id
+        )
+      `)
+      .eq('features.organization_id', organizationId)
+      .gte('period_end', new Date().toISOString())
+      .gt('limit_units', 0);
+
+    if (error) {
+      this.logger.error(`Failed to fetch at-risk usage records: ${error.message}`);
+      throw new BadRequestException('Failed to fetch at-risk customers');
+    }
+
+    // Step 2: Get customer details for the customer IDs found
+    const customerIds = [...new Set((records || []).map(r => r.customer_id))];
+    const customerMap = new Map<string, { external_user_id: string; email: string }>();
+
+    if (customerIds.length > 0) {
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, external_user_id, email')
+        .in('id', customerIds);
+
+      (customers || []).forEach((c: any) => {
+        customerMap.set(c.id, { external_user_id: c.external_user_id || '', email: c.email || '' });
+      });
+    }
+
+    const atRisk = (records || [])
+      .filter((r: any) => {
+        const pct = ((r.consumed_units || 0) / r.limit_units) * 100;
+        return pct >= threshold;
+      })
+      .map((r: any) => {
+        const customer = customerMap.get(r.customer_id);
+        return {
+          customer_id: r.customer_id,
+          external_id: customer?.external_user_id || '',
+          email: customer?.email || '',
+          feature_key: r.features?.name || '',
+          consumed: r.consumed_units || 0,
+          limit: r.limit_units,
+          percentage_used: Math.round(((r.consumed_units || 0) / r.limit_units) * 100),
+          resets_at: r.period_end,
+        };
+      })
+      .sort((a: any, b: any) => b.percentage_used - a.percentage_used);
+
+    const response: AtRiskCustomersResponseDto = {
+      data: atRisk,
+      threshold,
+      total_at_risk: atRisk.length,
+      as_of: new Date().toISOString(),
+    };
+
+    await this.cacheManager.set(cacheKey, response, 300000);
+    return response;
+  }
+
+  /**
+   * Get usage trends for a specific feature over time
+   */
+  async getUsageTrends(
+    organizationId: string,
+    featureName: string,
+    periodDays: number = 30,
+  ): Promise<UsageTrendsResponseDto> {
+    const cacheKey = `analytics:${organizationId}:usage-trends:${featureName}:${periodDays}`;
+
+    const cached = await this.cacheManager.get<UsageTrendsResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    const startDate = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: records, error } = await supabase
+      .from('usage_records')
+      .select(`
+        consumed_units,
+        period_start,
+        customer_id,
+        features!inner (
+          name,
+          organization_id
+        )
+      `)
+      .eq('features.organization_id', organizationId)
+      .eq('features.name', featureName)
+      .gte('period_start', startDate)
+      .order('period_start', { ascending: true });
+
+    if (error) {
+      this.logger.error(`Failed to fetch usage trends: ${error.message}`);
+      throw new BadRequestException('Failed to fetch usage trends');
+    }
+
+    // Group by period_start date
+    const dateMap = new Map<string, { consumed: number; customers: Set<string> }>();
+
+    (records || []).forEach((r: any) => {
+      const date = r.period_start ? new Date(r.period_start).toISOString().split('T')[0] : null;
+      if (!date) return;
+
+      const existing = dateMap.get(date) || { consumed: 0, customers: new Set<string>() };
+      existing.consumed += r.consumed_units || 0;
+      existing.customers.add(r.customer_id);
+      dateMap.set(date, existing);
+    });
+
+    const data = Array.from(dateMap.entries())
+      .map(([date, metrics]) => ({
+        date,
+        consumed: metrics.consumed,
+        customer_count: metrics.customers.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const response: UsageTrendsResponseDto = {
+      feature_key: featureName,
+      data,
+      period: periodDays,
+    };
+
+    await this.cacheManager.set(cacheKey, response, 900000);
     return response;
   }
 

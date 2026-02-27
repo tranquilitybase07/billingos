@@ -64,13 +64,16 @@
       "Bash(sed:*)",
       "Bash(rm:*)",
       "Bash(supabase db push:*)",
-      "WebFetch(domain:github.com)"
+      "Bash(git init:*)",
+      "Bash(npx tsx:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pnpm.io)",
+      "Bash(pnpm run linear:find-ids:*)",
+      "WebFetch(domain:docs.stripe.com)"
     ],
     "deny": [],
     "ask": []
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "shadcn"
-  ]
+  "enabledMcpjsonServers": ["shadcn"]
 }
