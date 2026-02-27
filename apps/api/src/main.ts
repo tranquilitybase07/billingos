@@ -3,8 +3,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { initializeSentry } from './config/sentry.config';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ValidationException } from './common/exceptions/validation.exception';
 
 async function bootstrap() {
+  // Initialize Sentry before anything else
+  initializeSentry();
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true, // Enable raw body for Stripe webhooks
   });
@@ -60,14 +66,18 @@ async function bootstrap() {
     ],
   });
 
-  // Global validation pipe
+  // Global validation pipe with standardized error format
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip properties that don't have decorators
-      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are present
-      transform: true, // Automatically transform payloads to DTO instances
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      exceptionFactory: (errors) => ValidationException.fromClassValidator(errors),
     }),
   );
+
+  // Global exception filter - catches all errors and standardizes responses
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Use JSON parser for all routes except webhooks
   app.use((req, res, next) => {
