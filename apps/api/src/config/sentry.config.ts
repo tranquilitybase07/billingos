@@ -13,11 +13,15 @@ export function initializeSentry() {
     // Performance Monitoring
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
 
-    // Only send relevant errors in production
+    // Filter events by environment
     beforeSend(event) {
-      // Don't send in development unless it's an error
+      // In development: allow error, fatal, and warning so you can test
       if (process.env.NODE_ENV === 'development') {
-        if (event.level !== 'error' && event.level !== 'fatal') {
+        if (
+          event.level !== 'error' &&
+          event.level !== 'fatal' &&
+          event.level !== 'warning'
+        ) {
           return null;
         }
       }
