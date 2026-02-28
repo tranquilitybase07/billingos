@@ -13,9 +13,12 @@ export default withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: "billingos",
+  org: process.env.SENTRY_ORG,
 
-  project: "billingos-web0prod",
+  project: process.env.SENTRY_PROJECT,
+
+  // Auth token for source map uploads
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

@@ -1,15 +1,15 @@
+// IMPORTANT: Import instrument.ts at the top before all other imports
+import './instrument';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { initializeSentry } from './config/sentry.config';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ValidationException } from './common/exceptions/validation.exception';
 
 async function bootstrap() {
-  // Initialize Sentry before anything else
-  initializeSentry();
 
   const app = await NestFactory.create(AppModule, {
     rawBody: true, // Enable raw body for Stripe webhooks

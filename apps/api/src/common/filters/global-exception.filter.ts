@@ -7,7 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import * as Sentry from '@sentry/node';
+import * as Sentry from '@sentry/nestjs';
+import { SentryExceptionCaptured } from '@sentry/nestjs';
 import { BillingOSException } from '../exceptions/billing-os.exception';
 import { StripeErrorMapper } from '../exceptions/stripe-error-mapper';
 import { ErrorCode, ErrorSeverity } from '../exceptions/error-codes';
@@ -18,6 +19,7 @@ import Stripe from 'stripe';
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
+  @SentryExceptionCaptured()
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
