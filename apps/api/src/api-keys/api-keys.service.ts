@@ -209,10 +209,40 @@ export class ApiKeysService {
   async revoke(organizationId: string, keyId: string): Promise<ApiKey[]> {
     const supabase = this.supabaseService.getClient();
 
-    // Revoke the single key
-    // TODO: Re-enable key pair revocation after regenerating Supabase types
     const revokedAt = new Date().toISOString();
-    const { data, error } = await supabase
+
+    // First, fetch the key to get its key_pair_id
+    const { data: keyData, error: fetchError } = await supabase
+      .from('api_keys')
+      .select('key_pair_id')
+      .eq('id', keyId)
+      .eq('organization_id', organizationId)
+      .single();
+
+    if (fetchError || !keyData) {
+      throw new Error('Failed to find API key');
+    }
+
+    let revokedKeys: ApiKey[];
+
+    if (keyData.key_pair_id) {
+      // Revoke all keys in the pair using key_pair_id
+      const { data, error } = await supabase
+        .from('api_keys')
+        .update({ revoked_at: revokedAt })
+        .eq('key_pair_id', keyData.key_pair_id)
+        .eq('organization_id', organizationId)
+        .select();
+
+      if (error || !data) {
+        throw new Error('Failed to revoke API key pair');
+      }
+
+      revokedKeys = data as ApiKey[];
+      this.logger.log(`Revoked API key pair ${keyData.key_pair_id} for organization ${organizationId}`);
+    } else {
+      // Legacy individual key — revoke just the one key
+      const { data, error } = await supabase
         .from('api_keys')
         .update({ revoked_at: revokedAt })
         .eq('id', keyId)
@@ -220,13 +250,15 @@ export class ApiKeysService {
         .select()
         .single();
 
-    if (error || !data) {
-      throw new Error('Failed to revoke API key');
+      if (error || !data) {
+        throw new Error('Failed to revoke API key');
+      }
+
+      revokedKeys = [data as ApiKey];
+      this.logger.log(`Revoked API key ${keyId} for organization ${organizationId}`);
     }
 
-    this.logger.log(`Revoked API key ${keyId} for organization ${organizationId}`);
-
-    return [data as ApiKey];
+    return revokedKeys;
   }
 
   /**
