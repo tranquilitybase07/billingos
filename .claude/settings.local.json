@@ -63,7 +63,8 @@
       "WebFetch(domain:www.npmjs.com)",
       "Bash(sed:*)",
       "Bash(rm:*)",
-      "Bash(supabase db push:*)"
+      "Bash(supabase db push:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

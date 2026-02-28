@@ -11,4 +11,10 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  // Uncomment to test Sentry error capturing
+  // @Get('debug-sentry')
+  // getError(): string {
+  //   throw new Error('My first Sentry error!');
+  // }
 }
