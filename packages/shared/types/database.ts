@@ -674,6 +674,41 @@ export type Database = {
           },
         ]
       }
+      idempotency_keys: {
+        Row: {
+          created_at: string | null
+          customer_id: string
+          expires_at: string
+          id: string
+          idempotency_key: string
+          response: Json
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: string
+          expires_at?: string
+          id?: string
+          idempotency_key: string
+          response?: Json
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: string
+          expires_at?: string
+          id?: string
+          idempotency_key?: string
+          response?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idempotency_keys_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           account_id: string | null

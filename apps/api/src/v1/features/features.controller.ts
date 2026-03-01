@@ -74,9 +74,14 @@ export class V1FeaturesController {
     return {
       feature_key: featureKey,
       has_access: access.has_access,
-      limit: access.limit,
-      usage: access.usage,
-      metadata: access.metadata,
+      reason: access.reason,
+      limit: access.feature?.properties?.limit ?? null,
+      usage: access.feature?.properties?.consumed ?? null,
+      metadata: access.feature ? {
+        remaining: access.feature.properties?.remaining,
+        resets_at: access.feature.properties?.resets_at,
+        type: access.feature.type,
+      } : null,
     };
   }
 
@@ -95,6 +100,7 @@ export class V1FeaturesController {
       feature_key: string;
       quantity: number;
       timestamp?: string;
+      idempotency_key?: string;
       metadata?: Record<string, any>;
     },
   ) {
@@ -117,7 +123,7 @@ export class V1FeaturesController {
       customer_id: customerRecord.id,
       feature_name: body.feature_key,
       units: body.quantity,
-      idempotency_key: body.metadata?.idempotency_key,
+      idempotency_key: body.idempotency_key,
     });
 
     return {

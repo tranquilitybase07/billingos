@@ -8,6 +8,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
@@ -602,8 +603,7 @@ export class FeaturesService {
       `,
       )
       .eq('customer_id', customerId)
-      .is('revoked_at', null)
-      .limit(1);
+      .is('revoked_at', null);
 
     if (error) {
       this.logger.error('Error checking feature access:', error);
@@ -686,12 +686,20 @@ export class FeaturesService {
   async trackUsage(trackDto: TrackUsageDto) {
     const supabase = this.supabaseService.getClient();
 
-    // TODO: Check idempotency key in Redis
-    // if (trackDto.idempotency_key) {
-    //   const idempotencyKey = `usage:idempotency:${trackDto.idempotency_key}`;
-    //   const existing = await this.redisClient.get(idempotencyKey);
-    //   if (existing) return JSON.parse(existing);
-    // }
+    // Check idempotency key in database
+    if (trackDto.idempotency_key) {
+      const { data: existingKey } = await (supabase as any)
+        .from('idempotency_keys')
+        .select('response, expires_at')
+        .eq('customer_id', trackDto.customer_id)
+        .eq('idempotency_key', trackDto.idempotency_key)
+        .single();
+
+      if (existingKey && new Date(existingKey.expires_at) > new Date()) {
+        this.logger.log(`Idempotency key hit: ${trackDto.idempotency_key}`);
+        return existingKey.response;
+      }
+    }
 
     // Get active subscription with the feature
     const { data: grants } = await supabase
@@ -732,7 +740,7 @@ export class FeaturesService {
     }
 
     // Get or create usage record for current period
-    const { data: usageRecord, error: fetchError } = await supabase
+    const { data: existingRecord, error: fetchError } = await supabase
       .from('usage_records')
       .select('*')
       .eq('customer_id', trackDto.customer_id)
@@ -747,8 +755,36 @@ export class FeaturesService {
       throw new BadRequestException('Failed to fetch usage record');
     }
 
+    let usageRecord = existingRecord;
+
     if (!usageRecord) {
-      throw new NotFoundException('Usage record not found for current period');
+      // Auto-create usage record for the current billing period
+      const periodStart = grant.subscriptions?.current_period_start || new Date().toISOString();
+      const periodEnd = grant.subscriptions?.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const featureProperties = grant.features.properties as any;
+      const limitUnits = featureProperties?.limit ?? 0;
+
+      const { data: newRecord, error: createError } = await supabase
+        .from('usage_records')
+        .insert({
+          customer_id: trackDto.customer_id,
+          feature_id: grant.feature_id,
+          subscription_id: grant.subscription_id,
+          consumed_units: 0,
+          limit_units: limitUnits,
+          period_start: periodStart,
+          period_end: periodEnd,
+        })
+        .select()
+        .single();
+
+      if (createError || !newRecord) {
+        this.logger.error('Failed to auto-create usage record:', createError);
+        throw new BadRequestException('Failed to create usage record');
+      }
+
+      usageRecord = newRecord;
+      this.logger.log(`Auto-created usage record for customer ${trackDto.customer_id}, feature ${trackDto.feature_name}`);
     }
 
     // Check if adding units would exceed limit
@@ -808,11 +844,17 @@ export class FeaturesService {
     // TODO: Invalidate Redis cache
     // await this.invalidateFeatureCache(trackDto.customer_id, trackDto.feature_name);
 
-    // TODO: Store idempotency key result
-    // if (trackDto.idempotency_key) {
-    //   const idempotencyKey = `usage:idempotency:${trackDto.idempotency_key}`;
-    //   await this.redisClient.setex(idempotencyKey, 86400, JSON.stringify(result)); // 24h
-    // }
+    // Store idempotency key result
+    if (trackDto.idempotency_key) {
+      await (supabase as any)
+        .from('idempotency_keys')
+        .upsert({
+          customer_id: trackDto.customer_id,
+          idempotency_key: trackDto.idempotency_key,
+          response: result,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        }, { onConflict: 'customer_id,idempotency_key' });
+    }
 
     this.logger.log(
       `Usage tracked: ${trackDto.feature_name} for customer ${trackDto.customer_id} - ${trackDto.units} units`,
@@ -993,26 +1035,16 @@ export class FeaturesService {
       throw new BadRequestException('Failed to fetch customer features');
     }
 
-    this.logger.log(`Found ${grants?.length || 0} feature grants for customer ${customerId}`);
-    this.logger.log(`Raw grants data:`, JSON.stringify(grants, null, 2));
-
     // Filter by organization if provided
     let filteredGrants = grants || [];
     if (organizationId) {
       filteredGrants = filteredGrants.filter(
         (grant: any) => grant.features?.organization_id === organizationId
       );
-      this.logger.log(`After org filter: ${filteredGrants.length} grants`);
     }
 
     // Map to response format
     const features = filteredGrants.map((grant: any) => {
-      this.logger.log(`Processing grant ${grant.id}:`, {
-        hasProperties: 'properties' in grant,
-        propertiesValue: grant.properties,
-        propertiesType: typeof grant.properties,
-      });
-      
       return {
         id: grant.id,
         feature_id: grant.feature_id,
@@ -1026,14 +1058,25 @@ export class FeaturesService {
       };
     });
 
-    this.logger.log(`Returning ${features.length} features`);
-
     return features;
   }
 
-  // TODO: Add Redis cache invalidation methods
-  // private async invalidateFeatureCache(customerId: string, featureName: string) {
-  //   const cacheKey = `feature:check:${customerId}:${featureName}`;
-  //   await this.redisClient.del(cacheKey);
-  // }
+  /**
+   * Clean up expired idempotency keys every hour
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async cleanupExpiredIdempotencyKeys() {
+    const supabase = this.supabaseService.getClient();
+
+    const { error } = await (supabase as any)
+      .from('idempotency_keys')
+      .delete()
+      .lt('expires_at', new Date().toISOString());
+
+    if (error) {
+      this.logger.error('Failed to cleanup expired idempotency keys:', error);
+    } else {
+      this.logger.log('Cleaned up expired idempotency keys');
+    }
+  }
 }

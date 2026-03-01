@@ -268,6 +268,60 @@ export interface AnalyticsQueryParams {
   granularity?: Granularity
 }
 
+// Usage Analytics Types
+export interface UsageOverviewResponse {
+  total_consumption: number
+  active_metered_customers: number
+  at_limit_count: number
+  features_tracked: number
+  as_of: string
+}
+
+export interface UsageByFeatureData {
+  feature_key: string
+  feature_title: string
+  total_consumed: number
+  avg_per_customer: number
+  customer_count: number
+  at_limit_count: number
+}
+
+export interface UsageByFeatureResponse {
+  data: UsageByFeatureData[]
+  organization_id: string
+  as_of: string
+}
+
+export interface AtRiskCustomer {
+  customer_id: string
+  external_id: string
+  email: string
+  feature_key: string
+  consumed: number
+  limit: number
+  percentage_used: number
+  resets_at: string
+}
+
+export interface AtRiskCustomersResponse {
+  data: AtRiskCustomer[]
+  threshold: number
+  total_at_risk: number
+  as_of: string
+}
+
+export interface UsageTrendDataPoint {
+  date: string
+  consumed: number
+  customer_count: number
+}
+
+export interface UsageTrendsResponse {
+  feature_key: string
+  data: UsageTrendDataPoint[]
+  period: number
+}
+
 // Subscription Upgrade/Downgrade Types
 export type ChangeEffectiveTiming = 'immediate' | 'period_end'
 export type ChangeType = 'upgrade' | 'downgrade'

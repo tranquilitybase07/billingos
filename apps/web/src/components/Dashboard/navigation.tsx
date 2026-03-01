@@ -13,6 +13,7 @@ import {
   DonutLarge as DonutLargeOutlined,
   ShoppingBag as ShoppingBagOutlined,
   AllInclusive as AllInclusiveOutlined,
+  BarChart,
 } from '@mui/icons-material'
 import type { Organization } from '@/lib/api/types'
 
@@ -122,6 +123,13 @@ const organizationRoutesList = (org?: Organization): Route[] => [
     title: "Customers",
     link: `/dashboard/${org?.slug}/customers`,
     icon: <People fontSize="inherit" />,
+    if: true,
+  },
+  {
+    id: "analytics",
+    title: "Analytics",
+    link: `/dashboard/${org?.slug}/analytics`,
+    icon: <BarChart fontSize="inherit" />,
     if: true,
   },
   {

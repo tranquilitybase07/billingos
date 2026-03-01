@@ -6,6 +6,7 @@ import { SessionTokensModule } from '../session-tokens/session-tokens.module';
 import { V1ProductsModule } from './products/products.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { PortalModule } from './portal/portal.module';
+import { V1UsageModule } from './usage/usage.module';
 import { CustomerController } from './customer/customer.controller';
 import { V1FeaturesController } from './features/features.controller';
 
@@ -21,7 +22,8 @@ import { V1FeaturesController } from './features/features.controller';
  * - /v1/checkout/*     Payment intent creation and processing
  * - /v1/portal/*       Customer portal session management
  * - /v1/subscriptions/* Customer subscription management
- * - /v1/features/*     Feature gating and usage tracking
+ * - /v1/features/*     Feature gating and usage tracking (session token auth)
+ * - /v1/usage/*        Usage tracking (API key auth for Node SDK)
  */
 @Module({
   imports: [
@@ -32,6 +34,7 @@ import { V1FeaturesController } from './features/features.controller';
     V1ProductsModule,
     CheckoutModule,
     PortalModule,
+    V1UsageModule,
   ],
   controllers: [
     CustomerController,
