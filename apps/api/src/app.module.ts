@@ -1,7 +1,9 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import * as redisStore from 'cache-manager-redis-store';
 import { AppController } from './app.controller';
@@ -23,6 +25,16 @@ import { V1Module } from './v1/v1.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import {
+  getClientIp,
+  getContextPath,
+  getGlobalRateLimitForContext,
+  getScopedRateLimitForContext,
+  rateLimitConfig,
+  resolveScopedTrackerForContext,
+  shouldSkipPath,
+} from './config/rate-limit.config';
 
 @Module({
   imports: [
@@ -30,6 +42,28 @@ import { RedisModule } from './redis/redis.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    ThrottlerModule.forRoot({
+      errorMessage: rateLimitConfig.messages.tooManyRequests,
+      throttlers: [
+        {
+          name: 'default',
+          ttl: (context) => getGlobalRateLimitForContext(context).ttlMs,
+          limit: (context) => getGlobalRateLimitForContext(context).limit,
+          getTracker: (request) => getClientIp(request as any),
+          skipIf: (context) => shouldSkipPath(getContextPath(context)),
+          setHeaders: true,
+        },
+        {
+          name: 'scoped',
+          ttl: (context) => getScopedRateLimitForContext(context).ttlMs,
+          limit: (context) => getScopedRateLimitForContext(context).limit,
+          getTracker: (_request, context) =>
+            resolveScopedTrackerForContext(context) || 'skip-scoped',
+          skipIf: (context) => !resolveScopedTrackerForContext(context),
+          setHeaders: true,
+        },
+      ],
     }),
     ScheduleModule.forRoot(),
     CacheModule.registerAsync({
@@ -62,7 +96,13 @@ import { RedisModule } from './redis/redis.module';
     DiscountsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
