@@ -20,10 +20,9 @@ import { CustomersModule } from './customers/customers.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { SessionTokensModule } from './session-tokens/session-tokens.module';
 import { V1Module } from './v1/v1.module';
-import { JwtDebugMiddleware } from './middleware/jwt-debug.middleware';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
-import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -36,7 +35,7 @@ import { DatabaseModule } from './database/database.module';
     CacheModule.registerAsync({
       isGlobal: true,
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService) => ({
         store: redisStore,
         host: configService.get('REDIS_HOST', 'localhost'),
         port: parseInt(configService.get('REDIS_PORT', '6379'), 10),
@@ -67,6 +66,6 @@ import { DatabaseModule } from './database/database.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(JwtDebugMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
   }
 }
