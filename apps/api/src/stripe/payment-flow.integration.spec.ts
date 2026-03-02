@@ -284,6 +284,11 @@ describe('Payment Flow Integration Tests', () => {
     });
 
     it('should handle race condition in customer creation', async () => {
+      jest.spyOn(databaseService, 'upsertCustomerAtomic').mockResolvedValue({
+        customerId: 'cust_single',
+        created: true,
+      });
+
       // Simulate multiple concurrent requests
       const promises = Array(5).fill(null).map(() =>
         databaseService.upsertCustomerAtomic({
@@ -292,11 +297,6 @@ describe('Payment Flow Integration Tests', () => {
           externalId: 'ext_concurrent',
         }),
       );
-
-      jest.spyOn(databaseService, 'upsertCustomerAtomic').mockResolvedValue({
-        customerId: 'cust_single',
-        created: true,
-      });
 
       const results = await Promise.all(promises);
 

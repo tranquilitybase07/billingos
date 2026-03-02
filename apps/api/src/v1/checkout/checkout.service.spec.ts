@@ -3,6 +3,7 @@ import { CheckoutService } from './checkout.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
 import { StripeService } from '../../stripe/stripe.service';
+import { CheckoutMetadataService } from './checkout-metadata.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('CheckoutService - Critical Path Tests', () => {
@@ -20,15 +21,29 @@ describe('CheckoutService - Critical Path Tests', () => {
   };
 
   const mockStripeClient = {
+    customers: {
+      create: jest.fn(),
+    },
     paymentIntents: {
       create: jest.fn(),
-      confirm: jest.fn(),
+      retrieve: jest.fn(),
       cancel: jest.fn(),
     },
   };
 
   const mockStripeService = {
     getClient: jest.fn().mockReturnValue(mockStripeClient),
+  };
+
+  const mockCheckoutMetadataService = {
+    createMetadata: jest.fn().mockResolvedValue({
+      id: 'meta_123',
+      metadata_key: 'mkey_123',
+      expiresAt: new Date(Date.now() + 1000 * 60 * 30),
+    }),
+    linkToCheckoutSession: jest.fn(),
+    getMetadata: jest.fn(),
+    deleteMetadata: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -48,6 +63,10 @@ describe('CheckoutService - Critical Path Tests', () => {
         {
           provide: StripeService,
           useValue: mockStripeService,
+        },
+        {
+          provide: CheckoutMetadataService,
+          useValue: mockCheckoutMetadataService,
         },
       ],
     }).compile();
@@ -135,9 +154,16 @@ describe('CheckoutService - Critical Path Tests', () => {
           return {
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: mockPrice,
-                  error: null,
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                      data: {
+                        ...mockPrice,
+                        product: mockProduct,
+                      },
+                      error: null,
+                    }),
+                  }),
                 }),
               }),
             }),
@@ -151,6 +177,21 @@ describe('CheckoutService - Critical Path Tests', () => {
                 single: jest.fn().mockResolvedValue({
                   data: mockOrganization,
                   error: null,
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === 'customers') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  maybeSingle: jest.fn().mockResolvedValue({
+                    data: null,
+                    error: null,
+                  }),
                 }),
               }),
             }),
@@ -202,17 +243,28 @@ describe('CheckoutService - Critical Path Tests', () => {
       });
 
       mockCustomersService.upsertCustomer.mockResolvedValue(mockCustomer);
+      mockStripeClient.customers.create.mockResolvedValue({ id: 'cus_test123' });
       mockStripeClient.paymentIntents.create.mockResolvedValue(mockPaymentIntent);
 
       // Execute
-      const result = await service.createCheckout(createCheckoutDto);
+      const result = await service.createCheckout(
+        createCheckoutDto.organizationId,
+        createCheckoutDto.externalUserId,
+        {
+          priceId: createCheckoutDto.productPriceId,
+          customerEmail: createCheckoutDto.customerEmail,
+          customerName: createCheckoutDto.customerName,
+          metadata: createCheckoutDto.metadata,
+        },
+      );
 
       // Verify
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         id: 'cs_123',
         clientSecret: 'pi_test123_secret_test',
         paymentIntentId: 'pi_test123',
         amount: 1000,
+        totalAmount: 1000,
         currency: 'usd',
         product: {
           name: 'Test Product',
@@ -234,6 +286,7 @@ describe('CheckoutService - Critical Path Tests', () => {
         email: 'test@example.com',
         name: 'Test Customer',
         external_id: 'ext_user_123',
+        stripe_customer_id: 'cus_test123',
         metadata: { source: 'sdk' },
       });
 
@@ -248,9 +301,6 @@ describe('CheckoutService - Critical Path Tests', () => {
             productId: 'prod_123',
             priceId: 'price_123',
             externalUserId: 'ext_user_123',
-            customerEmail: 'test@example.com',
-            customerName: 'Test Customer',
-            trialDays: '7',
           }),
         }),
         expect.objectContaining({
@@ -286,9 +336,13 @@ describe('CheckoutService - Critical Path Tests', () => {
           return {
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: null,
-                  error: null,
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                      data: null,
+                      error: null,
+                    }),
+                  }),
                 }),
               }),
             }),
@@ -300,9 +354,17 @@ describe('CheckoutService - Critical Path Tests', () => {
         };
       });
 
-      await expect(service.createCheckout(createCheckoutDto)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.createCheckout(
+          createCheckoutDto.organizationId,
+          createCheckoutDto.externalUserId,
+          {
+            priceId: createCheckoutDto.productPriceId,
+            customerEmail: createCheckoutDto.customerEmail,
+            customerName: createCheckoutDto.customerName,
+          },
+        ),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should cleanup payment intent if database save fails', async () => {
@@ -320,6 +382,67 @@ describe('CheckoutService - Critical Path Tests', () => {
       };
 
       mockSupabaseClient.from.mockImplementation((table) => {
+        if (table === 'product_prices') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                      data: {
+                        id: 'price_123',
+                        price_amount: 1000,
+                        price_currency: 'usd',
+                        recurring_interval: 'month',
+                        recurring_interval_count: 1,
+                        product: {
+                          id: 'prod_123',
+                          name: 'Test Product',
+                          trial_days: 0,
+                          is_archived: false,
+                        },
+                      },
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === 'organizations') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    accounts: {
+                      stripe_id: 'acct_test',
+                    },
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+
+        if (table === 'customers') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  maybeSingle: jest.fn().mockResolvedValue({
+                    data: null,
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+
         if (table === 'payment_intents') {
           return {
             insert: jest.fn().mockReturnValue({
@@ -356,12 +479,21 @@ describe('CheckoutService - Critical Path Tests', () => {
         stripe_customer_id: 'cus_test123',
       });
 
+      mockStripeClient.customers.create.mockResolvedValue({ id: 'cus_test123' });
       mockStripeClient.paymentIntents.create.mockResolvedValue(mockPaymentIntent);
       mockStripeClient.paymentIntents.cancel.mockResolvedValue({});
 
-      await expect(service.createCheckout(createCheckoutDto)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.createCheckout(
+          createCheckoutDto.organizationId,
+          createCheckoutDto.externalUserId,
+          {
+            priceId: createCheckoutDto.productPriceId,
+            customerEmail: createCheckoutDto.customerEmail,
+            customerName: createCheckoutDto.customerName,
+          },
+        ),
+      ).rejects.toThrow(BadRequestException);
 
       // Verify payment intent was cancelled
       expect(mockStripeClient.paymentIntents.cancel).toHaveBeenCalledWith('pi_test123');
@@ -389,14 +521,6 @@ describe('CheckoutService - Critical Path Tests', () => {
         payment_method: 'pm_test123',
       };
 
-      const mockCheckoutSession = {
-        id: 'cs_123',
-      };
-
-      const mockSubscription = {
-        id: 'sub_123',
-      };
-
       mockSupabaseClient.from.mockImplementation((table) => {
         if (table === 'payment_intents') {
           return {
@@ -419,31 +543,10 @@ describe('CheckoutService - Critical Path Tests', () => {
 
         if (table === 'checkout_sessions') {
           return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: mockCheckoutSession,
-                  error: null,
-                }),
-              }),
-            }),
             update: jest.fn().mockReturnValue({
               eq: jest.fn().mockResolvedValue({
                 data: null,
                 error: null,
-              }),
-            }),
-          };
-        }
-
-        if (table === 'subscriptions') {
-          return {
-            insert: jest.fn().mockReturnValue({
-              select: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: mockSubscription,
-                  error: null,
-                }),
               }),
             }),
           };
@@ -454,7 +557,7 @@ describe('CheckoutService - Critical Path Tests', () => {
         };
       });
 
-      mockStripeClient.paymentIntents.confirm.mockResolvedValue(mockConfirmedPaymentIntent);
+      mockStripeClient.paymentIntents.retrieve.mockResolvedValue(mockConfirmedPaymentIntent);
 
       // Execute
       const result = await service.confirmCheckout(clientSecret, confirmDto);
@@ -464,14 +567,11 @@ describe('CheckoutService - Critical Path Tests', () => {
         status: 'succeeded',
         requiresAction: false,
         success: true,
-        subscriptionId: 'sub_123',
+        message: 'Payment successful! Your subscription is being activated.',
       });
 
-      expect(mockStripeClient.paymentIntents.confirm).toHaveBeenCalledWith(
+      expect(mockStripeClient.paymentIntents.retrieve).toHaveBeenCalledWith(
         'pi_test123',
-        {
-          payment_method: 'pm_test123',
-        },
         {
           stripeAccount: 'acct_test123',
         },
@@ -510,6 +610,12 @@ describe('CheckoutService - Critical Path Tests', () => {
                 }),
               }),
             }),
+            update: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: null,
+                error: null,
+              }),
+            }),
           };
         }
 
@@ -518,7 +624,7 @@ describe('CheckoutService - Critical Path Tests', () => {
         };
       });
 
-      mockStripeClient.paymentIntents.confirm.mockResolvedValue(mockPaymentIntentWith3DS);
+      mockStripeClient.paymentIntents.retrieve.mockResolvedValue(mockPaymentIntentWith3DS);
 
       // Execute
       const result = await service.confirmCheckout(clientSecret, confirmDto);
@@ -553,6 +659,12 @@ describe('CheckoutService - Critical Path Tests', () => {
                 }),
               }),
             }),
+            update: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: null,
+                error: null,
+              }),
+            }),
           };
         }
 
@@ -563,7 +675,7 @@ describe('CheckoutService - Critical Path Tests', () => {
 
       const stripeError = new Error('Card declined');
       stripeError['type'] = 'StripeCardError';
-      mockStripeClient.paymentIntents.confirm.mockRejectedValue(stripeError);
+      mockStripeClient.paymentIntents.retrieve.mockRejectedValue(stripeError);
 
       // Execute and verify
       await expect(service.confirmCheckout(clientSecret, confirmDto)).rejects.toThrow(

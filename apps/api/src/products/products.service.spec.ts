@@ -454,7 +454,8 @@ describe('ProductsService', () => {
 
       const result = await service.update(mockProduct.id, testUser.id, updateDto);
 
-      expect(stripeService.createProduct).toHaveBeenCalled();
+      // Feature linking is now applied in-place (no automatic version bump)
+      expect(stripeService.createProduct).not.toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
@@ -1051,8 +1052,9 @@ describe('ProductsService', () => {
         updateDto
       );
 
-      expect(result.will_version).toBe(true);
-      expect(result.changes).toContainEqual(expect.stringContaining('Adding 1 new feature(s)'));
+      // Linking features no longer forces versioning
+      expect(result.will_version).toBe(false);
+      expect(result.changes).toHaveLength(0);
     });
 
     it('should indicate no versioning for basic metadata updates', async () => {

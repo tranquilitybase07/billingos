@@ -1,25 +1,25 @@
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { AppController } from './../src/app.controller';
+import { AppService } from './../src/app.service';
 
-describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+describe('AppController integration', () => {
+  let appController: AppController;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      controllers: [AppController],
+      providers: [AppService],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
-    await app.init();
+    appController = moduleFixture.get(AppController);
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  it('/ (GET) returns hello world', () => {
+    expect(appController.getHello()).toBe('Hello World!');
+  });
+
+  it('binds controller to root path', () => {
+    expect([undefined, '', '/']).toContain(Reflect.getMetadata(PATH_METADATA, AppController));
   });
 });

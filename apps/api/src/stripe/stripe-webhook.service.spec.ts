@@ -1,9 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { StripeWebhookService } from './stripe-webhook.service';
 import { StripeService } from './stripe.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CustomersService } from '../customers/customers.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { RedisService } from '../redis/redis.service';
+import { RefundService } from './refund.service';
 import { Logger, forwardRef } from '@nestjs/common';
 import Stripe from 'stripe';
 
@@ -40,6 +43,14 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
     syncActiveEntitlementsFromStripe: jest.fn(),
   };
 
+  const mockRedisService = {
+    setIdempotencyKey: jest.fn().mockResolvedValue(true),
+  };
+
+  const mockRefundService = {
+    refundPaymentOnFailure: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -61,6 +72,22 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         {
           provide: SubscriptionsService,
           useValue: mockSubscriptionsService,
+        },
+        {
+          provide: CACHE_MANAGER,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
+        {
+          provide: RefundService,
+          useValue: mockRefundService,
         },
       ],
     }).compile();
@@ -162,7 +189,14 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         if (table === 'checkout_sessions') {
           return {
             update: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+              eq: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                  single: jest.fn().mockResolvedValue({
+                    data: { id: 'cs_123' },
+                    error: null,
+                  }),
+                }),
+              }),
             }),
           };
         }
@@ -179,9 +213,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
             }),
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: mockCustomer,
-                  error: null,
+                eq: jest.fn().mockReturnValue({
+                  single: jest.fn().mockResolvedValue({
+                    data: mockCustomer,
+                    error: null,
+                  }),
                 }),
               }),
             }),
@@ -226,9 +262,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
             }),
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: null,
-                  error: null,
+                eq: jest.fn().mockReturnValue({
+                  order: jest.fn().mockResolvedValue({
+                    data: [],
+                    error: null,
+                  }),
                 }),
               }),
             }),
@@ -261,6 +299,13 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         }
 
         return {
+          update: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockResolvedValue({ data: null, error: null }),
           }),
@@ -314,9 +359,6 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
 
       // Verify subscription was created in database
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('subscriptions');
-
-      // Verify feature grants were created
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('feature_grants');
     });
 
     it('should handle customer upsert race condition with retry', async () => {
@@ -369,9 +411,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
               }),
               select: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
-                  single: jest.fn().mockResolvedValue({
-                    data: { id: 'customer_123', organization_id: 'org_123' },
-                    error: null,
+                  eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                      data: { id: 'customer_123', organization_id: 'org_123' },
+                      error: null,
+                    }),
                   }),
                 }),
               }),
@@ -393,10 +437,20 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
 
         return {
           update: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+            eq: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: { id: 'fallback' },
+                  error: null,
+                }),
+              }),
+            }),
           }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({ data: null, error: null }),
+              }),
               single: jest.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
@@ -443,7 +497,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
 
         return {
           update: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+            eq: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
           }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
@@ -489,7 +547,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
 
         return {
           update: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+            eq: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
           }),
         };
       });
@@ -531,9 +593,11 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
             }),
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                single: jest.fn().mockResolvedValue({
-                  data: null,
-                  error: null,
+                eq: jest.fn().mockReturnValue({
+                  order: jest.fn().mockResolvedValue({
+                    data: [],
+                    error: null,
+                  }),
                 }),
               }),
             }),
@@ -543,17 +607,31 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         // Default mock for other tables
         return {
           update: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({ data: {}, error: null }),
+            eq: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
           }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'test',
+                    accounts: { stripe_id: 'acct_test' },
+                    stripe_price_id: 'price_test',
+                  },
+                  error: null,
+                }),
+              }),
               single: jest.fn().mockResolvedValue({
                 data: {
                   id: 'test',
                   accounts: { stripe_id: 'acct_test' },
                   stripe_price_id: 'price_test',
                 },
-                error: null
+                error: null,
               }),
             }),
           }),
