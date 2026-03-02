@@ -2,17 +2,21 @@
 import './instrument';
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ResponseSanitizeInterceptor } from './common/interceptors/response-sanitize.interceptor';
 import { ValidationException } from './common/exceptions/validation.exception';
+import { securityConfig } from './config/security.config';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
 
   const app = await NestFactory.create(AppModule, {
-    rawBody: true, // Enable raw body for Stripe webhooks
+    rawBody: true,
+    logger: securityConfig.logLevel as any,
   });
 
   // Enable CORS for frontend and sample app
@@ -51,7 +55,7 @@ async function bootstrap() {
       if (isAllowed) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked origin: ${origin}`);
+        logger.warn(`CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -76,8 +80,9 @@ async function bootstrap() {
     }),
   );
 
-  // Global exception filter - catches all errors and standardizes responses
+  // Global exception filter and response sanitization
   app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalInterceptors(new ResponseSanitizeInterceptor());
 
   // Use JSON parser for all routes except webhooks
   app.use((req, res, next) => {
@@ -158,9 +163,9 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
-  console.log(`🚀 API server running on http://localhost:${port}`);
-  console.log(`📚 Swagger documentation available at http://localhost:${port}/api`);
-  console.log(`📄 OpenAPI JSON available at http://localhost:${port}/api-json`);
+  logger.log(`API server running on http://localhost:${port}`);
+  logger.log(`Swagger documentation available at http://localhost:${port}/api`);
+  logger.log(`OpenAPI JSON available at http://localhost:${port}/api-json`);
 }
 
 void bootstrap();

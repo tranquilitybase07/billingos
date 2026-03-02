@@ -4,6 +4,8 @@ import { Request } from 'express';
 import { StripeService } from './stripe.service';
 import { StripeWebhookService } from './stripe-webhook.service';
 import { Public } from '../auth/decorators/public.decorator';
+import { securityLogger } from '../common/utils/security-logger';
+import { sanitizeErrorMessage } from '../common/utils/security.utils';
 
 @common.Controller('stripe')
 export class StripeController {
@@ -18,39 +20,50 @@ export class StripeController {
    * Stripe webhook endpoint
    * Handles events from Stripe (account.updated, etc.)
    */
-  @Public() // Webhook doesn't use JWT auth
+  @Public()
   @common.Post('webhooks')
   @common.HttpCode(common.HttpStatus.OK)
   async handleWebhook(
     @common.Headers('stripe-signature') signature: string,
     @common.Req() request: common.RawBodyRequest<Request>,
   ) {
+    const requestId = (request as any).requestId || 'no-request-id';
+
     if (!signature) {
       throw new common.BadRequestException('Missing stripe-signature header');
     }
 
-    // Get raw body (needed for webhook signature verification)
     const rawBody = request.rawBody;
     if (!rawBody) {
       throw new common.BadRequestException('Missing raw body');
     }
 
     try {
-      // Verify and construct the event
       const event = this.stripeService.constructWebhookEvent(
         rawBody,
         signature,
       );
 
+      securityLogger.webhookValidation(event.type, true, requestId);
       this.logger.log(`Received Stripe webhook: ${event.type} (${event.id})`);
 
-      // Handle the event
       await this.webhookService.handleEvent(event);
 
       return { received: true };
     } catch (error) {
-      this.logger.error('Webhook error:', error);
-      throw new common.BadRequestException(`Webhook Error: ${error.message}`);
+      securityLogger.webhookValidation('unknown', false, requestId);
+
+      const sanitizedMessage = sanitizeErrorMessage(error.message);
+      this.logger.error(`Webhook error: ${sanitizedMessage}`, {
+        requestId,
+      });
+
+      throw new common.BadRequestException({
+        error: {
+          message: 'Webhook validation failed',
+          requestId,
+        },
+      });
     }
   }
 }
