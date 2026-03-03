@@ -95,6 +95,18 @@ export default function ApiKeysPage() {
   const createApiKey = useCreateApiKey(organization.id)
   const revokeApiKey = useRevokeApiKey(organization.id)
 
+  const getCreatedAtTime = (value: Date | string | null | undefined) => {
+    if (!value) return 0
+    const date = value instanceof Date ? value : new Date(value)
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime()
+  }
+
+  const formatCreatedAt = (value: Date | string | null | undefined) => {
+    const time = getCreatedAtTime(value)
+    if (time === 0) return 'Unknown'
+    return formatDistanceToNow(new Date(time), { addSuffix: true })
+  }
+
   // Group keys by pair
   const keyPairs = useMemo(() => {
     const pairs: Array<{
@@ -143,7 +155,7 @@ export default function ApiKeysPage() {
       }
     })
 
-    return pairs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    return pairs.sort((a, b) => getCreatedAtTime(b.createdAt) - getCreatedAtTime(a.createdAt))
   }, [apiKeys])
 
   // Handlers
@@ -507,9 +519,7 @@ export default function ApiKeysPage() {
                     </TableCell>
                     <TableCell>{getEnvironmentBadge(pair.environment)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDistanceToNow(new Date(pair.createdAt), {
-                        addSuffix: true,
-                      })}
+                      {formatCreatedAt(pair.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       {pair.secretKey?.revokedAt || pair.publishableKey?.revokedAt ? (
