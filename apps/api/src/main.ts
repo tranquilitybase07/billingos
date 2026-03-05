@@ -23,6 +23,7 @@ async function bootstrap() {
   const allowedOrigins = [
     process.env.APP_URL || 'http://localhost:3000',
     'http://localhost:3002', // Sample app
+    'http://localhost:3003', // final-test app
     'http://localhost:61000', // Ladle development server
     'http://localhost:61001', // Ladle alternate port
     'https://billingos-web.vercel.app', // Production frontend
