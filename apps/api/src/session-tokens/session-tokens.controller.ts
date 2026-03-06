@@ -16,7 +16,6 @@ import { CreateSessionTokenDto } from './dto/create-session-token.dto';
 import { SessionTokenResponseDto } from './dto/session-token-response.dto';
 
 @ApiTags('SDK - Session Tokens')
-
 @Controller('v1/session-tokens')
 export class SessionTokensController {
   constructor(
@@ -36,7 +35,9 @@ export class SessionTokensController {
   ): Promise<SessionTokenResponseDto> {
     // Extract API key from Authorization header
     if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const apiKey = authorization.substring('Bearer '.length);
@@ -44,11 +45,12 @@ export class SessionTokensController {
     // Validate API key
     const apiKeyRecord = await this.apiKeysService.validate(apiKey);
 
-    // Create session token
+    // Create session token with environment from API key
     const { sessionToken, token } = await this.sessionTokensService.create(
       apiKeyRecord.id,
       apiKeyRecord.organization_id,
       createDto,
+      apiKeyRecord.environment,
     );
 
     // Parse allowed_operations from JSONB string
@@ -75,14 +77,19 @@ export class SessionTokensController {
   ): Promise<{ message: string }> {
     // Extract and validate API key
     if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const apiKey = authorization.substring('Bearer '.length);
     const apiKeyRecord = await this.apiKeysService.validate(apiKey);
 
     // Revoke token
-    await this.sessionTokensService.revoke(apiKeyRecord.organization_id, tokenId);
+    await this.sessionTokensService.revoke(
+      apiKeyRecord.organization_id,
+      tokenId,
+    );
 
     return {
       message: 'Session token revoked successfully',

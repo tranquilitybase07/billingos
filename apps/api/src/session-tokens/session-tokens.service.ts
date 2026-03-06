@@ -7,7 +7,10 @@ import {
 import { SupabaseService } from '../supabase/supabase.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CreateSessionTokenDto } from './dto/create-session-token.dto';
-import { SessionToken, SessionTokenPayload } from './entities/session-token.entity';
+import {
+  SessionToken,
+  SessionTokenPayload,
+} from './entities/session-token.entity';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -27,6 +30,7 @@ export class SessionTokensService {
     apiKeyId: string,
     organizationId: string,
     createDto: CreateSessionTokenDto,
+    environment: 'test' | 'live' = 'live',
   ): Promise<{ sessionToken: SessionToken; token: string }> {
     const supabase = this.supabaseService.getClient();
 
@@ -61,8 +65,8 @@ export class SessionTokensService {
       payload.metadata = createDto.metadata;
     }
 
-    // Generate token string
-    const token = this.generateToken(payload, signingSecret);
+    // Generate token string with environment-aware prefix
+    const token = this.generateToken(payload, signingSecret, environment);
 
     // Store in database
     const { data, error } = await supabase
@@ -77,7 +81,9 @@ export class SessionTokensService {
           ? JSON.stringify(createDto.allowedOperations)
           : null,
         expires_at: new Date(expiresAt * 1000).toISOString(),
-        metadata: createDto.metadata ? JSON.stringify(createDto.metadata) : null,
+        metadata: createDto.metadata
+          ? JSON.stringify(createDto.metadata)
+          : null,
       })
       .select()
       .single();
@@ -99,9 +105,14 @@ export class SessionTokensService {
 
   /**
    * Generate a session token string
-   * Format: bos_session_{base64url_payload}.{hmac_signature}
+   * Format: bos_session_{env}_{base64url_payload}.{hmac_signature}
+   * e.g. bos_session_test_{payload}.{sig} or bos_session_live_{payload}.{sig}
    */
-  private generateToken(payload: SessionTokenPayload, signingSecret: string): string {
+  private generateToken(
+    payload: SessionTokenPayload,
+    signingSecret: string,
+    environment: 'test' | 'live' = 'live',
+  ): string {
     // Encode payload as Base64URL
     const payloadJson = JSON.stringify(payload);
     const payloadBase64 = Buffer.from(payloadJson)
@@ -110,11 +121,15 @@ export class SessionTokensService {
       .replace(/\//g, '_')
       .replace(/=/g, ''); // Remove padding
 
-    // Create signing input
-    const signingInput = `bos_session_${payloadBase64}`;
+    // Create signing input with environment-aware prefix
+    const prefix = `bos_session_${environment}_`;
+    const signingInput = `${prefix}${payloadBase64}`;
 
     // Generate HMAC-SHA256 signature
-    const hmac = crypto.createHmac('sha256', Buffer.from(signingSecret, 'base64'));
+    const hmac = crypto.createHmac(
+      'sha256',
+      Buffer.from(signingSecret, 'base64'),
+    );
     hmac.update(signingInput);
     const signature = hmac.digest('hex');
 
@@ -135,12 +150,18 @@ export class SessionTokensService {
 
     const [prefixPayload, providedSignature] = parts;
 
-    // Extract payload
-    if (!prefixPayload.startsWith('bos_session_')) {
+    // Extract payload — support both new (bos_session_test_/bos_session_live_) and legacy (bos_session_) prefixes
+    let payloadBase64: string;
+    if (prefixPayload.startsWith('bos_session_test_')) {
+      payloadBase64 = prefixPayload.substring('bos_session_test_'.length);
+    } else if (prefixPayload.startsWith('bos_session_live_')) {
+      payloadBase64 = prefixPayload.substring('bos_session_live_'.length);
+    } else if (prefixPayload.startsWith('bos_session_')) {
+      // Legacy tokens without environment prefix — treat as live
+      payloadBase64 = prefixPayload.substring('bos_session_'.length);
+    } else {
       throw new UnauthorizedException('Invalid token prefix');
     }
-
-    const payloadBase64 = prefixPayload.substring('bos_session_'.length);
 
     // Decode payload
     let payload: SessionTokenPayload;
@@ -175,7 +196,10 @@ export class SessionTokensService {
 
     // Verify signature using signing secret from API key
     const signingSecret = tokenRecord.api_keys.signing_secret;
-    const expectedSignature = this.generateSignature(prefixPayload, signingSecret);
+    const expectedSignature = this.generateSignature(
+      prefixPayload,
+      signingSecret,
+    );
 
     if (providedSignature !== expectedSignature) {
       throw new UnauthorizedException('Invalid token signature');
@@ -196,8 +220,14 @@ export class SessionTokensService {
   /**
    * Generate HMAC-SHA256 signature for a signing input
    */
-  private generateSignature(signingInput: string, signingSecret: string): string {
-    const hmac = crypto.createHmac('sha256', Buffer.from(signingSecret, 'base64'));
+  private generateSignature(
+    signingInput: string,
+    signingSecret: string,
+  ): string {
+    const hmac = crypto.createHmac(
+      'sha256',
+      Buffer.from(signingSecret, 'base64'),
+    );
     hmac.update(signingInput);
     return hmac.digest('hex');
   }
@@ -221,7 +251,9 @@ export class SessionTokensService {
       throw new NotFoundException('Session token not found or already revoked');
     }
 
-    this.logger.log(`Revoked session token ${tokenId} for organization ${organizationId}`);
+    this.logger.log(
+      `Revoked session token ${tokenId} for organization ${organizationId}`,
+    );
 
     return data as SessionToken;
   }
@@ -229,7 +261,10 @@ export class SessionTokensService {
   /**
    * List all session tokens for an organization (for audit)
    */
-  async findAll(organizationId: string, includeRevoked = false): Promise<SessionToken[]> {
+  async findAll(
+    organizationId: string,
+    includeRevoked = false,
+  ): Promise<SessionToken[]> {
     const supabase = this.supabaseService.getClient();
 
     let query = supabase
