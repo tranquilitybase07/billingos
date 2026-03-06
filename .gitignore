@@ -114,3 +114,5 @@ packages/*/node_modules/
 .supabase/
 supabase/.branches/
 supabase/.temp/
+
+.claude/

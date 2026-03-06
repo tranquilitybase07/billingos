@@ -69,11 +69,14 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:pnpm.io)",
       "Bash(pnpm run linear:find-ids:*)",
-      "WebFetch(domain:docs.stripe.com)"
+      "WebFetch(domain:docs.stripe.com)",
+      "WebFetch(domain:clerk.com)"
     ],
     "deny": [],
     "ask": []
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["shadcn"]
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
 }
