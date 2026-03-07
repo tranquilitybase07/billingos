@@ -66,6 +66,8 @@ export class SandboxSyncService {
       if (shouldUpdate) {
         return this.updateSandboxUser(userId);
       }
+      // Always clean up synced prod org memberships, even if user data is up to date
+      await this.cleanupSyncedOrgMemberships(userId);
       return { success: true, action: 'already_exists', userId };
     }
 
@@ -94,10 +96,11 @@ export class SandboxSyncService {
         user_metadata: authUser.user_metadata,
       });
 
-    if (
-      createAuthError &&
-      !createAuthError.message.includes('already exists')
-    ) {
+    const alreadyExists =
+      createAuthError?.message.includes('already exists') ||
+      createAuthError?.message.includes('already been registered') ||
+      createAuthError?.message.includes('already registered');
+    if (createAuthError && !alreadyExists) {
       throw new Error(
         `Failed to create auth user in sandbox: ${createAuthError.message}`,
       );
@@ -113,20 +116,25 @@ export class SandboxSyncService {
     if (publicUser) {
       // Destructure out prod-specific fields so they're never sent to sandbox
       // (sandbox schema may not have all these columns)
-      const { stripe_customer_id, subscription_id, last_login_at, ...sandboxUser } = publicUser;
+      const {
+        stripe_customer_id,
+        subscription_id,
+        last_login_at,
+        ...sandboxUser
+      } = publicUser;
       const { error: insertError } = await this.sandboxSupabase
         .from('users')
-        .insert(sandboxUser);
+        .upsert(sandboxUser, { onConflict: 'id' });
 
-      if (insertError && !insertError.message.includes('duplicate')) {
+      if (insertError) {
         throw new Error(
           `Failed to create public user in sandbox: ${insertError.message}`,
         );
       }
     }
 
-    // Sync organization memberships
-    await this.syncUserOrganizations(userId);
+    // Clean up any synced prod org memberships from sandbox
+    await this.cleanupSyncedOrgMemberships(userId);
 
     this.logger.log(`Successfully synced user ${userId} to sandbox`);
     return { success: true, action: 'created', userId, email: authUser.email };
@@ -142,40 +150,33 @@ export class SandboxSyncService {
     return !error && !!data;
   }
 
-  private async syncUserOrganizations(userId: string): Promise<void> {
+  private async cleanupSyncedOrgMemberships(userId: string): Promise<void> {
     if (!this.prodSupabase || !this.sandboxSupabase) return;
 
-    const { data: memberships, error } = await this.prodSupabase
+    const { data: prodMemberships, error } = await this.prodSupabase
       .from('user_organizations')
-      .select('*, organization:organizations(*)')
+      .select('organization_id')
       .eq('user_id', userId);
 
-    if (error || !memberships?.length) return;
+    if (error || !prodMemberships?.length) return;
 
-    for (const membership of memberships) {
-      if (membership.organization) {
-        await this.sandboxSupabase.from('organizations').upsert({
-          id: membership.organization.id,
-          name: membership.organization.name,
-          slug: membership.organization.slug,
-          email: membership.organization.email,
-          website: membership.organization.website,
-          // Reset production-specific fields
-          account_id: null,
-          status: 'created',
-        });
-      }
+    const prodOrgIds = prodMemberships.map((m) => m.organization_id);
 
-      await this.sandboxSupabase.from('user_organizations').upsert({
-        id: membership.id,
-        user_id: membership.user_id,
-        organization_id: membership.organization_id,
-        role: membership.role,
-      });
+    const { error: deleteError } = await this.sandboxSupabase
+      .from('user_organizations')
+      .delete()
+      .eq('user_id', userId)
+      .in('organization_id', prodOrgIds);
+
+    if (deleteError) {
+      this.logger.warn(
+        `Failed to clean up synced org memberships for user ${userId}: ${deleteError.message}`,
+      );
+      return;
     }
 
     this.logger.log(
-      `Synced ${memberships.length} organization(s) for user ${userId}`,
+      `Cleaned up ${prodOrgIds.length} synced org membership(s) for user ${userId}`,
     );
   }
 
@@ -207,7 +208,12 @@ export class SandboxSyncService {
 
     if (!prodUser) throw new Error('User not found in production');
 
-    const { stripe_customer_id, subscription_id, last_login_at, ...sandboxUser } = prodUser;
+    const {
+      stripe_customer_id,
+      subscription_id,
+      last_login_at,
+      ...sandboxUser
+    } = prodUser;
     const { error } = await this.sandboxSupabase
       .from('users')
       .update({ ...sandboxUser, updated_at: new Date().toISOString() })
@@ -216,7 +222,7 @@ export class SandboxSyncService {
     if (error)
       throw new Error(`Failed to update user in sandbox: ${error.message}`);
 
-    await this.syncUserOrganizations(userId);
+    await this.cleanupSyncedOrgMemberships(userId);
     return { success: true, action: 'updated', userId };
   }
 }

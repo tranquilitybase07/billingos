@@ -74,8 +74,8 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
         // Also set a cookie so server-side API calls can read the environment
         document.cookie = `${ENVIRONMENT_COOKIE}=${env}; path=/; max-age=31536000; SameSite=Lax`
         setEnvironment(env)
-        // Reload so all queries/clients reinitialise with the new env
-        window.location.reload()
+        // Navigate to /dashboard so org routing re-runs with the new env's last-visited org
+        window.location.href = '/dashboard'
       } catch (error) {
         setIsSwitching(false)
         throw error

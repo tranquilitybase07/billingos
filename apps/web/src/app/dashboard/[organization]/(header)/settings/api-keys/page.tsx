@@ -75,7 +75,6 @@ export default function ApiKeysPage() {
   const [revokeKeyId, setRevokeKeyId] = useState<string | null>(null)
   const [createdKeyPair, setCreatedKeyPair] = useState<ApiKeyPairCreated | null>(null)
   const [showSecretKey, setShowSecretKey] = useState(false)
-  const [showPublishableKey, setShowPublishableKey] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState<CreateApiKeyDTO>({
@@ -159,7 +158,7 @@ export default function ApiKeysPage() {
       setFormData({ name: '' })
       toast({
         title: 'Success',
-        description: 'API key pair created successfully',
+        description: 'API key created successfully',
       })
     } catch (error) {
       toast({
@@ -179,13 +178,13 @@ export default function ApiKeysPage() {
       setRevokeKeyId(null)
       toast({
         title: 'Success',
-        description: 'API key pair revoked successfully',
+        description: 'API key revoked successfully',
       })
     } catch (error) {
       toast({
         title: 'Error',
         description:
-          error instanceof Error ? error.message : 'Failed to revoke API keys',
+          error instanceof Error ? error.message : 'Failed to revoke API key',
         variant: 'destructive',
       })
     }
@@ -246,21 +245,21 @@ export default function ApiKeysPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">API Keys</h2>
           <p className="text-muted-foreground mt-2">
-            Manage API key pairs for your organization
+            Manage API keys for your organization
           </p>
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Create API Keys
+              Create API Key
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create API Key Pair</DialogTitle>
+              <DialogTitle>Create API Key</DialogTitle>
               <DialogDescription>
-                Generate a secret and publishable key pair (like Stripe)
+                Generate a secret API key for your application
               </DialogDescription>
             </DialogHeader>
 
@@ -278,7 +277,7 @@ export default function ApiKeysPage() {
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Creates both secret (sk_) and publishable (pk_) keys together
+                Your secret key will only be shown once after creation
               </p>
             </div>
 
@@ -296,7 +295,7 @@ export default function ApiKeysPage() {
                 {createApiKey.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Create Key Pair
+                Create API Key
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -309,7 +308,7 @@ export default function ApiKeysPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Save Your API Keys
+              Save Your API Key
             </DialogTitle>
             <DialogDescription>
               {createdKeyPair?.warning}
@@ -320,8 +319,8 @@ export default function ApiKeysPage() {
             {/* Secret Key */}
             <div className="rounded-lg border bg-muted p-4">
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  Secret Key <Badge variant="default">Backend Only</Badge>
+                <Label className="text-sm font-medium">
+                  API Key
                 </Label>
                 <div className="flex gap-2">
                   <Button
@@ -338,7 +337,7 @@ export default function ApiKeysPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => copyToClipboard(createdKeyPair?.secretKey.fullKey || '', 'Secret key')}
+                    onClick={() => copyToClipboard(createdKeyPair?.secretKey.fullKey || '', 'API key')}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
@@ -348,40 +347,6 @@ export default function ApiKeysPage() {
                 {showSecretKey
                   ? createdKeyPair?.secretKey.fullKey
                   : `${createdKeyPair?.secretKey.keyPrefix}${'•'.repeat(32)}`}
-              </code>
-            </div>
-
-            {/* Publishable Key */}
-            <div className="rounded-lg border bg-muted p-4">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  Publishable Key <Badge variant="secondary">Frontend Safe</Badge>
-                </Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowPublishableKey(!showPublishableKey)}
-                  >
-                    {showPublishableKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(createdKeyPair?.publishableKey.fullKey || '', 'Publishable key')}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <code className="block font-mono text-sm break-all">
-                {showPublishableKey
-                  ? createdKeyPair?.publishableKey.fullKey
-                  : `${createdKeyPair?.publishableKey.keyPrefix}${'•'.repeat(32)}`}
               </code>
             </div>
 
@@ -395,7 +360,7 @@ export default function ApiKeysPage() {
           </div>
 
           <DialogFooter>
-            <Button onClick={() => setCreatedKeyPair(null)}>I've Saved My Keys</Button>
+            <Button onClick={() => setCreatedKeyPair(null)}>I've Saved My Key</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -407,11 +372,10 @@ export default function ApiKeysPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revoke API Key Pair</AlertDialogTitle>
+            <AlertDialogTitle>Revoke API Key</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to revoke this API key pair? Both the secret
-              and publishable keys will be revoked. Applications using these keys
-              will immediately lose access. This action cannot be undone.
+              Are you sure you want to revoke this API key? Applications using
+              this key will immediately lose access. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -426,7 +390,7 @@ export default function ApiKeysPage() {
                   Revoking...
                 </>
               ) : (
-                'Revoke Key Pair'
+                'Revoke Key'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -436,11 +400,11 @@ export default function ApiKeysPage() {
       {/* API Keys List */}
       <Card>
         <CardHeader>
-          <CardTitle>Your API Key Pairs</CardTitle>
+          <CardTitle>Your API Keys</CardTitle>
           <CardDescription>
             {keyPairs.length === 0
-              ? 'No API keys yet. Create a pair to get started.'
-              : `You have ${keyPairs.length} key ${keyPairs.length === 1 ? 'pair' : 'pairs'}`}
+              ? 'No API keys yet. Create one to get started.'
+              : `You have ${keyPairs.length} API ${keyPairs.length === 1 ? 'key' : 'keys'}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -461,8 +425,7 @@ export default function ApiKeysPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Secret Key</TableHead>
-                  <TableHead>Publishable Key</TableHead>
+                  <TableHead>API Key</TableHead>
                   <TableHead>Environment</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -481,13 +444,6 @@ export default function ApiKeysPage() {
                     <TableCell>
                       {pair.secretKey ? (
                         <code className="text-sm font-mono">{pair.secretKey.keyPrefix}***</code>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {pair.publishableKey ? (
-                        <code className="text-sm font-mono">{pair.publishableKey.keyPrefix}***</code>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

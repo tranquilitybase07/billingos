@@ -8,10 +8,17 @@ export class SupabaseService {
   private supabase: SupabaseClient<Database>;
 
   constructor(private configService: ConfigService) {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-    const supabaseKey = this.configService.get<string>(
-      'SUPABASE_SERVICE_ROLE_KEY',
-    );
+    const isSandbox = this.configService.get<string>('NODE_ENV') === 'sandbox';
+
+    const supabaseUrl = isSandbox
+      ? this.configService.get<string>('SANDBOX_SUPABASE_URL') ||
+        this.configService.get<string>('SUPABASE_URL')
+      : this.configService.get<string>('SUPABASE_URL');
+
+    const supabaseKey = isSandbox
+      ? this.configService.get<string>('SANDBOX_SUPABASE_SERVICE_ROLE_KEY') ||
+        this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')
+      : this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase URL and Service Role Key must be provided');
