@@ -48,13 +48,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -87,7 +80,6 @@ export default function ApiKeysPage() {
   // Form state
   const [formData, setFormData] = useState<CreateApiKeyDTO>({
     name: '',
-    environment: 'test',
   })
 
   // Queries
@@ -164,7 +156,7 @@ export default function ApiKeysPage() {
       const result = await createApiKey.mutateAsync(formData)
       setCreatedKeyPair(result)
       setCreateDialogOpen(false)
-      setFormData({ name: '', environment: 'test' })
+      setFormData({ name: '' })
       toast({
         title: 'Success',
         description: 'API key pair created successfully',
@@ -285,26 +277,9 @@ export default function ApiKeysPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="environment">Environment</Label>
-                <Select
-                  value={formData.environment}
-                  onValueChange={(value: 'live' | 'test') =>
-                    setFormData({ ...formData, environment: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="test">Test</SelectItem>
-                    <SelectItem value="live">Live</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Creates both secret (sk_) and publishable (pk_) keys together
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Creates both secret (sk_) and publishable (pk_) keys together
+              </p>
             </div>
 
             <DialogFooter>

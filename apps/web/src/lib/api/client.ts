@@ -1,9 +1,8 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { getApiUrl } from '@/lib/config/environment'
 import type { AvailablePlansResponse } from './types'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
 export class APIError extends Error {
   constructor(
@@ -51,7 +50,7 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const url = `${API_URL}${endpoint}`
+  const url = `${getApiUrl()}${endpoint}`
 
   // Debug logging
   console.log('API Request:', {

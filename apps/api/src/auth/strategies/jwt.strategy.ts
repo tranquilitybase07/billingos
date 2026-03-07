@@ -36,7 +36,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
-    // Detect if we're in local development based on URL
+    // In sandbox mode, tokens are issued by production Supabase.
+    // Use SUPABASE_AUTH_URL for JWT issuer/JWKS validation when set (sandbox deployments
+    // should set this to the production Supabase URL). Falls back to SUPABASE_URL.
+    const authUrl =
+      configService.get<string>('SUPABASE_AUTH_URL') || supabaseUrl;
+
+    // Detect if we're in local development based on data URL
     const isLocalDev =
       supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost');
     const config: any = {
@@ -46,18 +52,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (isLocalDev) {
       config.secretOrKey = jwtSecret;
-      config.issuer = `${supabaseUrl}/auth/v1`; // Actual issuer from the token
+      config.issuer = `${authUrl}/auth/v1`;
       config.algorithms = ['HS256'];
-      config.audience = 'authenticated'; // Local tokens do have audience claim
+      config.audience = 'authenticated';
     } else {
       config.secretOrKeyProvider = passportJwtSecret({
         cache: true,
         rateLimit: true,
         jwksRequestsPerMinute: 5,
-        jwksUri: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
+        jwksUri: `${authUrl}/auth/v1/.well-known/jwks.json`,
       });
-      config.issuer = `${supabaseUrl}/auth/v1`;
-      config.algorithms = ['ES256']; // Modern Supabase uses ES256
+      config.issuer = `${authUrl}/auth/v1`;
+      config.algorithms = ['ES256'];
       config.audience = 'authenticated';
     }
 

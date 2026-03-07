@@ -1,7 +1,14 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const ENVIRONMENT_COOKIE = 'billingos-environment'
+
+function getApiUrl(cookieStore: Awaited<ReturnType<typeof cookies>>): string {
+  const env = cookieStore.get(ENVIRONMENT_COOKIE)?.value
+  return env === 'sandbox'
+    ? (process.env.NEXT_PUBLIC_SANDBOX_API_URL || 'http://localhost:3002')
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+}
 
 export class APIError extends Error {
   constructor(
@@ -15,7 +22,6 @@ export class APIError extends Error {
 }
 
 async function getAuthToken(): Promise<string | null> {
-  const cookieStore = await cookies()
   const supabase = await createClient()
   const {
     data: { session },
@@ -33,7 +39,9 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const cookieStore = await cookies()
   const token = await getAuthToken()
+  const apiUrl = getApiUrl(cookieStore)
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -44,7 +52,7 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const url = `${API_URL}${endpoint}`
+  const url = `${apiUrl}${endpoint}`
 
   try {
     // If next.revalidate is set, don't override with cache: 'no-store'

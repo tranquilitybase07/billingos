@@ -45,6 +45,7 @@ import { useOrganization } from '@/providers/OrganizationProvider'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
+import { EnvironmentSwitcher } from '@/components/EnvironmentSwitcher'
 
 interface MenuItem {
   title: string
@@ -248,6 +249,13 @@ export const DashboardSidebar = () => {
           ))}
         </SidebarMenu>
       </SidebarContent>
+
+      {/* Environment Switcher */}
+      {!isCollapsed && (
+        <div className="px-4 pb-3">
+          <EnvironmentSwitcher />
+        </div>
+      )}
 
       {/* Footer with Organization Switcher */}
       <SidebarFooter className="border-t border-sidebar-border p-4">

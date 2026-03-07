@@ -32,6 +32,150 @@ export class StripeService {
   }
 
   /**
+   * Check if running with test keys (sandbox)
+   */
+  isTestMode(): boolean {
+    const key = this.configService.get<string>('STRIPE_SECRET_KEY');
+    return key?.startsWith('sk_test_') ?? false;
+  }
+
+  /**
+   * Check if the backend is running in sandbox environment
+   */
+  isSandboxEnvironment(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'sandbox';
+  }
+
+  /**
+   * Create and auto-verify a Stripe Express account using Stripe's test magic values.
+   * ONLY works in sandbox mode with test keys — throws otherwise.
+   */
+  async createTestAccountWithBypass(params: {
+    email: string;
+    country?: string;
+    organizationName?: string;
+  }): Promise<Stripe.Account> {
+    if (!this.isTestMode() || !this.isSandboxEnvironment()) {
+      throw new Error(
+        'Auto-verification only available in sandbox mode with test keys',
+      );
+    }
+
+    const country = params.country || 'US';
+
+    // Step 1: Create Express account
+    const account = await this.stripe.accounts.create({
+      type: 'express',
+      email: params.email,
+      country,
+      business_type: 'individual',
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      metadata: {
+        auto_created: 'true',
+        organization_name: params.organizationName || '',
+        environment: 'sandbox',
+      },
+    });
+
+    // Step 2: Auto-verify with Stripe's magic test values
+    // Split into two updates so a failure in one doesn't block the other.
+
+    // 2a. Identity + business profile + statement descriptor + TOS
+    try {
+      await this.stripe.accounts.update(account.id, {
+        individual: {
+          first_name: 'Test',
+          last_name: 'Merchant',
+          email: params.email,
+          phone: '+16505551234',
+          dob: { day: 1, month: 1, year: 1901 }, // Stripe magic DOB for instant verification
+          address: {
+            line1: 'address_full_match', // Stripe magic address value
+            city: 'San Francisco',
+            state: 'CA',
+            postal_code: '94102',
+            country,
+          },
+          ssn_last_4: '0000',
+        } as Stripe.AccountUpdateParams.Individual,
+        business_profile: {
+          mcc: '5734',
+          name: params.organizationName || 'Test Business',
+          url: 'https://example.com',
+        },
+        settings: {
+          payments: {
+            statement_descriptor: (params.organizationName || 'TEST BUSINESS')
+              .replace(/[^A-Z0-9 ]/gi, '')
+              .toUpperCase()
+              .substring(0, 22)
+              .padEnd(5, 'X'), // Must be 5-22 chars, letters/numbers/spaces only
+          },
+        },
+        tos_acceptance: {
+          date: Math.floor(Date.now() / 1000),
+          ip: '127.0.0.1',
+          user_agent: 'BillingOS Sandbox Auto-Creation',
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[Sandbox] Identity/profile update failed for ${account.id}: ${(error as Error).message}`,
+      );
+    }
+
+    // 2b. External bank account (separate call — Express accounts can be picky)
+    try {
+      await this.stripe.accounts.update(account.id, {
+        external_account: {
+          object: 'bank_account',
+          country,
+          currency: 'usd',
+          account_holder_name: 'Test Merchant',
+          account_holder_type: 'individual',
+          routing_number: '110000000', // Stripe test routing number
+          account_number: '000123456789', // Stripe test account number
+        } as any,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[Sandbox] External account update failed for ${account.id}: ${(error as Error).message}`,
+      );
+    }
+
+    return await this.stripe.accounts.retrieve(account.id);
+  }
+
+  /**
+   * Smart account creation: auto-verifies in sandbox, uses normal flow in production
+   */
+  async createConnectAccountSmart(params: {
+    email: string;
+    country: string;
+    businessType?: Stripe.AccountCreateParams.BusinessType;
+    organizationName?: string;
+  }): Promise<{ account: Stripe.Account; autoCreated: boolean }> {
+    if (this.isSandboxEnvironment() && this.isTestMode()) {
+      const account = await this.createTestAccountWithBypass({
+        email: params.email,
+        country: params.country,
+        organizationName: params.organizationName,
+      });
+      return { account, autoCreated: true };
+    }
+
+    const account = await this.createConnectAccount({
+      email: params.email,
+      country: params.country,
+      businessType: params.businessType,
+    });
+    return { account, autoCreated: false };
+  }
+
+  /**
    * Create a Stripe Connect account
    */
   async createConnectAccount(params: {
@@ -748,11 +892,17 @@ export class StripeService {
   async listCustomerSubscriptions(params: {
     customerId: string;
     stripeAccountId?: string;
-    status?: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'all';
+    status?:
+      | 'active'
+      | 'past_due'
+      | 'unpaid'
+      | 'canceled'
+      | 'incomplete'
+      | 'incomplete_expired'
+      | 'trialing'
+      | 'all';
   }): Promise<Stripe.ApiList<Stripe.Subscription>> {
-    this.logger.log(
-      `Listing subscriptions for customer: ${params.customerId}`,
-    );
+    this.logger.log(`Listing subscriptions for customer: ${params.customerId}`);
 
     const listParams: Stripe.SubscriptionListParams = {
       customer: params.customerId,
@@ -811,9 +961,7 @@ export class StripeService {
     params: Stripe.CouponCreateParams,
     stripeAccountId: string,
   ): Promise<Stripe.Coupon> {
-    this.logger.log(
-      `Creating Stripe coupon for account ${stripeAccountId}`,
-    );
+    this.logger.log(`Creating Stripe coupon for account ${stripeAccountId}`);
 
     return await this.stripe.coupons.create(params, {
       stripeAccount: stripeAccountId,
@@ -945,7 +1093,7 @@ export class StripeService {
 
     // Preview the upcoming invoice with the new price
     // Note: Using type assertion as retrieveUpcoming may not be in all Stripe SDK versions
-    return await (this.stripe.invoices as any).retrieveUpcoming(
+    return (await (this.stripe.invoices as any).retrieveUpcoming(
       {
         customer: customerId,
         subscription: subscriptionId,
@@ -960,7 +1108,7 @@ export class StripeService {
       {
         stripeAccount: stripeAccountId,
       },
-    ) as Promise<Stripe.Invoice>;
+    )) as Promise<Stripe.Invoice>;
   }
 
   /**
