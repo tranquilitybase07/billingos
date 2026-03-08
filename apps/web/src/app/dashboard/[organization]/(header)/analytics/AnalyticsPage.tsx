@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardGhost, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Select,
@@ -133,7 +133,7 @@ export default function AnalyticsPage({
         </div>
 
         {/* Usage Trends */}
-        <Card>
+        <CardGhost>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Usage Trends (Last 30 Days)</CardTitle>
             {byFeature?.data && byFeature.data.length > 0 && (
@@ -166,7 +166,7 @@ export default function AnalyticsPage({
                     return (
                       <div
                         key={point.date}
-                        className="flex-1 bg-blue-500 rounded-t hover:bg-blue-600 transition-colors relative group"
+                        className="flex-1 bg-primary rounded-t hover:bg-primary/80 transition-colors relative group"
                         style={{ height: `${Math.max(heightPct, 2)}%` }}
                         title={`${point.date}: ${point.consumed} units, ${point.customer_count} customers`}
                       >
@@ -184,7 +184,7 @@ export default function AnalyticsPage({
               </div>
             )}
           </CardContent>
-        </Card>
+        </CardGhost>
 
         {/* Per-Feature Breakdown */}
         <Card>

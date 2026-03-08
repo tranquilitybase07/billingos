@@ -188,7 +188,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
       {/* Chart Area */}
       <div className="relative">
         {/* inset / expanded background */}
-        <div className="absolute inset-[-16px] rounded-xl bg-base" />
+        <div className="absolute inset-[-16px] rounded-xl bg-transparent" />
         {/* actual chart container */}
         <div className="relative h-80 rounded-lg p-6 pb-12">
           <div
@@ -200,7 +200,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
             {/* Tooltip */}
             {tooltipVisible && hoveredIndex !== null && (
               <div
-                className="absolute bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-4 min-w-[200px] pointer-events-none z-10 transition-all duration-200 ease-out"
+                className="absolute bg-popover/95 backdrop-blur-sm border border-border rounded-lg p-4 min-w-[200px] pointer-events-none z-10 transition-all duration-200 ease-out"
                 style={{
                   left: `${(hoveredIndex / (dates.length - 1)) * 100}%`,
                   top: `${tooltipPosition.y}px`,
@@ -210,7 +210,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                       : "translate(10px, -50%)",
                 }}
               >
-                <div className="text-xs text-gray-400 mb-2">Current Period</div>
+                <div className="text-xs text-muted-foreground mb-2">Current Period</div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-blue-500"></div>
@@ -296,7 +296,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                     Net Revenue
                   </h3>
                   <div className="text-4xl font-light text-white">$0</div>
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="flex items-center gap-2 text-sm text-white/60">
                     <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                     <span>Jan 6 - 16, 2026</span>
                   </div>
@@ -304,10 +304,10 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                   {/* Chart Preview */}
                   <div className="relative rounded-xl h-35 mt-8  ">
                     <div className="absolute bottom-6 left-0 right-0 h-1 bg-blue-500 rounded-full"></div>
-                    <div className="absolute bottom-0 left-0 text-xs text-gray-500">
+                    <div className="absolute bottom-0 left-0 text-xs text-white/40">
                       Jan 06
                     </div>
-                    <div className="absolute bottom-0 right-0 text-xs text-gray-500">
+                    <div className="absolute bottom-0 right-0 text-xs text-white/40">
                       Jan 16
                     </div>
                   </div>
@@ -336,7 +336,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                         className={`h-7 w-7 hover:cursor-pointer rounded-full overflow-hidden border-2 transition-all relative ${
                           selectedBackground === "color"
                             ? "border-blue-500"
-                            : "border-gray-300"
+                            : "border-border"
                         }`}
                       >
                         <Image
@@ -361,7 +361,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                         className={`h-7 ml-2 hover:cursor-pointer w-7 rounded-full overflow-hidden border-2 transition-all relative ${
                           selectedBackground === "silver"
                             ? "border-blue-500"
-                            : "border-gray-300"
+                            : "border-border"
                         }`}
                       >
                         <Image

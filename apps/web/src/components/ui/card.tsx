@@ -92,4 +92,22 @@ const CardFooter = ({
 )
 CardFooter.displayName = 'CardFooter'
 
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
+const CardGhost = ({
+  ref,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  ref?: React.RefObject<HTMLDivElement>
+}) => (
+  <div
+    ref={ref}
+    className={cn(
+      'bg-transparent text-card-foreground rounded-lg border',
+      className,
+    )}
+    {...props}
+  />
+)
+CardGhost.displayName = 'CardGhost'
+
+export { Card, CardContent, CardDescription, CardFooter, CardGhost, CardHeader, CardTitle }

@@ -51,13 +51,13 @@ export default function MagicLinkForm({
 
   if (sent) {
     return (
-      <div className="flex flex-col gap-4 p-6 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <div className="flex flex-col gap-4 p-6 rounded-lg border bg-card">
         <div className="flex flex-col gap-2">
           <h3 className="text-lg font-semibold">Check your email</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             We&apos;ve sent a magic link to <strong>{email}</strong>
           </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Click the link in the email to sign in.
           </p>
         </div>

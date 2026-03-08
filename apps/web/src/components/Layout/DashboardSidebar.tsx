@@ -172,9 +172,9 @@ export const DashboardSidebar = () => {
               <Image
                 src="/Logo.png"
                 alt="BillingOS Logo"
-                width={32}
-                height={32}
-                className="h-8 w-auto object-contain"
+                width={30}
+                height={30}
+                className="w-auto object-contain"
                 onError={() => setLogoError(true)}
                 priority
               />
@@ -280,14 +280,14 @@ export const DashboardSidebar = () => {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 bg-[#1A1A1A] border-white/10 text-gray-300" align="start" side="top">
+          <DropdownMenuContent className="w-56 bg-popover border-border text-popover-foreground" align="start" side="top">
             {organizations.map((org) => (
               <DropdownMenuItem
                 key={org.id}
                 onClick={() => router.push(`/dashboard/${org.slug}`)}
                 className={cn(
-                  "focus:bg-white/10 focus:text-white cursor-pointer",
-                  org.id === organization.id && "bg-white/5 text-sidebar-primary"
+                  "focus:bg-accent focus:text-accent-foreground cursor-pointer",
+                  org.id === organization.id && "bg-accent/50 text-sidebar-primary"
                 )}
               >
                 <Building2 className="mr-2 h-4 w-4" />
@@ -297,15 +297,15 @@ export const DashboardSidebar = () => {
                 </div>
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-pointer">
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem className="focus:bg-accent focus:text-accent-foreground cursor-pointer">
               <Plus className="mr-2 h-4 w-4" />
               <span>Create Organization</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={handleLogout}
-              className="focus:bg-white/10 focus:text-destructive cursor-pointer text-destructive"
+              className="focus:bg-accent focus:text-destructive cursor-pointer text-destructive"
             >
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log out</span>

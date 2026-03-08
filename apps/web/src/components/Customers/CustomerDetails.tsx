@@ -18,7 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardGhost, CardHeader, CardTitle } from "@/components/ui/card";
 import { RevenueChart } from "./RevenueChart";
 import { TableSection } from "./TableSection";
 import {
@@ -379,11 +379,11 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
             </div> */}
 
             {/* Revenue Chart */}
-            <Card>
+            <CardGhost>
               <CardContent className="pt-6">
                 <RevenueChart timePeriod={timePeriod} />
               </CardContent>
-            </Card>
+            </CardGhost>
 
             {/*subscriptions table */}
             <div className="space-y-4">
