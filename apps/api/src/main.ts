@@ -164,6 +164,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
+  logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.log(`API server running on http://localhost:${port}`);
   logger.log(`Swagger documentation available at http://localhost:${port}/api`);
   logger.log(`OpenAPI JSON available at http://localhost:${port}/api-json`);
