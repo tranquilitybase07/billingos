@@ -59,7 +59,7 @@ export const TableSection = ({ title, columns, data, isLoading }: TableSectionPr
                   <tr>
                     <td
                       colSpan={columns.length}
-                      className="text-center text-sm font-medium py-12 text-popover-foreground bg-base hover:bg-black/20"
+                      className="text-center text-sm font-medium py-12 text-muted-foreground hover:bg-accent"
                     >
                       No Results
                     </td>

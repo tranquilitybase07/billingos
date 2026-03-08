@@ -5,7 +5,9 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -21,7 +23,11 @@ import {
 export class OrganizationService {
   private readonly logger = new Logger(OrganizationService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly stripeService: StripeService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
    * Create a new organization
@@ -85,7 +91,86 @@ export class OrganizationService {
     this.logger.log(
       `Organization created: ${organization.id} by user ${user.id}`,
     );
+
+    // In sandbox mode, auto-create and auto-verify a Stripe test account
+    if (this.configService.get<string>('NODE_ENV') === 'sandbox') {
+      this.autoCreateSandboxStripeAccount(user, organization).catch((err) => {
+        this.logger.error(
+          `Failed to auto-create Stripe account for org ${organization.id} in sandbox:`,
+          err,
+        );
+      });
+    }
+
     return organization;
+  }
+
+  /**
+   * Auto-creates a verified Stripe test account for sandbox orgs.
+   * Runs asynchronously — org creation never blocks on this.
+   */
+  private async autoCreateSandboxStripeAccount(
+    user: User,
+    organization: any,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    // Check org doesn't already have an account
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', organization.id)
+      .single();
+
+    if (org?.account_id) return;
+
+    const { account: stripeAccount } =
+      await this.stripeService.createConnectAccountSmart({
+        email: user.email,
+        country: 'US',
+        organizationName: organization.name,
+      });
+
+    const { data: account, error: insertError } = await supabase
+      .from('accounts')
+      .insert({
+        account_type: 'stripe',
+        admin_id: user.id,
+        stripe_id: stripeAccount.id,
+        email: stripeAccount.email || user.email,
+        country: stripeAccount.country || 'US',
+        currency: stripeAccount.default_currency || 'usd',
+        is_details_submitted: true,
+        is_charges_enabled: true,
+        is_payouts_enabled: true,
+        business_type: 'individual',
+        status: 'active',
+        auto_created: true,
+        test_mode: true,
+        data: stripeAccount as any,
+        platform_fee_percent: 60,
+        platform_fee_fixed: 10,
+      })
+      .select()
+      .single();
+
+    if (insertError || !account) {
+      this.logger.error('Failed to insert auto-created account:', insertError);
+      return;
+    }
+
+    await supabase
+      .from('organizations')
+      .update({
+        account_id: account.id,
+        status: 'active',
+        status_updated_at: new Date().toISOString(),
+      })
+      .eq('id', organization.id);
+
+    this.logger.log(
+      `Auto-created Stripe test account ${stripeAccount.id} for org ${organization.id}`,
+    );
   }
 
   /**

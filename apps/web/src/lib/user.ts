@@ -72,7 +72,7 @@ const _getUserOrganizations = async (
     } else {
       requestOptions.next = {
         tags: [`users:${user.id}:organizations`],
-        revalidate: 600, // Cache for 10 minutes
+        revalidate: 600,
       }
     }
 

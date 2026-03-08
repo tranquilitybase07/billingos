@@ -74,19 +74,20 @@
   --color-gray-900: oklch(0.21 0.034 264.665);
   --color-gray-950: oklch(0.13 0.028 261.692);
 
-  /* Dark Mode Palette — extracted from ElevenLabs UI */
-  /* Backgrounds: sidebar #1c1c1d, dashboard #0f0f0f */
-  --color-dark-50: #e8e8e8;   /* primary text / near-white labels */
-  --color-dark-100: #c8c8c8;  /* secondary text, column headers */
-  --color-dark-200: #9a9a9a;  /* muted text, timestamps, placeholder */
+  /* Dark Mode Palette — "Carbon" Pure Neutral (Vercel-style) */
+  /* Sidebar #0f0f0f (15) < Page #141414 (20) < Card #1e1e1e (30) — darkened for Polar-like depth */
+  --color-dark-50:  #e8e8e8;  /* primary text */
+  --color-dark-100: #c8c8c8;  /* secondary text */
+  --color-dark-200: #9a9a9a;  /* muted text, placeholder */
   --color-dark-300: #6b6b6b;  /* disabled / dimmed text */
-  --color-dark-400: #4a4a4b;  /* icon tint, divider accents */
-  --color-dark-500: #3a3a3b;  /* subtle borders, muted separators */
-  --color-dark-600: #2a2a2b;  /* border / hairline between panels */
-  --color-dark-700: #252526;  /* active nav highlight, hover row */
-  --color-dark-800: #1c1c1d;  /* sidebar background */
-  --color-dark-900: #141415;  /* input / search field background */
-  --color-dark-950: #0f0f0f;  /* main dashboard / page background */
+  --color-dark-400: #515151;  /* icon tint, divider accents */
+  --color-dark-500: #2a2a2a;  /* STANDARD BORDER — subtle */
+  --color-dark-600: #1f1f1f;  /* subtle border, secondary surface */
+  --color-dark-700: #252525;  /* hover / muted bg — above card */
+  --color-dark-800: #1e1e1e;  /* CARD background — lift above page bg */
+  --color-dark-850: #111111;  /* INPUT background — well effect (darker than card) */
+  --color-dark-900: #141414;  /* PAGE/CONTENT background — above sidebar */
+  --color-dark-950: #0f0f0f;  /* SIDEBAR background — deep black anchor */
 
   /* Base Colors */
   --color-white: #ffffff;
@@ -219,51 +220,54 @@
   }
 
   :root.dark {
-    /* ── ElevenLabs-inspired dark theme ──────────────────────────────
-       Sidebar:   #1c1c1d   (--color-dark-800)
-       Dashboard: #0f0f0f   (--color-dark-950)
-       Cards:     #1a1a1b ≈ between 800 and 900
-       Active nav:#252526   (--color-dark-700)
-       Borders:   #2a2a2b   (--color-dark-600)
-       Primary:   blue-600  (#4a6cf7 range)
+    /* ── "Carbon" Pure Neutral dark theme (darkened for Polar-like depth) ──
+       Sidebar:   #0f0f0f  (--color-dark-950)  ← deep black anchor
+       Page bg:   #141414  (--color-dark-900)  ← content area
+       Cards:     #1e1e1e  (--color-dark-800)  ← lift above page
+       Input bg:  #111111  (--color-dark-850)  ← well effect on cards
+       Hover bg:  #252525  (--color-dark-700)  ← above card for visible hover
+       Borders:   #2a2a2a  (--color-dark-500)  ← subtle neutral border
+       Primary:   blue-600
        Text:      #e8e8e8 primary, #9a9a9a muted
     ──────────────────────────────────────────────────────────────── */
-    --background: var(--color-dark-950);         /* #0f0f0f — main page bg */
+    --background: var(--color-dark-900);         /* #1c1c1c — content area bg */
     --foreground: var(--color-dark-50);          /* #e8e8e8 — primary text */
 
-    --card: var(--color-dark-800);               /* #1c1c1d — card/panel bg */
+    --card: var(--color-dark-800);               /* #2c2c2c — card/panel bg */
     --card-foreground: var(--color-dark-50);     /* #e8e8e8 */
 
-    --popover: var(--color-dark-900);            /* #141415 — dropdown bg */
+    --popover: var(--color-dark-850);            /* #141414 — dropdown bg */
     --popover-foreground: var(--color-dark-50);  /* #e8e8e8 */
 
-    --sidebar-background: var(--color-dark-800); /* #1c1c1d — sidebar */
+    --sidebar-background: var(--color-dark-950); /* #0f0f0f — sidebar deep black anchor */
     --sidebar-foreground: var(--color-dark-100); /* #c8c8c8 — sidebar nav labels */
     --sidebar-primary: var(--color-blue);        /* accent blue for active item */
     --sidebar-primary-foreground: var(--color-dark-50);
-    --sidebar-border: var(--color-dark-600);     /* #2a2a2b — sidebar dividers */
+    --sidebar-border: var(--color-dark-600);     /* #2e2e2e — subtle sidebar dividers */
+    --sidebar-accent: var(--color-dark-700);     /* #333333 — nav hover/active bg */
+    --sidebar-accent-foreground: var(--color-dark-50);
 
     --primary: var(--color-blue);                /* blue-600 — CTA buttons */
     --primary-foreground: var(--color-dark-50);
 
-    --secondary: var(--color-dark-700);          /* #252526 — secondary btn bg */
+    --secondary: var(--color-dark-700);          /* #333333 — secondary btn bg */
     --secondary-foreground: var(--color-dark-50);
 
-    --muted: var(--color-dark-700);              /* #252526 — muted backgrounds */
+    --muted: var(--color-dark-700);              /* #333333 — muted backgrounds */
     --muted-foreground: var(--color-dark-200);   /* #9a9a9a — muted text */
 
-    --accent: var(--color-blue);
+    --accent: var(--color-dark-700);         /* #252525 — neutral hover bg */
     --accent-foreground: var(--color-dark-50);
 
     --destructive: var(--color-red-500);
     --destructive-foreground: var(--color-red-500);
 
-    --border: var(--color-dark-600);             /* #2a2a2b — all borders */
-    --input: var(--color-dark-900);              /* #141415 — input bg */
-    --ring: var(--color-dark-500);               /* #3a3a3b — focus ring */
+    --border: var(--color-dark-500);             /* #3d3d3d — all borders (strong!) */
+    --input: var(--color-dark-850);              /* #141414 — input bg (well on card) */
+    --ring: var(--color-blue-500);               /* blue focus ring */
 
     /* Hover states */
-    --hover: var(--color-dark-700);              /* #252526 — row/item hover */
+    --hover: var(--color-dark-700);              /* #383838 — row/item hover (above card) */
     --hover-foreground: var(--color-dark-50);
 
     /* Info/Success/Warning states */
@@ -275,15 +279,15 @@
     --success-foreground: var(--color-green-400);
     --success-border: var(--color-green-900);
 
-    --warning: var(--color-dark-900);
+    --warning: var(--color-dark-950);
     --warning-foreground: var(--color-dark-300);
-    --warning-border: var(--color-dark-600);
+    --warning-border: var(--color-dark-700);
 
     /* Destructive variants */
     --destructive-light: var(--color-red-950);
     --destructive-border: var(--color-red-900);
 
-    --color-base: var(--color-dark-200);  /* Updated to use readable text color in dark mode (#9a9a9a) */
+    --color-base: var(--color-dark-200);  /* #8992a6 — base text in dark mode */
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -435,38 +439,44 @@
 }
 
 .dark {
-  /* ElevenLabs-inspired dark theme overrides for shadcn compatibility */
-  --background: oklch(0.09 0 0);              /* #0f0f0f — page bg */
+  /* "Carbon" pure neutral — shadcn/ui compatibility overrides (darkened palette) */
+  --background: oklch(0.09 0 0);              /* #141414 — content area */
   --foreground: oklch(0.92 0 0);              /* #e8e8e8 — primary text */
-  --card: oklch(0.115 0 0);                   /* #1c1c1d — card/panel */
+  --card: oklch(0.128 0 0);                   /* #1e1e1e — card/panel (lift above page) */
   --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.085 0 0);               /* #141415 — dropdown */
+  --popover: oklch(0.075 0 0);                /* #111111 — dropdown bg */
   --popover-foreground: oklch(0.92 0 0);
   --primary: oklch(0.546 0.245 262.881);      /* blue-600 — CTA */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.148 0 0);             /* #252526 — secondary btn */
+  --secondary: oklch(0.159 0 0);              /* #252525 — secondary btn */
   --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.148 0 0);                 /* #252526 */
-  --muted-foreground: oklch(0.61 0 0);       /* #9a9a9a — muted text */
-  --accent: oklch(0.546 0.245 262.881);
-  --accent-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.159 0 0);                  /* #252525 — muted bg */
+  --muted-foreground: oklch(0.63 0 0);        /* #9a9a9a — muted text */
+  --accent: oklch(0.159 0 0);              /* #252525 — neutral hover bg (was blue-600) */
+  --accent-foreground: oklch(0.92 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.168 0 0);                /* #2a2a2b — borders */
-  --input: oklch(0.085 0 0);                 /* #141415 — input bg */
-  --ring: oklch(0.23 0 0);                   /* #3a3a3b — focus ring */
+  --border: oklch(0.182 0 0);                 /* #2a2a2a — border */
+  --input: oklch(0.075 0 0);                  /* #111111 — input bg (well effect) */
+  --ring: oklch(0.546 0.245 262.881);         /* BLUE focus ring */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.115 0 0);               /* #1c1c1d — sidebar */
-  --sidebar-foreground: oklch(0.785 0 0);    /* #c8c8c8 — sidebar labels */
+  --sidebar: oklch(0.065 0 0);                /* #0f0f0f — sidebar deep black anchor */
+  --sidebar-foreground: oklch(0.81 0 0);      /* #c8c8c8 — sidebar labels */
   --sidebar-primary: oklch(0.546 0.245 262.881);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.148 0 0);        /* #252526 — active nav item */
+  --sidebar-accent: oklch(0.159 0 0);         /* #252525 — nav hover */
   --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(0.168 0 0);        /* #2a2a2b — sidebar dividers */
-  --sidebar-ring: oklch(0.23 0 0);
+  --sidebar-border: oklch(0.128 0 0);         /* #1e1e1e — subtle sidebar dividers */
+  --sidebar-ring: oklch(0.546 0.245 262.881);
+}
+
+/* Subtle depth shadow on cards in dark mode */
+.dark [data-slot="card"],
+.dark .card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
 }
 
 @layer base {

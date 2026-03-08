@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { Area, AreaChart, XAxis, YAxis } from 'recharts'
 import { ArrowUpRight } from 'lucide-react'
 import {
-    Card,
+    CardGhost,
     CardContent,
     CardDescription,
     CardHeader,
@@ -58,7 +58,7 @@ export function MetricAreaChart({
     const endDate = data[data.length - 1]?.date || 'Dec 31'
 
     return (
-        <Card>
+        <CardGhost>
             <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <div>
                     <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -164,7 +164,7 @@ export function MetricAreaChart({
                                         {title}
                                     </h3>
                                     <div className="text-4xl font-light text-white">{value || '$0'}</div>
-                                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                                    <div className="flex items-center gap-2 text-sm text-white/60">
                                         <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                                         <span>{startDate} - {endDate}</span>
                                     </div>
@@ -206,10 +206,10 @@ export function MetricAreaChart({
                                                 />
                                             </AreaChart>
                                         </ChartContainer>
-                                        <div className="absolute bottom-0 left-0 text-xs text-gray-500 translate-y-full pt-2">
+                                        <div className="absolute bottom-0 left-0 text-xs text-white/40 translate-y-full pt-2">
                                             {startDate}
                                         </div>
-                                        <div className="absolute bottom-0 right-0 text-xs text-gray-500 translate-y-full pt-2">
+                                        <div className="absolute bottom-0 right-0 text-xs text-white/40 translate-y-full pt-2">
                                             {endDate}
                                         </div>
                                     </div>
@@ -237,7 +237,7 @@ export function MetricAreaChart({
                                                 onClick={() => setSelectedBackground('color')}
                                                 className={`h-7 w-7 hover:cursor-pointer rounded-full overflow-hidden border-2 transition-all relative ${selectedBackground === 'color'
                                                     ? 'border-blue-500'
-                                                    : 'border-gray-300'
+                                                    : 'border-border'
                                                     }`}
                                             >
                                                 <Image
@@ -261,7 +261,7 @@ export function MetricAreaChart({
                                                 onClick={() => setSelectedBackground('silver')}
                                                 className={`h-7 ml-2 hover:cursor-pointer w-7 rounded-full overflow-hidden border-2 transition-all relative ${selectedBackground === 'silver'
                                                     ? 'border-blue-500'
-                                                    : 'border-gray-300'
+                                                    : 'border-border'
                                                     }`}
                                             >
                                                 <Image
@@ -292,6 +292,6 @@ export function MetricAreaChart({
                     </div>
                 </DialogContent>
             </Dialog>
-        </Card>
+        </CardGhost>
     )
 }

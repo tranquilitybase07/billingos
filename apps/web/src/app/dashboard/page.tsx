@@ -3,7 +3,8 @@ import { cookies } from 'next/headers'
 import { apiServer, APIError } from '@/lib/api/server'
 import type { Organization } from '@/lib/api/types'
 
-const LAST_VISITED_ORG_COOKIE = 'billingos_last_org'
+const LAST_VISITED_ORG_COOKIE_PREFIX = 'billingos_last_org'
+const ENVIRONMENT_COOKIE = 'billingos-environment'
 
 /**
  * Dashboard entry point - Server Component
@@ -34,9 +35,11 @@ export default async function DashboardPage() {
     redirect('/dashboard/create')
   }
 
-  // Try to get last visited organization from cookie
+  // Try to get last visited organization from env-specific cookie
   const cookieStore = await cookies()
-  const lastVisitedSlug = cookieStore.get(LAST_VISITED_ORG_COOKIE)?.value
+  const env = cookieStore.get(ENVIRONMENT_COOKIE)?.value || 'production'
+  const envCookieName = `${LAST_VISITED_ORG_COOKIE_PREFIX}_${env}`
+  const lastVisitedSlug = cookieStore.get(envCookieName)?.value
 
   let targetSlug: string
 

@@ -59,36 +59,54 @@ export class AccountService {
       throw new ForbiddenException('You are not a member of this organization');
     }
 
+    // Fetch org name for auto-creation metadata
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', createDto.organization_id)
+      .single();
+
     try {
-      // Create Stripe Connect account
-      const stripeAccount = await this.stripeService.createConnectAccount({
-        email: createDto.email,
-        country: createDto.country,
-        businessType: createDto.business_type as any,
-      });
+      // Use smart creation: auto-verifies in sandbox, normal flow in production
+      const { account: stripeAccount, autoCreated } =
+        await this.stripeService.createConnectAccountSmart({
+          email: createDto.email,
+          country: createDto.country,
+          businessType: createDto.business_type as any,
+          organizationName: orgData?.name,
+        });
+
+      // Auto-created sandbox accounts are immediately active
+      const accountStatus = autoCreated ? 'active' : 'onboarding_started';
 
       // Create account in database
       const { data: account, error } = await supabase
         .from('accounts')
         .insert({
           account_type: 'stripe',
-          admin_id: user.id, // User who creates the account becomes admin
+          admin_id: user.id,
           stripe_id: stripeAccount.id,
           email: stripeAccount.email || createDto.email,
           country: stripeAccount.country || createDto.country,
           currency: stripeAccount.default_currency || null,
-          is_details_submitted: stripeAccount.details_submitted || false,
-          is_charges_enabled: stripeAccount.charges_enabled || false,
-          is_payouts_enabled: stripeAccount.payouts_enabled || false,
+          is_details_submitted: autoCreated
+            ? true
+            : stripeAccount.details_submitted || false,
+          is_charges_enabled: autoCreated
+            ? true
+            : stripeAccount.charges_enabled || false,
+          is_payouts_enabled: autoCreated
+            ? true
+            : stripeAccount.payouts_enabled || false,
           business_type: stripeAccount.business_type || createDto.business_type,
-          status: 'onboarding_started',
+          status: accountStatus,
+          auto_created: autoCreated,
+          test_mode: this.stripeService.isTestMode(),
           data: stripeAccount as any,
-          // Platform fees: 0.6% + $0.10 (on top of Stripe's 2.9% + $0.30)
-          // Merchant absorbs all fees - if product is $100, merchant receives $96.10
           platform_fee_percent:
-            this.configService.get<number>('PLATFORM_FEE_PERCENT') || 60, // 0.6% in basis points
+            this.configService.get<number>('PLATFORM_FEE_PERCENT') || 60,
           platform_fee_fixed:
-            this.configService.get<number>('PLATFORM_FEE_FIXED') || 10, // $0.10 in cents
+            this.configService.get<number>('PLATFORM_FEE_FIXED') || 10,
         })
         .select()
         .single();
@@ -105,7 +123,7 @@ export class AccountService {
         .from('organizations')
         .update({
           account_id: account.id,
-          status: 'onboarding_started',
+          status: autoCreated ? 'active' : 'onboarding_started',
           status_updated_at: new Date().toISOString(),
         })
         .eq('id', createDto.organization_id);

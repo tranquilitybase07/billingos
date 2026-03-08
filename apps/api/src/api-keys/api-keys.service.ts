@@ -5,7 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
-import { CreateApiKeyDto, ApiKeyType, ApiKeyEnvironment } from './dto/create-api-key.dto';
+import {
+  CreateApiKeyDto,
+  ApiKeyType,
+  ApiKeyEnvironment,
+} from './dto/create-api-key.dto';
 import { ApiKey } from './entities/api-key.entity';
 import * as crypto from 'crypto';
 
@@ -19,16 +23,31 @@ export class ApiKeysService {
    * Generate a cryptographically secure API key
    * Format: {prefix}_{base58_encoded_random_bytes}
    */
-  private generateApiKey(keyType: ApiKeyType, environment: ApiKeyEnvironment): string {
+  private generateApiKey(
+    keyType: ApiKeyType,
+    environment: ApiKeyEnvironment,
+  ): string {
     // Determine prefix based on type and environment
     let prefix = '';
-    if (keyType === ApiKeyType.SECRET && environment === ApiKeyEnvironment.LIVE) {
+    if (
+      keyType === ApiKeyType.SECRET &&
+      environment === ApiKeyEnvironment.LIVE
+    ) {
       prefix = 'sk_live';
-    } else if (keyType === ApiKeyType.SECRET && environment === ApiKeyEnvironment.TEST) {
+    } else if (
+      keyType === ApiKeyType.SECRET &&
+      environment === ApiKeyEnvironment.TEST
+    ) {
       prefix = 'sk_test';
-    } else if (keyType === ApiKeyType.PUBLISHABLE && environment === ApiKeyEnvironment.LIVE) {
+    } else if (
+      keyType === ApiKeyType.PUBLISHABLE &&
+      environment === ApiKeyEnvironment.LIVE
+    ) {
       prefix = 'pk_live';
-    } else if (keyType === ApiKeyType.PUBLISHABLE && environment === ApiKeyEnvironment.TEST) {
+    } else if (
+      keyType === ApiKeyType.PUBLISHABLE &&
+      environment === ApiKeyEnvironment.TEST
+    ) {
       prefix = 'pk_test';
     }
 
@@ -61,7 +80,8 @@ export class ApiKeysService {
    * Base58 encoding (Bitcoin-style, avoids confusing characters)
    */
   private base58Encode(buffer: Buffer): string {
-    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const ALPHABET =
+      '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     const base = BigInt(58);
 
     let num = BigInt('0x' + buffer.toString('hex'));
@@ -86,7 +106,10 @@ export class ApiKeysService {
    * Generates both secret and publishable keys together
    * Returns the full keys ONCE (never stored in plaintext)
    */
-  async create(organizationId: string, createDto: CreateApiKeyDto): Promise<{
+  async create(
+    organizationId: string,
+    createDto: CreateApiKeyDto,
+  ): Promise<{
     secretKey: ApiKey;
     publishableKey: ApiKey;
     secretFullKey: string;
@@ -94,8 +117,11 @@ export class ApiKeysService {
   }> {
     const supabase = this.supabaseService.getClient();
 
-    // Default environment
-    const environment = createDto.environment || ApiKeyEnvironment.TEST;
+    // Auto-detect environment from NODE_ENV (sandbox = test, production = live)
+    const isSandbox = process.env.NODE_ENV === 'sandbox';
+    const environment = isSandbox
+      ? ApiKeyEnvironment.TEST
+      : ApiKeyEnvironment.LIVE;
 
     // Generate unique pair ID to link the keys
     const keyPairId = crypto.randomUUID();
@@ -107,7 +133,10 @@ export class ApiKeysService {
     const signingSecret = this.generateSigningSecret();
 
     // Generate publishable key components
-    const publishableFullKey = this.generateApiKey(ApiKeyType.PUBLISHABLE, environment);
+    const publishableFullKey = this.generateApiKey(
+      ApiKeyType.PUBLISHABLE,
+      environment,
+    );
     const publishableKeyPrefix = publishableFullKey.substring(0, 13);
     const publishableKeyHash = this.hashApiKey(publishableFullKey);
 
@@ -144,9 +173,13 @@ export class ApiKeysService {
     }
 
     const secretKey = data.find((k) => k.key_type === 'secret') as ApiKey;
-    const publishableKey = data.find((k) => k.key_type === 'publishable') as ApiKey;
+    const publishableKey = data.find(
+      (k) => k.key_type === 'publishable',
+    ) as ApiKey;
 
-    this.logger.log(`Created API key pair for organization ${organizationId} (${environment})`);
+    this.logger.log(
+      `Created API key pair for organization ${organizationId} (${environment})`,
+    );
 
     return {
       secretKey,
@@ -159,7 +192,10 @@ export class ApiKeysService {
   /**
    * List all API keys for an organization (excluding revoked keys by default)
    */
-  async findAll(organizationId: string, includeRevoked = false): Promise<ApiKey[]> {
+  async findAll(
+    organizationId: string,
+    includeRevoked = false,
+  ): Promise<ApiKey[]> {
     const supabase = this.supabaseService.getClient();
 
     let query = supabase
@@ -239,7 +275,9 @@ export class ApiKeysService {
       }
 
       revokedKeys = data as ApiKey[];
-      this.logger.log(`Revoked API key pair ${keyData.key_pair_id} for organization ${organizationId}`);
+      this.logger.log(
+        `Revoked API key pair ${keyData.key_pair_id} for organization ${organizationId}`,
+      );
     } else {
       // Legacy individual key — revoke just the one key
       const { data, error } = await supabase
@@ -255,7 +293,9 @@ export class ApiKeysService {
       }
 
       revokedKeys = [data as ApiKey];
-      this.logger.log(`Revoked API key ${keyId} for organization ${organizationId}`);
+      this.logger.log(
+        `Revoked API key ${keyId} for organization ${organizationId}`,
+      );
     }
 
     return revokedKeys;

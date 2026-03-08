@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const LAST_VISITED_ORG_COOKIE = 'billingos_last_org'
+const ENVIRONMENT_COOKIE = 'billingos-environment'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -60,14 +61,16 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Track last visited organization for smart redirects
+  // Track last visited organization per environment for smart redirects
   // Match pattern: /dashboard/[org-slug] or /dashboard/[org-slug]/...
   const orgMatch = request.nextUrl.pathname.match(/^\/dashboard\/([^\/]+)/);
   if (user && orgMatch && orgMatch[1] !== 'create') {
     const orgSlug = orgMatch[1];
+    const env = request.cookies.get(ENVIRONMENT_COOKIE)?.value || 'production';
+    const envCookieName = `${LAST_VISITED_ORG_COOKIE}_${env}`;
 
-    // Set cookie to remember last visited org
-    supabaseResponse.cookies.set(LAST_VISITED_ORG_COOKIE, orgSlug, {
+    // Set env-specific cookie to remember last visited org per environment
+    supabaseResponse.cookies.set(envCookieName, orgSlug, {
       path: '/',
       maxAge: 60 * 60 * 24 * 365, // 1 year
       sameSite: 'lax',
