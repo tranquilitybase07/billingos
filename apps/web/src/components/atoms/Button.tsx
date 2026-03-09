@@ -9,7 +9,7 @@ const customButtonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground hover:opacity-85 transition-opacity duration-100 border border-white/10',
+          'bg-primary text-primary-foreground hover:opacity-85 transition-opacity duration-100 border border-white/10 dark:bg-gradient-to-b dark:from-blue-500 dark:to-blue-600 dark:hover:from-blue-400 dark:hover:to-blue-500 dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:

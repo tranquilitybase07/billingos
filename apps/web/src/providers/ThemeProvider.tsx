@@ -9,7 +9,7 @@ export function ThemeProvider({
 }) {
   return (
     <NextThemesProvider
-      defaultTheme="system"
+      defaultTheme="dark"
       enableSystem={true}
       attribute="class"
       storageKey="billingos-theme"

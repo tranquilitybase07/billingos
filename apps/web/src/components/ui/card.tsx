@@ -11,6 +11,7 @@ const Card = ({
 }) => (
   <div
     ref={ref}
+    data-slot="card"
     className={cn(
       'bg-card text-card-foreground rounded-lg border shadow-xs',
       className,
