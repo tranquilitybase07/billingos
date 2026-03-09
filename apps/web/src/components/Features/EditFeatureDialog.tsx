@@ -1,9 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import {
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  X,
+  Flag,
+  Activity,
+  Hash,
+} from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -33,12 +42,13 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { useUpdateFeature, type Feature } from '@/hooks/queries/features'
 import {
-  updateFeatureSchema,
-  parseJsonSafely,
-  type UpdateFeatureFormData,
+  updateFeatureFormSchema,
+  assembleFeaturePayload,
+  parseFeatureToFormValues,
+  RESET_PERIOD_OPTIONS,
+  type UpdateFeatureFormValues,
   type FeatureType,
 } from '@/lib/validations/feature'
-import { FEATURE_TYPE_INFO } from '@/lib/constants/feature-templates'
 import { cn } from '@/lib/utils'
 
 interface EditFeatureDialogProps {
@@ -48,9 +58,30 @@ interface EditFeatureDialogProps {
   onFeatureUpdated?: (feature: Feature) => void
 }
 
-/**
- * Feature editing dialog with form validation
- */
+const TYPE_DISPLAY = {
+  boolean_flag: {
+    label: 'On/Off Feature',
+    description: 'Enabled or disabled per plan',
+    icon: Flag,
+    iconColor: 'text-blue-500',
+    iconBg: 'bg-blue-500/10',
+  },
+  usage_quota: {
+    label: 'Usage Limit',
+    description: 'Resets each billing cycle',
+    icon: Activity,
+    iconColor: 'text-green-500',
+    iconBg: 'bg-green-500/10',
+  },
+  numeric_limit: {
+    label: 'Fixed Limit',
+    description: "Hard cap that doesn't reset",
+    icon: Hash,
+    iconColor: 'text-purple-500',
+    iconBg: 'bg-purple-500/10',
+  },
+} as const
+
 export function EditFeatureDialog({
   feature,
   isOpen,
@@ -59,59 +90,69 @@ export function EditFeatureDialog({
 }: EditFeatureDialogProps) {
   const { toast } = useToast()
   const updateFeature = useUpdateFeature()
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const form = useForm<UpdateFeatureFormData>({
-    resolver: zodResolver(updateFeatureSchema),
-    mode: 'onSubmit',
-    defaultValues: {
+  const getDefaultValues = useCallback((): UpdateFeatureFormValues => {
+    const parsed = parseFeatureToFormValues({
+      properties: feature.properties ?? null,
+      metadata: feature.metadata ?? null,
+    })
+    return {
       title: feature.title,
       description: feature.description || '',
-      type: feature.type,
-      properties: feature.properties,
-      metadata: feature.metadata,
-    },
+      unit: parsed.unit,
+      reset_period: parsed.reset_period,
+      category: parsed.category,
+      premium: parsed.premium,
+      advanced_metadata: parsed.advanced_metadata,
+    }
+  }, [feature])
+
+  const form = useForm<UpdateFeatureFormValues>({
+    resolver: zodResolver(updateFeatureFormSchema),
+    mode: 'onSubmit',
+    defaultValues: getDefaultValues(),
   })
 
-  // Reset form when feature changes
+  const { fields: advancedFields, append: appendField, remove: removeField } =
+    useFieldArray({ control: form.control, name: 'advanced_metadata' })
+
+  // Reset form when feature changes or dialog opens
   useEffect(() => {
-    if (feature && isOpen) {
-      form.reset({
-        title: feature.title,
-        description: feature.description || '',
-        type: feature.type,
-        properties: feature.properties,
-        metadata: feature.metadata,
-      })
+    if (isOpen) {
+      form.reset(getDefaultValues())
+      setShowAdvanced(false)
     }
-  }, [feature, isOpen, form])
+  }, [feature, isOpen, getDefaultValues, form])
 
-  const onSubmit = useCallback(async (data: UpdateFeatureFormData) => {
-    // Prevent double submission
-    if (updateFeature.isPending) return
+  const onSubmit = useCallback(
+    async (data: UpdateFeatureFormValues) => {
+      if (updateFeature.isPending) return
+      try {
+        const payload = assembleFeaturePayload(data) as any
+        const updatedFeature = await updateFeature.mutateAsync({
+          id: feature.id,
+          ...payload,
+        })
+        toast({
+          title: 'Feature Updated',
+          description: `"${updatedFeature.title}" was updated successfully`,
+        })
+        onFeatureUpdated?.(updatedFeature)
+        onClose()
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error?.message || 'Failed to update feature',
+          variant: 'destructive',
+        })
+      }
+    },
+    [updateFeature, feature.id, toast, onFeatureUpdated, onClose]
+  )
 
-    try {
-      const updatedFeature = await updateFeature.mutateAsync({
-        id: feature.id,
-        ...data,
-      })
-
-      // Show success notification
-      toast({
-        title: 'Feature Updated',
-        description: `Feature "${updatedFeature.title}" was updated successfully`,
-      })
-
-      // Notify parent and close
-      onFeatureUpdated?.(updatedFeature)
-      onClose()
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error?.message || 'Failed to update feature',
-        variant: 'destructive',
-      })
-    }
-  }, [updateFeature, feature.id, toast, onFeatureUpdated, onClose])
+  const typeInfo = TYPE_DISPLAY[feature.type as FeatureType]
+  const TypeIcon = typeInfo?.icon
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -119,7 +160,7 @@ export function EditFeatureDialog({
         <SheetHeader>
           <SheetTitle>Edit Feature</SheetTitle>
           <SheetDescription>
-            Update the feature details. The identifier (name) cannot be changed.
+            Update feature details. Type and identifier cannot be changed.
           </SheetDescription>
         </SheetHeader>
 
@@ -131,18 +172,46 @@ export function EditFeatureDialog({
             }}
             className="space-y-6 mt-6"
           >
-            {/* Name (Read-only) */}
+            {/* Read-only: Type display */}
             <div className="space-y-2">
-              <FormLabel>Name (Identifier)</FormLabel>
-              <Input
-                value={feature.name}
-                disabled
-                className="bg-muted"
-              />
-              <p className="text-sm text-muted-foreground">
-                The identifier cannot be changed after creation
+              <p className="text-sm font-medium">Feature Type</p>
+              <div
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border p-3 bg-muted/30 cursor-not-allowed',
+                  'opacity-70'
+                )}
+              >
+                {typeInfo && TypeIcon && (
+                  <div className={cn('rounded-md p-1.5', typeInfo.iconBg)}>
+                    <TypeIcon className={cn('h-4 w-4', typeInfo.iconColor)} />
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium">{typeInfo?.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {typeInfo?.description}
+                  </p>
+                </div>
+                <p className="ml-auto text-xs text-muted-foreground">
+                  Can't be changed
+                </p>
+              </div>
+            </div>
+
+            {/* Read-only: Identifier */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Identifier</p>
+              <div className="flex items-center h-9 px-3 rounded-md border bg-muted/30 opacity-70 cursor-not-allowed">
+                <code className="text-sm font-mono text-muted-foreground">
+                  {feature.name}
+                </code>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Cannot be changed after creation
               </p>
             </div>
+
+            <div className="border-t" />
 
             {/* Title */}
             <FormField
@@ -152,48 +221,10 @@ export function EditFeatureDialog({
                 <FormItem>
                   <FormLabel>Title *</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="API Calls per Month"
-                      {...field}
-                    />
+                    <Input placeholder="Feature title" {...field} />
                   </FormControl>
                   <FormDescription>
                     Human-readable name shown to customers
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Type */}
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Feature Type *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.entries(FEATURE_TYPE_INFO).map(([type, info]) => (
-                        <SelectItem key={type} value={type}>
-                          <div className="flex items-center gap-2">
-                            <info.icon className={cn('h-4 w-4', info.color)} />
-                            <span>{info.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {FEATURE_TYPE_INFO[field.value as FeatureType]?.description}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -206,76 +237,158 @@ export function EditFeatureDialog({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>
+                    Description{' '}
+                    <span className="font-normal text-muted-foreground">
+                      (optional)
+                    </span>
+                  </FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Detailed description of this feature..."
-                      rows={3}
+                      placeholder="Brief description shown to customers..."
+                      rows={2}
                       value={field.value || ''}
                       onChange={field.onChange}
                       onBlur={field.onBlur}
                       name={field.name}
                     />
                   </FormControl>
-                  <FormDescription>
-                    Optional description for internal reference
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Properties (JSON) */}
-            <FormField
-              control={form.control}
-              name="properties"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Properties (JSON)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder='{"unit": "requests", "reset_period": "monthly"}'
-                      rows={3}
-                      value={field.value ? JSON.stringify(field.value, null, 2) : ''}
-                      onChange={(e) => {
-                        const parsed = parseJsonSafely(e.target.value)
-                        field.onChange(parsed || undefined)
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Optional JSON configuration for this feature
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Type-specific fields */}
+            {feature.type === 'usage_quota' && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="unit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Unit</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. requests, emails"
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>What is being counted?</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="reset_period"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Resets</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || ''}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="How often?" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {RESET_PERIOD_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Billing cycle</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
-            {/* Metadata (JSON) */}
-            <FormField
-              control={form.control}
-              name="metadata"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Metadata (JSON)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder='{"category": "usage", "common": true}'
-                      rows={3}
-                      value={field.value ? JSON.stringify(field.value, null, 2) : ''}
-                      onChange={(e) => {
-                        const parsed = parseJsonSafely(e.target.value)
-                        field.onChange(parsed || undefined)
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Optional metadata for categorization and filtering
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
+            {feature.type === 'numeric_limit' && (
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. GB, members, projects"
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      What is the limit measured in?
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Advanced key-value metadata */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showAdvanced ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Advanced options
+              </button>
+
+              {showAdvanced && (
+                <div className="space-y-2 pl-4 border-l-2 border-muted">
+                  <p className="text-xs text-muted-foreground">
+                    Add custom metadata fields for your own tracking
+                  </p>
+                  {advancedFields.map((advField, index) => (
+                    <div key={advField.id} className="flex items-center gap-2">
+                      <Input
+                        placeholder="key"
+                        className="h-7 text-xs font-mono w-28 flex-none"
+                        {...form.register(`advanced_metadata.${index}.key`)}
+                      />
+                      <Input
+                        placeholder="value"
+                        className="h-7 text-xs flex-1"
+                        {...form.register(`advanced_metadata.${index}.value`)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 flex-none"
+                        onClick={() => removeField(index)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => appendField({ key: '', value: '' })}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add field
+                  </Button>
+                </div>
               )}
-            />
+            </div>
 
             {/* Stripe Sync Info */}
             {feature.stripe_feature_id && (
@@ -284,23 +397,32 @@ export function EditFeatureDialog({
                 <div className="space-y-1 text-sm">
                   <p>
                     <span className="text-muted-foreground">Feature ID:</span>{' '}
-                    <code className="font-mono">{feature.stripe_feature_id}</code>
+                    <code className="font-mono text-xs">
+                      {feature.stripe_feature_id}
+                    </code>
                   </p>
                   {feature.stripe_synced_at && (
                     <p>
-                      <span className="text-muted-foreground">Last Synced:</span>{' '}
+                      <span className="text-muted-foreground">
+                        Last Synced:
+                      </span>{' '}
                       {new Date(feature.stripe_synced_at).toLocaleString()}
                     </p>
                   )}
                   {feature.stripe_sync_status && (
                     <p>
                       <span className="text-muted-foreground">Status:</span>{' '}
-                      <span className={cn(
-                        'font-medium',
-                        feature.stripe_sync_status === 'synced' && 'text-green-600',
-                        feature.stripe_sync_status === 'pending' && 'text-yellow-600',
-                        feature.stripe_sync_status === 'failed' && 'text-red-600'
-                      )}>
+                      <span
+                        className={cn(
+                          'font-medium',
+                          feature.stripe_sync_status === 'synced' &&
+                            'text-green-600',
+                          feature.stripe_sync_status === 'pending' &&
+                            'text-yellow-600',
+                          feature.stripe_sync_status === 'failed' &&
+                            'text-red-600'
+                        )}
+                      >
                         {feature.stripe_sync_status}
                       </span>
                     </p>

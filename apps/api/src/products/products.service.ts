@@ -16,7 +16,11 @@ import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { CreatePriceDto, PriceAmountType, RecurringInterval } from './dto/create-price.dto';
+import {
+  CreatePriceDto,
+  PriceAmountType,
+  RecurringInterval,
+} from './dto/create-price.dto';
 
 @Injectable()
 export class ProductsService {
@@ -171,7 +175,9 @@ export class ProductsService {
         const recurringInterval =
           dto.recurring_interval || createDto.recurring_interval;
         const recurringIntervalCount =
-          dto.recurring_interval_count || createDto.recurring_interval_count || 1;
+          dto.recurring_interval_count ||
+          createDto.recurring_interval_count ||
+          1;
 
         const { data: priceRecord, error: priceError } = await supabase
           .from('product_prices')
@@ -463,7 +469,10 @@ export class ProductsService {
     let requiresVersioning = false;
 
     // Check subscription count
-    const subscriptionCount = await this.getSubscriptionCount(product.id, userId);
+    const subscriptionCount = await this.getSubscriptionCount(
+      product.id,
+      userId,
+    );
 
     // If no active subscriptions, no versioning needed
     if (subscriptionCount.count === 0) {
@@ -516,27 +525,32 @@ export class ProductsService {
           // so null === null will be false (no versioning) for those types.
           if (newLimit !== currentLimit) {
             requiresVersioning = true;
-            const formatLimit = (l: number | null) => (l === null ? 'Unlimited' : l);
+            const formatLimit = (l: number | null) =>
+              l === null ? 'Unlimited' : l;
             reasons.push(
               `Feature "${currentFeature.features.name}" limit changed from ${formatLimit(currentLimit)} to ${formatLimit(newLimit)}`,
             );
           } else {
             // Check for other config changes (e.g. boolean flags, metadata)
-            // We strip null/undefined values for fair comparison if needed, 
+            // We strip null/undefined values for fair comparison if needed,
             // but for now a direct stringify comparison is safer to catch any drift.
-            const currentConfigStr = JSON.stringify(currentFeature.config || {});
+            const currentConfigStr = JSON.stringify(
+              currentFeature.config || {},
+            );
             const newConfigStr = JSON.stringify(featureUpdate.config || {});
-            
+
             if (currentConfigStr !== newConfigStr) {
               requiresVersioning = true;
               reasons.push(
                 `Feature "${currentFeature.features.name}" configuration changed`,
               );
-            } else if (currentFeature.display_order !== featureUpdate.display_order) {
-               requiresVersioning = true;
-               reasons.push(
-                 `Feature "${currentFeature.features.name}" display order changed`,
-               );
+            } else if (
+              currentFeature.display_order !== featureUpdate.display_order
+            ) {
+              requiresVersioning = true;
+              reasons.push(
+                `Feature "${currentFeature.features.name}" display order changed`,
+              );
             }
           }
         }
@@ -586,11 +600,13 @@ export class ProductsService {
     const supabase = this.supabaseService.getClient();
 
     // Get the latest version number
-    const { data: latestVersionData } = await supabase
-      .rpc('get_latest_product_version', {
+    const { data: latestVersionData } = await supabase.rpc(
+      'get_latest_product_version',
+      {
         p_organization_id: currentProduct.organization_id,
         p_product_name: currentProduct.name,
-      });
+      },
+    );
 
     const newVersion = (latestVersionData || 1) + 1;
 
@@ -657,7 +673,10 @@ export class ProductsService {
     if (createError) {
       // Clean up Stripe product if database insert fails
       if (stripeProductId && stripeAccountId) {
-        await this.stripeService.deleteProduct(stripeProductId, stripeAccountId);
+        await this.stripeService.deleteProduct(
+          stripeProductId,
+          stripeAccountId,
+        );
       }
       throw new BadRequestException('Failed to create product version');
     }
@@ -705,11 +724,17 @@ export class ProductsService {
     let stripePriceId: string | null = null;
 
     // Determine recurring interval (use price's interval or fall back to product's)
-    const recurringInterval = priceDto.recurring_interval || productRecurringInterval;
-    const recurringIntervalCount = priceDto.recurring_interval_count || productRecurringIntervalCount;
+    const recurringInterval =
+      priceDto.recurring_interval || productRecurringInterval;
+    const recurringIntervalCount =
+      priceDto.recurring_interval_count || productRecurringIntervalCount;
 
     // Create Stripe price for fixed price types
-    if (priceDto.amount_type === 'fixed' && stripeAccountId && stripeProductId) {
+    if (
+      priceDto.amount_type === 'fixed' &&
+      stripeAccountId &&
+      stripeProductId
+    ) {
       const stripePrice = await this.stripeService.createPrice(
         {
           product: stripeProductId,
@@ -766,26 +791,27 @@ export class ProductsService {
       .eq('product_id', oldProductId)
       .eq('is_archived', false);
 
-    const pricesToKeep = currentPrices?.filter((price) => {
-      // Exclude prices to be archived
-      if (updateDto.prices?.archive?.includes(price.id)) {
-        return false;
-      }
-
-      // Exclude prices being replaced by new prices with same interval and currency
-      if (updateDto.prices?.create) {
-        const isBeingReplaced = updateDto.prices.create.some(
-          (newPrice) =>
-            newPrice.recurring_interval === price.recurring_interval &&
-            newPrice.price_currency === price.price_currency,
-        );
-        if (isBeingReplaced) {
+    const pricesToKeep =
+      currentPrices?.filter((price) => {
+        // Exclude prices to be archived
+        if (updateDto.prices?.archive?.includes(price.id)) {
           return false;
         }
-      }
 
-      return true;
-    }) || [];
+        // Exclude prices being replaced by new prices with same interval and currency
+        if (updateDto.prices?.create) {
+          const isBeingReplaced = updateDto.prices.create.some(
+            (newPrice) =>
+              newPrice.recurring_interval === price.recurring_interval &&
+              newPrice.price_currency === price.price_currency,
+          );
+          if (isBeingReplaced) {
+            return false;
+          }
+        }
+
+        return true;
+      }) || [];
 
     // Get the new product's details once for all price operations
     const { data: newProduct } = await supabase
@@ -855,9 +881,10 @@ export class ProductsService {
       .select('*, features!inner(id, stripe_feature_id)')
       .eq('product_id', oldProductId);
 
-    const featuresToKeep = currentFeatures?.filter(
-      (feature) => !updateDto.features?.unlink?.includes(feature.feature_id),
-    ) || [];
+    const featuresToKeep =
+      currentFeatures?.filter(
+        (feature) => !updateDto.features?.unlink?.includes(feature.feature_id),
+      ) || [];
 
     // Copy existing features (not being unlinked) with any updates
     for (const feature of featuresToKeep) {
@@ -869,23 +896,33 @@ export class ProductsService {
       const displayOrder = updateConfig?.display_order ?? feature.display_order;
 
       // Insert feature link in database
-      const { data: link } = await supabase.from('product_features').insert({
-        product_id: newProductId,
-        feature_id: feature.feature_id,
-        display_order: displayOrder,
-        config: config,
-        stripe_synced: false,
-      }).select().single();
+      const { data: link } = await supabase
+        .from('product_features')
+        .insert({
+          product_id: newProductId,
+          feature_id: feature.feature_id,
+          display_order: displayOrder,
+          config: config,
+          stripe_synced: false,
+        })
+        .select()
+        .single();
 
       // Sync to Stripe if the feature has a Stripe ID
       const featureData = (feature as any).features;
-      if (link && featureData?.stripe_feature_id && newProduct?.stripe_product_id && stripeAccountId) {
+      if (
+        link &&
+        featureData?.stripe_feature_id &&
+        newProduct?.stripe_product_id &&
+        stripeAccountId
+      ) {
         try {
-          const productFeature = await this.stripeService.attachFeatureToProduct({
-            productId: newProduct.stripe_product_id,
-            featureId: featureData.stripe_feature_id,
-            stripeAccountId,
-          });
+          const productFeature =
+            await this.stripeService.attachFeatureToProduct({
+              productId: newProduct.stripe_product_id,
+              featureId: featureData.stripe_feature_id,
+              stripeAccountId,
+            });
 
           // Mark as synced
           await supabase
@@ -922,22 +959,32 @@ export class ProductsService {
           .single();
 
         // Insert feature link in database
-        const { data: link } = await supabase.from('product_features').insert({
-          product_id: newProductId,
-          feature_id: newFeature.feature_id,
-          display_order: newFeature.display_order,
-          config: newFeature.config || {},
-          stripe_synced: false,
-        }).select().single();
+        const { data: link } = await supabase
+          .from('product_features')
+          .insert({
+            product_id: newProductId,
+            feature_id: newFeature.feature_id,
+            display_order: newFeature.display_order,
+            config: newFeature.config || {},
+            stripe_synced: false,
+          })
+          .select()
+          .single();
 
         // Sync to Stripe if the feature has a Stripe ID
-        if (link && featureData?.stripe_feature_id && newProduct?.stripe_product_id && stripeAccountId) {
+        if (
+          link &&
+          featureData?.stripe_feature_id &&
+          newProduct?.stripe_product_id &&
+          stripeAccountId
+        ) {
           try {
-            const productFeature = await this.stripeService.attachFeatureToProduct({
-              productId: newProduct.stripe_product_id,
-              featureId: featureData.stripe_feature_id,
-              stripeAccountId,
-            });
+            const productFeature =
+              await this.stripeService.attachFeatureToProduct({
+                productId: newProduct.stripe_product_id,
+                featureId: featureData.stripe_feature_id,
+                stripeAccountId,
+              });
 
             // Mark as synced
             await supabase
@@ -975,7 +1022,11 @@ export class ProductsService {
     const product = await this.findOne(id, userId);
 
     // Check if versioning is needed
-    const versioningAnalysis = await this.analyzeChanges(product, updateDto, userId);
+    const versioningAnalysis = await this.analyzeChanges(
+      product,
+      updateDto,
+      userId,
+    );
 
     // If versioning is required and there are active subscriptions, create new version
     if (versioningAnalysis.requiresVersioning) {
@@ -1025,7 +1076,8 @@ export class ProductsService {
           updateData.trial_days = updateDto.trial_days;
         if (updateDto.metadata) updateData.metadata = updateDto.metadata;
         if (updateDto.visible_in_pricing_table !== undefined)
-          updateData.visible_in_pricing_table = updateDto.visible_in_pricing_table;
+          updateData.visible_in_pricing_table =
+            updateDto.visible_in_pricing_table;
 
         const { error } = await supabase
           .from('products')
@@ -1104,7 +1156,11 @@ export class ProductsService {
           for (const priceDto of updateDto.prices.create) {
             // Create in Stripe first
             let stripePriceId: string | null = null;
-            if (priceDto.amount_type === 'fixed' && product.stripe_product_id && stripeAccountId) {
+            if (
+              priceDto.amount_type === 'fixed' &&
+              product.stripe_product_id &&
+              stripeAccountId
+            ) {
               const recurringInterval =
                 priceDto.recurring_interval || product.recurring_interval;
               const recurringIntervalCount =
@@ -1119,7 +1175,8 @@ export class ProductsService {
                     currency: priceDto.price_currency || 'usd',
                     unit_amount: priceDto.price_amount,
                     recurring: {
-                      interval: recurringInterval as Stripe.Price.Recurring.Interval,
+                      interval:
+                        recurringInterval as Stripe.Price.Recurring.Interval,
                       interval_count: recurringIntervalCount,
                     },
                   },
@@ -1140,18 +1197,16 @@ export class ProductsService {
               product.recurring_interval_count ||
               1;
 
-            const { error } = await supabase
-              .from('product_prices')
-              .insert({
-                product_id: id,
-                amount_type: priceDto.amount_type,
-                price_amount: priceDto.price_amount || null,
-                price_currency: priceDto.price_currency || 'usd',
-                recurring_interval: recurringInterval,
-                recurring_interval_count: recurringIntervalCount,
-                stripe_price_id: stripePriceId,
-                is_archived: false,
-              });
+            const { error } = await supabase.from('product_prices').insert({
+              product_id: id,
+              amount_type: priceDto.amount_type,
+              price_amount: priceDto.price_amount || null,
+              price_currency: priceDto.price_currency || 'usd',
+              recurring_interval: recurringInterval,
+              recurring_interval_count: recurringIntervalCount,
+              stripe_price_id: stripePriceId,
+              is_archived: false,
+            });
 
             if (error) {
               this.logger.error('Failed to create price in DB:', error);
@@ -1182,7 +1237,10 @@ export class ProductsService {
               .eq('feature_id', featureId);
 
             if (error) {
-              this.logger.error(`Failed to unlink feature ${featureId}:`, error);
+              this.logger.error(
+                `Failed to unlink feature ${featureId}:`,
+                error,
+              );
               throw new BadRequestException(
                 `Failed to unlink feature ${featureId}`,
               );
@@ -1227,16 +1285,17 @@ export class ProductsService {
               );
             }
 
-            // Create link in database
-            const { error } = await supabase
-              .from('product_features')
-              .insert({
+            // Create or update link in database (upsert handles re-linking existing features)
+            const { error } = await supabase.from('product_features').upsert(
+              {
                 product_id: id,
                 feature_id: featureDto.feature_id,
                 display_order: featureDto.display_order,
                 config: featureDto.config || {},
                 stripe_synced: false,
-              });
+              },
+              { onConflict: 'product_id,feature_id' },
+            );
 
             if (error) {
               this.logger.error('Failed to link feature:', error);
@@ -1358,7 +1417,9 @@ export class ProductsService {
       .in('status', ['active', 'trialing']);
 
     if (activeError) {
-      throw new BadRequestException('Failed to fetch active subscription count');
+      throw new BadRequestException(
+        'Failed to fetch active subscription count',
+      );
     }
 
     // Count canceled subscriptions
@@ -1369,7 +1430,9 @@ export class ProductsService {
       .eq('status', 'canceled');
 
     if (canceledError) {
-      throw new BadRequestException('Failed to fetch canceled subscription count');
+      throw new BadRequestException(
+        'Failed to fetch canceled subscription count',
+      );
     }
 
     return {
@@ -1382,16 +1445,26 @@ export class ProductsService {
   /**
    * Get subscriptions for a product with pagination
    */
-  async getProductSubscriptions(id: string, userId: string, limit = 10, offset = 0) {
+  async getProductSubscriptions(
+    id: string,
+    userId: string,
+    limit = 10,
+    offset = 0,
+  ) {
     const supabase = this.supabaseService.getClient();
 
     // Verify product exists and user has access
     const product = await this.findOne(id, userId);
 
     // Get subscriptions with customer details
-    const { data: subscriptions, error, count } = await supabase
+    const {
+      data: subscriptions,
+      error,
+      count,
+    } = await supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         *,
         customer:customers(
           id,
@@ -1400,7 +1473,9 @@ export class ProductsService {
           external_id,
           stripe_customer_id
         )
-      `, { count: 'exact' })
+      `,
+        { count: 'exact' },
+      )
       .eq('product_id', id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -1450,11 +1525,13 @@ export class ProductsService {
     let newVersion: number | null = null;
 
     if (analysis.requiresVersioning) {
-      const { data: latestVersionData } = await supabase
-        .rpc('get_latest_product_version', {
+      const { data: latestVersionData } = await supabase.rpc(
+        'get_latest_product_version',
+        {
           p_organization_id: product.organization_id,
           p_product_name: product.name,
-        });
+        },
+      );
 
       newVersion = (latestVersionData || currentVersion) + 1;
     }
@@ -1498,25 +1575,35 @@ export class ProductsService {
     }
 
     // Get all versions using the database function
-    const { data: versions, error } = await supabase.rpc('get_product_versions', {
-      p_organization_id: organizationId,
-      p_product_name: productName,
-    });
+    const { data: versions, error } = await supabase.rpc(
+      'get_product_versions',
+      {
+        p_organization_id: organizationId,
+        p_product_name: productName,
+      },
+    );
 
     if (error) {
       throw new BadRequestException('Failed to fetch product versions');
     }
 
     // Calculate totals
-    const totalSubscriptions = versions?.reduce((sum, v) => sum + Number(v.subscription_count || 0), 0) || 0;
-    const totalMonthlyRevenue = versions?.reduce((sum, v) => sum + Number(v.total_mrr || 0), 0) || 0;
+    const totalSubscriptions =
+      versions?.reduce(
+        (sum, v) => sum + Number(v.subscription_count || 0),
+        0,
+      ) || 0;
+    const totalMonthlyRevenue =
+      versions?.reduce((sum, v) => sum + Number(v.total_mrr || 0), 0) || 0;
 
     // Get the latest version's price for potential revenue calculation
-    const latestVersion = versions?.find(v => v.version_status === 'current');
+    const latestVersion = versions?.find((v) => v.version_status === 'current');
     let potentialRevenue: number | null = null;
 
     if (latestVersion && totalSubscriptions > 0) {
-      const avgPricePerSub = Number(latestVersion.total_mrr || 0) / Number(latestVersion.subscription_count || 1);
+      const avgPricePerSub =
+        Number(latestVersion.total_mrr || 0) /
+        Number(latestVersion.subscription_count || 1);
       potentialRevenue = Math.round(avgPricePerSub * totalSubscriptions);
     }
 
@@ -1561,8 +1648,10 @@ export class ProductsService {
     // Temporarily return not implemented while we fix type issues
     return {
       success: false,
-      message: 'Sync functionality is temporarily disabled while we fix type issues. For now, please use a new test user.',
-      recommendation: 'Create a new test subscription with a different email address to test the versioning system.',
+      message:
+        'Sync functionality is temporarily disabled while we fix type issues. For now, please use a new test user.',
+      recommendation:
+        'Create a new test subscription with a different email address to test the versioning system.',
     };
 
     /* Commenting out for now due to TypeScript issues
@@ -1820,7 +1909,9 @@ export class ProductsService {
     // Try to get from cache first
     const cachedMetrics = await this.cacheManager.get(metricsCacheKey);
     if (cachedMetrics) {
-      this.logger.debug(`Returning cached revenue metrics for product ${productId}`);
+      this.logger.debug(
+        `Returning cached revenue metrics for product ${productId}`,
+      );
       return cachedMetrics;
     }
 
@@ -1839,7 +1930,8 @@ export class ProductsService {
       throw new BadRequestException('Failed to calculate MRR');
     }
 
-    const mrr = subscriptions?.reduce((sum, sub) => sum + (sub.amount || 0), 0) ?? 0;
+    const mrr =
+      subscriptions?.reduce((sum, sub) => sum + (sub.amount || 0), 0) ?? 0;
 
     // Calculate revenue from last 30 days using payment_intents
     const thirtyDaysAgo = new Date();
@@ -1853,15 +1945,21 @@ export class ProductsService {
       .gte('created_at', thirtyDaysAgo.toISOString());
 
     if (revenueError) {
-      this.logger.error(`Failed to calculate 30-day revenue: ${revenueError.message}`);
+      this.logger.error(
+        `Failed to calculate 30-day revenue: ${revenueError.message}`,
+      );
       throw new BadRequestException('Failed to calculate 30-day revenue');
     }
 
-    const revenueLastThirtyDays = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) ?? 0;
+    const revenueLastThirtyDays =
+      payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) ?? 0;
 
     // Calculate ARPU (Average Revenue Per User)
     const activeSubscriptionCount = subscriptions?.length ?? 0;
-    const arpu = activeSubscriptionCount > 0 ? Math.round(mrr / activeSubscriptionCount) : 0;
+    const arpu =
+      activeSubscriptionCount > 0
+        ? Math.round(mrr / activeSubscriptionCount)
+        : 0;
 
     // Prepare response
     const metrics = {
@@ -1875,7 +1973,9 @@ export class ProductsService {
     // Cache the result with 5 minute TTL for MRR and 15 minutes for revenue
     await this.cacheManager.set(metricsCacheKey, metrics, 300); // 5 minutes in seconds
 
-    this.logger.debug(`Calculated and cached revenue metrics for product ${productId}`);
+    this.logger.debug(
+      `Calculated and cached revenue metrics for product ${productId}`,
+    );
 
     return metrics;
   }
