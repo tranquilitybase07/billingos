@@ -70,7 +70,14 @@
       "WebFetch(domain:pnpm.io)",
       "Bash(pnpm run linear:find-ids:*)",
       "WebFetch(domain:docs.stripe.com)",
-      "WebFetch(domain:clerk.com)"
+      "WebFetch(domain:clerk.com)",
+      "Bash(grep:*)",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:www.humanlayer.dev)",
+      "WebFetch(domain:www.builder.io)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:dometrain.com)",
+      "WebFetch(domain:arize.com)"
     ],
     "deny": [],
     "ask": []

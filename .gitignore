@@ -115,4 +115,6 @@ packages/*/node_modules/
 supabase/.branches/
 supabase/.temp/
 
-.claude/
+# Claude Code — personal/local files
+.claude/settings.local.json
+CLAUDE.local.md
