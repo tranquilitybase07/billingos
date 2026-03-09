@@ -66,7 +66,7 @@ export const InlineModal: FunctionComponent<InlineModalProps> = ({
           damping: 30,
         }}
         onClick={(e) => e.stopPropagation()}
-        className={`fixed bottom-0 right-0 top-0 flex h-screen w-full flex-col bg-white shadow-xl dark:bg-gray-900 md:w-[540px] ${className}`}
+        className={`fixed bottom-0 right-0 top-0 flex h-screen w-full flex-col bg-white shadow-xl dark:bg-background dark:border-l dark:border-border md:w-[540px] ${className}`}
       >
         {modalContent}
       </motion.div>

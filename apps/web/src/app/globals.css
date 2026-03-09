@@ -75,19 +75,20 @@
   --color-gray-950: oklch(0.13 0.028 261.692);
 
   /* Dark Mode Palette — "Carbon" Pure Neutral (Vercel-style) */
-  /* Sidebar #0f0f0f (15) < Page #141414 (20) < Card #1e1e1e (30) — darkened for Polar-like depth */
+  /* Sidebar #0d0d0d (13) < Page #181818 (24) < Card #222222 (34) — clear perceptual depth */
   --color-dark-50:  #e8e8e8;  /* primary text */
   --color-dark-100: #c8c8c8;  /* secondary text */
   --color-dark-200: #9a9a9a;  /* muted text, placeholder */
   --color-dark-300: #6b6b6b;  /* disabled / dimmed text */
   --color-dark-400: #515151;  /* icon tint, divider accents */
-  --color-dark-500: #2a2a2a;  /* STANDARD BORDER — subtle */
+  --color-dark-450: #404040;  /* INPUT BORDER + SWITCH TRACK — visible gray */
+  --color-dark-500: #333333;  /* STANDARD BORDER — Vercel-style visible border */
   --color-dark-600: #1f1f1f;  /* subtle border, secondary surface */
-  --color-dark-700: #252525;  /* hover / muted bg — above card */
-  --color-dark-800: #1e1e1e;  /* CARD background — lift above page bg */
-  --color-dark-850: #111111;  /* INPUT background — well effect (darker than card) */
-  --color-dark-900: #141414;  /* PAGE/CONTENT background — above sidebar */
-  --color-dark-950: #0f0f0f;  /* SIDEBAR background — deep black anchor */
+  --color-dark-700: #2a2a2a;  /* hover / muted bg — above card */
+  --color-dark-800: #222222;  /* CARD background — lift above page bg */
+  --color-dark-850: #111111;  /* POPOVER/DROPDOWN bg — well effect */
+  --color-dark-900: #181818;  /* PAGE/CONTENT background — above sidebar */
+  --color-dark-950: #0d0d0d;  /* SIDEBAR background — deep black anchor */
 
   /* Base Colors */
   --color-white: #ffffff;
@@ -230,20 +231,20 @@
        Primary:   blue-600
        Text:      #e8e8e8 primary, #9a9a9a muted
     ──────────────────────────────────────────────────────────────── */
-    --background: var(--color-dark-900);         /* #1c1c1c — content area bg */
+    --background: var(--color-dark-900);         /* #181818 — content area bg */
     --foreground: var(--color-dark-50);          /* #e8e8e8 — primary text */
 
-    --card: var(--color-dark-800);               /* #2c2c2c — card/panel bg */
+    --card: var(--color-dark-800);               /* #222222 — card/panel bg */
     --card-foreground: var(--color-dark-50);     /* #e8e8e8 */
 
     --popover: var(--color-dark-850);            /* #141414 — dropdown bg */
     --popover-foreground: var(--color-dark-50);  /* #e8e8e8 */
 
-    --sidebar-background: var(--color-dark-950); /* #0f0f0f — sidebar deep black anchor */
+    --sidebar-background: var(--color-dark-950); /* #0d0d0d — sidebar deep black anchor */
     --sidebar-foreground: var(--color-dark-100); /* #c8c8c8 — sidebar nav labels */
     --sidebar-primary: var(--color-blue);        /* accent blue for active item */
     --sidebar-primary-foreground: var(--color-dark-50);
-    --sidebar-border: var(--color-dark-600);     /* #2e2e2e — subtle sidebar dividers */
+    --sidebar-border: var(--color-dark-500);     /* #333333 — sidebar dividers */
     --sidebar-accent: var(--color-dark-700);     /* #333333 — nav hover/active bg */
     --sidebar-accent-foreground: var(--color-dark-50);
 
@@ -262,8 +263,8 @@
     --destructive: var(--color-red-500);
     --destructive-foreground: var(--color-red-500);
 
-    --border: var(--color-dark-500);             /* #3d3d3d — all borders (strong!) */
-    --input: var(--color-dark-850);              /* #141414 — input bg (well on card) */
+    --border: var(--color-dark-500);             /* #333333 — all borders (Vercel-style) */
+    --input: var(--color-dark-450);              /* #404040 — input border + switch track */
     --ring: var(--color-blue-500);               /* blue focus ring */
 
     /* Hover states */
@@ -440,9 +441,9 @@
 
 .dark {
   /* "Carbon" pure neutral — shadcn/ui compatibility overrides (darkened palette) */
-  --background: oklch(0.09 0 0);              /* #141414 — content area */
+  --background: oklch(0.111 0 0);             /* #181818 — content area */
   --foreground: oklch(0.92 0 0);              /* #e8e8e8 — primary text */
-  --card: oklch(0.128 0 0);                   /* #1e1e1e — card/panel (lift above page) */
+  --card: oklch(0.148 0 0);                   /* #222222 — card/panel (lift above page) */
   --card-foreground: oklch(0.92 0 0);
   --popover: oklch(0.075 0 0);                /* #111111 — dropdown bg */
   --popover-foreground: oklch(0.92 0 0);
@@ -455,21 +456,21 @@
   --accent: oklch(0.159 0 0);              /* #252525 — neutral hover bg (was blue-600) */
   --accent-foreground: oklch(0.92 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.182 0 0);                 /* #2a2a2a — border */
-  --input: oklch(0.075 0 0);                  /* #111111 — input bg (well effect) */
+  --border: oklch(0.223 0 0);                 /* #333333 — border */
+  --input: oklch(0.267 0 0);                  /* #404040 — input border + switch track */
   --ring: oklch(0.546 0.245 262.881);         /* BLUE focus ring */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.065 0 0);                /* #0f0f0f — sidebar deep black anchor */
+  --sidebar: oklch(0.057 0 0);                /* #0d0d0d — sidebar deep black anchor */
   --sidebar-foreground: oklch(0.81 0 0);      /* #c8c8c8 — sidebar labels */
   --sidebar-primary: oklch(0.546 0.245 262.881);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.159 0 0);         /* #252525 — nav hover */
   --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(0.128 0 0);         /* #1e1e1e — subtle sidebar dividers */
+  --sidebar-border: oklch(0.223 0 0);         /* #333333 — sidebar dividers */
   --sidebar-ring: oklch(0.546 0.245 262.881);
 }
 
@@ -477,6 +478,11 @@
 .dark [data-slot="card"],
 .dark .card {
   box-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* Sidebar right border — inset variant has no border by default */
+.dark [data-sidebar="sidebar"] {
+  border-right: 1px solid var(--sidebar-border);
 }
 
 @layer base {
