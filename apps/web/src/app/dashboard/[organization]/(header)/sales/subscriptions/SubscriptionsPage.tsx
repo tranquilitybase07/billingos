@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download as DownloadOutlined } from '@mui/icons-material'
+import { Download01Icon } from 'hugeicons-react'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import type { SortingState } from '@tanstack/react-table'
@@ -206,7 +206,7 @@ export default function SubscriptionsPage({
             className="gap-x-2"
             onClick={handleExportCSV}
           >
-            <DownloadOutlined className="h-4 w-4" />
+            <Download01Icon size={16} />
             Export CSV
           </Button>
         </div>

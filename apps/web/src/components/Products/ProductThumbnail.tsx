@@ -1,4 +1,4 @@
-import { Texture as TextureOutlined } from '@mui/icons-material'
+import { GridViewIcon } from 'hugeicons-react'
 import { Product } from '@/utils/product'
 import { cn } from '@/lib/utils'
 
@@ -30,7 +30,7 @@ export const ProductThumbnail = ({
           className={cn('aspect-square h-10 object-cover', sizeClassName)}
         />
       ) : (
-        <TextureOutlined fontSize="medium" className="text-gray-300 dark:text-gray-600" />
+        <GridViewIcon size={24} className="text-gray-300 dark:text-gray-600" />
       )}
     </div>
   )

@@ -10,7 +10,7 @@ import {
   serializeSearchParams,
   sortingStateToQueryParam,
 } from '@/utils/datatable'
-import { Add as AddOutlined, Inventory as HiveOutlined, Search } from '@mui/icons-material'
+import { PlusSignIcon, CubeIcon, Search01Icon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -111,7 +111,7 @@ export default function ClientPage({
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-4 md:flex-row md:items-center">
             <div className="relative w-full md:max-w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search01Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-9"
                 placeholder="Search Products"
@@ -165,7 +165,7 @@ export default function ClientPage({
             className="w-full md:w-fit"
           >
             <Button className="w-full gap-x-2 md:w-fit">
-              <AddOutlined className="h-4 w-4" />
+              <PlusSignIcon size={16} />
               <span>New Product</span>
             </Button>
           </Link>
@@ -204,7 +204,7 @@ export default function ClientPage({
           </Pagination>
         ) : (
           <div className="flex flex-col items-center justify-center gap-y-6 rounded-lg border bg-card py-48 shadow-sm">
-            <HiveOutlined className="text-5xl text-muted-foreground/30" />
+            <CubeIcon size={48} className="text-muted-foreground/30" />
             <div className="flex flex-col items-center gap-y-6">
               <div className="flex flex-col items-center gap-y-2">
                 <h3 className="text-lg font-medium">No products found</h3>

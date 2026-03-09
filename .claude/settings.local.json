@@ -77,7 +77,8 @@
       "WebFetch(domain:www.builder.io)",
       "WebFetch(domain:www.anthropic.com)",
       "WebFetch(domain:dometrain.com)",
-      "WebFetch(domain:arize.com)"
+      "WebFetch(domain:arize.com)",
+      "Bash(pnpm:*)"
     ],
     "deny": [],
     "ask": []

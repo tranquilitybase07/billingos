@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { CheckCircle, AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { CheckmarkCircle01Icon, AlertCircleIcon, ArrowUpRight01Icon, Loading03Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function FinanceAccountPage() {
@@ -111,7 +111,7 @@ export default function FinanceAccountPage() {
     return (
       <DashboardBody>
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
         </div>
       </DashboardBody>
     )
@@ -122,7 +122,7 @@ export default function FinanceAccountPage() {
       {/* Status banner */}
       {isPaymentReady ? (
         <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
-          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <CheckmarkCircle01Icon size={16} className="text-green-600 dark:text-green-400" />
           <AlertTitle className="text-green-900 dark:text-green-100">
             Payment account active
           </AlertTitle>
@@ -132,7 +132,7 @@ export default function FinanceAccountPage() {
         </Alert>
       ) : (
         <Alert>
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircleIcon size={16} />
           <AlertTitle>Setup required</AlertTitle>
           <AlertDescription>
             Complete the steps below to start accepting payments through Stripe Connect.
@@ -148,7 +148,7 @@ export default function FinanceAccountPage() {
               <CardTitle className="flex items-center gap-2">
                 Step 1: Business Details
                 {hasBusinessDetails && (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <CheckmarkCircle01Icon size={20} className="text-green-600" />
                 )}
               </CardTitle>
               <CardDescription>
@@ -187,7 +187,7 @@ export default function FinanceAccountPage() {
             >
               {submitBusinessDetails.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loading03Icon size={16} className="mr-2 animate-spin" />
                   Submitting...
                 </>
               ) : (
@@ -206,7 +206,7 @@ export default function FinanceAccountPage() {
               <CardTitle className="flex items-center gap-2">
                 Step 2: Stripe Connect Account
                 {hasAccount && (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <CheckmarkCircle01Icon size={20} className="text-green-600" />
                 )}
               </CardTitle>
               <CardDescription>
@@ -227,13 +227,13 @@ export default function FinanceAccountPage() {
               >
                 {createAccount.isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loading03Icon size={16} className="mr-2 animate-spin" />
                     Creating account...
                   </>
                 ) : (
                   <>
                     Create Stripe Account
-                    <ExternalLink className="ml-2 h-4 w-4" />
+                    <ArrowUpRight01Icon size={16} className="ml-2" />
                   </>
                 )}
               </Button>
@@ -274,7 +274,7 @@ export default function FinanceAccountPage() {
               {!isAccountFullyOnboarded && (
                 <Button onClick={handleContinueOnboarding}>
                   Continue Onboarding
-                  <ExternalLink className="ml-2 h-4 w-4" />
+                  <ArrowUpRight01Icon size={16} className="ml-2" />
                 </Button>
               )}
             </>

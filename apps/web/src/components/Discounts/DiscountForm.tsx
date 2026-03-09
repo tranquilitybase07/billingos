@@ -24,7 +24,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Autorenew, X, CalendarMonth as CalendarIcon, Search } from '@mui/icons-material'
+import { Rotate01Icon, Cancel01Icon, Calendar01Icon, Search01Icon } from 'hugeicons-react'
 import { format } from 'date-fns'
 import { useState } from 'react'
 import { Discount } from '@/utils/discount'
@@ -211,7 +211,7 @@ export function DiscountForm({
               onClick={generateCode}
               title="Generate code"
             >
-              <Autorenew className="h-4 w-4" />
+              <Rotate01Icon size={16} />
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -376,7 +376,7 @@ export function DiscountForm({
                     {/* Search */}
                     <div className="border-b p-2">
                       <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Search01Icon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           placeholder="Search products..."
                           value={productSearch}
@@ -464,7 +464,7 @@ export function DiscountForm({
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <Calendar01Icon size={16} className="mr-2" />
                       {startsAt ? format(startsAt, 'PPP') : 'Pick a date'}
                     </Button>
                   </PopoverTrigger>
@@ -487,7 +487,7 @@ export function DiscountForm({
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <Calendar01Icon size={16} className="mr-2" />
                       {endsAt ? format(endsAt, 'PPP') : 'Pick a date'}
                     </Button>
                   </PopoverTrigger>

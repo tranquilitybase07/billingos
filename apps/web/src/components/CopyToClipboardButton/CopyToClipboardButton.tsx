@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Clipboard, ClipboardCheck } from 'lucide-react'
+import { NoteIcon, CheckListIcon } from 'hugeicons-react'
 import { PropsWithChildren, useState } from 'react'
 
 const CopyToClipboardButton = (
@@ -33,8 +33,8 @@ const CopyToClipboardButton = (
       onClick={handleCopy}
     >
       {!copied &&
-        (props.children ? props.children : <Clipboard className="h-3 w-3" />)}
-      {copied && <ClipboardCheck className="h-3 w-3" />}
+        (props.children ? props.children : <NoteIcon size={12} />)}
+      {copied && <CheckListIcon size={12} />}
     </Button>
   )
 }

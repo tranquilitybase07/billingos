@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { format } from 'date-fns'
-import { CalendarDays } from 'lucide-react'
+import { Calendar03Icon } from 'hugeicons-react'
 import { useCallback, useMemo } from 'react'
 import { Matcher } from 'react-day-picker'
 import { twMerge } from 'tailwind-merge'
@@ -49,7 +49,7 @@ const DatePicker: React.FC<DatePickerProps> = (props) => {
             ) : (
               <span>Pick a date</span>
             )}
-            <CalendarDays className="ml-auto h-4 w-4 opacity-50" />
+            <Calendar03Icon size={16} className="ml-auto opacity-50" />
           </Button>
         </FormControl>
       </PopoverTrigger>

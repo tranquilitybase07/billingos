@@ -6,7 +6,7 @@ import { usePaymentStatus } from '@/hooks/queries/organization'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { CreditCard, Users, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react'
+import { CreditCardIcon, UserMultiple02Icon, CheckmarkCircle01Icon, AlertCircleIcon, ArrowRight01Icon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { orgPath } from '@/lib/navigation'
 
@@ -23,7 +23,7 @@ export default function DashboardHomePage() {
       {/* Onboarding banner if payment not setup */}
       {!isLoadingPayment && !isPaymentSetup && (
         <Alert className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
-          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertCircleIcon size={16} className="text-amber-600 dark:text-amber-400" />
           <AlertTitle className="text-amber-900 dark:text-amber-100">
             Complete your setup
           </AlertTitle>
@@ -31,7 +31,7 @@ export default function DashboardHomePage() {
             Set up your Stripe Connect account to start accepting payments.
             <Link href={orgPath(organization.slug, '/finance/account')}>
               <Button variant="link" className="h-auto p-0 ml-1 text-amber-900 dark:text-amber-100">
-                Get started <ArrowRight className="ml-1 h-3 w-3" />
+                Get started <ArrowRight01Icon size={12} className="ml-1" />
               </Button>
             </Link>
           </AlertDescription>
@@ -52,9 +52,9 @@ export default function DashboardHomePage() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CreditCard className="h-8 w-8 text-primary" />
+              <CreditCardIcon size={32} className="text-primary" />
               {isPaymentSetup && (
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckmarkCircle01Icon size={20} className="text-green-600" />
               )}
             </div>
             <CardTitle>Payment Setup</CardTitle>
@@ -77,7 +77,7 @@ export default function DashboardHomePage() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <Users className="h-8 w-8 text-primary" />
+              <UserMultiple02Icon size={32} className="text-primary" />
             </div>
             <CardTitle>Team Members</CardTitle>
             <CardDescription>

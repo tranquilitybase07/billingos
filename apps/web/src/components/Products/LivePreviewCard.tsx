@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Sparkles } from 'lucide-react'
+import { Tick01Icon, SparklesIcon } from 'hugeicons-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -138,7 +138,7 @@ export function LivePreviewCard({
             {/* Trial Badge */}
             {trialDays > 0 && (
               <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
-                <Sparkles className="h-4 w-4 text-primary" />
+                <SparklesIcon size={16} className="text-primary" />
                 <span className="text-sm font-medium">
                   {trialDays}-day free trial included
                 </span>
@@ -163,7 +163,7 @@ export function LivePreviewCard({
                   .map((feature, index) => (
                     <li key={feature.feature_id || `feature-${index}`} className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                        <Check className="h-3.5 w-3.5 text-primary" />
+                        <Tick01Icon size={14} className="text-primary" />
                       </div>
                       <div className="flex-1 space-y-0.5">
                         <div className="text-sm font-medium leading-none">

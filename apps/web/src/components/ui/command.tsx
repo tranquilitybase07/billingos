@@ -2,7 +2,7 @@
 
 import { type DialogProps } from '@radix-ui/react-dialog'
 import { Command as CommandPrimitive } from 'cmdk'
-import { Search } from 'lucide-react'
+import { Search01Icon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -48,7 +48,7 @@ const CommandInput = ({
     className={cn('flex items-center border-b px-3', wrapperClassName)}
     cmdk-input-wrapper=""
   >
-    <Search className="h-4 w-4 shrink-0 opacity-50" />
+    <Search01Icon size={16} className="shrink-0 opacity-50" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(

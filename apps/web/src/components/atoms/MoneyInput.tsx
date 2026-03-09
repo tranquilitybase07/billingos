@@ -1,4 +1,4 @@
-import { DollarSign } from 'lucide-react'
+import { Dollar01Icon } from 'hugeicons-react'
 import {
   ChangeEvent,
   FocusEvent,
@@ -239,7 +239,7 @@ const MoneyInput = (props: Props) => {
           ? `${(placeholder / 100).toLocaleString('en-US')}`
           : undefined
       }
-      preSlot={preSlot ? preSlot : <DollarSign className="h-4 w-4" />}
+      preSlot={preSlot ? preSlot : <Dollar01Icon size={16} />}
       postSlot={postSlot}
       onBlur={onBlur}
       onFocus={onFocus}

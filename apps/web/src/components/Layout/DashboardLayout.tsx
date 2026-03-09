@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sideb
 import { useRoute } from '@/components/Navigation/useRoute'
 import { cn } from '@/lib/utils'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
+import { CommandPalette } from '@/components/CommandPalette/CommandPalette'
 
 const BANNER_HEIGHT = '36px'
 
@@ -32,6 +33,8 @@ export const DashboardLayout = ({ children }: PropsWithChildren) => {
           {children}
         </SidebarInset>
       </div>
+      {/* Global Cmd+K command palette */}
+      <CommandPalette />
     </SidebarProvider>
   )
 }
@@ -72,15 +75,17 @@ export const DashboardBody = ({
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div>
           {/* Page header */}
-          <div className="flex items-center justify-between border-b px-6 py-2.5">
-            {typeof pageTitle === 'string' ? (
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {pageTitle}
-              </h1>
-            ) : (
-              pageTitle
-            )}
-            {header}
+          <div className="flex flex-col border-b px-6 py-2.5 gap-0.5">
+            <div className="flex items-center justify-between">
+              {typeof pageTitle === 'string' ? (
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {pageTitle}
+                </h1>
+              ) : (
+                pageTitle
+              )}
+              {header}
+            </div>
           </div>
 
           {/* Page content */}

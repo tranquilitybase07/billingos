@@ -2,7 +2,7 @@
 
 import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { X } from 'lucide-react'
+import { Cancel01Icon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -72,7 +72,7 @@ const SheetContent = ({
       {...props}
     >
       <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none">
-        <X className="h-4 w-4" />
+        <Cancel01Icon size={16} />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
       {children}

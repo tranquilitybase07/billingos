@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, MoreVertical, ChevronDown, X, Plus, Check } from "lucide-react";
+import { MoreVerticalIcon, ArrowDown01Icon, Cancel01Icon, PlusSignIcon, Tick01Icon } from "hugeicons-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -226,7 +226,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="bg-base">
                   {timePeriod}
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                  <ArrowDown01Icon size={16} className="ml-2" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -246,7 +246,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="bg-base">
                   All Time
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                  <ArrowDown01Icon size={16} className="ml-2" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -265,7 +265,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
+                  <MoreVerticalIcon size={16} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -631,7 +631,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       />
                     </svg>
                     All Events
-                    <ChevronDown className="h-4 w-4 ml-1 text-muted-foreground" />
+                    <ArrowDown01Icon size={16} className="ml-1 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -664,7 +664,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       <circle cx="8" cy="8" r="2" fill="currentColor" />
                     </svg>
                     All Meters
-                    <ChevronDown className="h-4 w-4 ml-1 text-muted-foreground" />
+                    <ArrowDown01Icon size={16} className="ml-1 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -678,7 +678,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="flex items-center justify-between p-4 hover:bg-base transition-colors">
                   <div className="flex items-center gap-4 max-w-fit">
-                    <ChevronDown className={`h-4 w-4 text-popover-foreground transition-transform duration-200 ${expandedEventId === "event-1" ? "" : "-rotate-90"}`} />
+                    <ArrowDown01Icon size={16} className={`text-popover-foreground transition-transform duration-200 ${expandedEventId === "event-1" ? "" : "-rotate-90"}`} />
                     <span className="text-sm font-medium text-popover-foreground">
                       Customer Created
                     </span>
@@ -804,7 +804,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                           <div className="flex items-center gap-2 w-full">
                             <span className="flex-1">{product.name}{versionLabel}</span>
                             {isSubscribed && (
-                              <Check className="h-4 w-4 text-green-600" />
+                              <Tick01Icon size={16} className="text-green-600" />
                             )}
                           </div>
                         </SelectItem>
@@ -925,7 +925,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                   className="h-8 w-8 rounded-full bg-blue-600 hover:bg-blue-700"
                   onClick={handleAddMetadataField}
                 >
-                  <Plus className="h-4 w-4" />
+                  <PlusSignIcon size={16} />
                 </Button>
               </div>
 
@@ -950,7 +950,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                     onClick={() => handleRemoveMetadataField(index)}
                     className="h-10 w-10"
                   >
-                    <X className="h-4 w-4" />
+                    <Cancel01Icon size={16} />
                   </Button>
                 </div>
               ))}

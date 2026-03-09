@@ -1,16 +1,16 @@
 import { type FeatureType } from '@/lib/validations/feature'
 import {
-  Activity,
-  Hash,
-  Flag,
-  Zap,
-  Users,
-  Database,
-  BarChart3,
-  Headphones,
-  Palette,
-  type LucideIcon,
-} from 'lucide-react'
+  Activity01Icon,
+  HashtagIcon,
+  Flag01Icon,
+  ZapIcon,
+  UserMultiple02Icon,
+  DatabaseIcon,
+  BarChartIcon,
+  HeadphonesIcon,
+  PaintBoardIcon,
+} from 'hugeicons-react'
+import type { FC } from 'react'
 
 export interface FeatureTemplate {
   id: string
@@ -18,7 +18,7 @@ export interface FeatureTemplate {
   title: string
   description: string
   type: FeatureType
-  icon: LucideIcon
+  icon: FC<any>
   iconColor: string
   properties?: Record<string, any>
   metadata?: Record<string, any>
@@ -36,7 +36,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'API Calls',
     description: 'Limit the number of API requests per billing period',
     type: 'usage_quota',
-    icon: Zap,
+    icon: ZapIcon,
     iconColor: 'text-green-500',
     suggestedLimit: 10000,
     properties: {
@@ -54,7 +54,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'Storage Limit',
     description: 'Set a maximum storage capacity in GB',
     type: 'numeric_limit',
-    icon: Database,
+    icon: DatabaseIcon,
     iconColor: 'text-purple-500',
     suggestedLimit: 100,
     properties: {
@@ -71,7 +71,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'Team Members',
     description: 'Maximum number of team members allowed',
     type: 'numeric_limit',
-    icon: Users,
+    icon: UserMultiple02Icon,
     iconColor: 'text-blue-500',
     suggestedLimit: 10,
     properties: {
@@ -88,7 +88,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'Advanced Analytics',
     description: 'Access to detailed analytics and reporting',
     type: 'boolean_flag',
-    icon: BarChart3,
+    icon: BarChartIcon,
     iconColor: 'text-indigo-500',
     metadata: {
       category: 'features',
@@ -101,7 +101,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'Priority Support',
     description: '24/7 priority customer support',
     type: 'boolean_flag',
-    icon: Headphones,
+    icon: HeadphonesIcon,
     iconColor: 'text-orange-500',
     metadata: {
       category: 'support',
@@ -114,7 +114,7 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     title: 'Custom Branding',
     description: 'Remove branding and add your own',
     type: 'boolean_flag',
-    icon: Palette,
+    icon: PaintBoardIcon,
     iconColor: 'text-pink-500',
     metadata: {
       category: 'customization',
@@ -131,7 +131,7 @@ export const FEATURE_TYPE_INFO: Record<
   {
     label: string
     description: string
-    icon: LucideIcon
+    icon: FC<any>
     color: string
     example: string
   }
@@ -139,21 +139,21 @@ export const FEATURE_TYPE_INFO: Record<
   boolean_flag: {
     label: 'Boolean Flag',
     description: 'Simple on/off feature flag',
-    icon: Flag,
+    icon: Flag01Icon,
     color: 'text-blue-500',
     example: 'Priority Support, Custom Branding',
   },
   usage_quota: {
     label: 'Usage Quota',
     description: 'Limit that resets each billing period',
-    icon: Activity,
+    icon: Activity01Icon,
     color: 'text-green-500',
     example: 'API Calls per month, Email sends',
   },
   numeric_limit: {
     label: 'Numeric Limit',
     description: 'Maximum total limit',
-    icon: Hash,
+    icon: HashtagIcon,
     color: 'text-purple-500',
     example: 'Team members, Storage capacity',
   },

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Sparkles, Eye, EyeOff, Info } from 'lucide-react'
+import { ArrowLeft01Icon, SparklesIcon, ViewIcon, ViewOffIcon, InformationCircleIcon } from 'hugeicons-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
@@ -95,9 +95,9 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 {visibleInPricingTable ? (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <ViewIcon size={16} className="text-muted-foreground" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <ViewOffIcon size={16} className="text-muted-foreground" />
                 )}
                 <span className="text-sm text-muted-foreground">
                   {visibleInPricingTable ? 'Will be visible in pricing' : 'Will be hidden from pricing'}
@@ -108,7 +108,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <InformationCircleIcon size={16} className="text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p className="font-medium mb-1">Pricing Table Visibility</p>
@@ -241,7 +241,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <SparklesIcon size={16} className="mr-2" />
                   Publish to Stripe
                 </>
               )}

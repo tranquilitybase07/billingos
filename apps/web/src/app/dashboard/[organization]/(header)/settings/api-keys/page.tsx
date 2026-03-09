@@ -51,17 +51,17 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import {
-  Key,
-  Plus,
-  Copy,
-  Trash2,
-  Loader2,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  Settings,
-  Users,
-} from 'lucide-react'
+  Key01Icon,
+  PlusSignIcon,
+  Copy01Icon,
+  Delete02Icon,
+  Loading03Icon,
+  ViewIcon,
+  ViewOffIcon,
+  Alert01Icon,
+  Settings01Icon,
+  UserMultiple02Icon,
+} from 'hugeicons-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { ApiKey, ApiKeyPairCreated, CreateApiKeyDTO } from '@/lib/api/types'
 
@@ -221,19 +221,19 @@ export default function ApiKeysPage() {
           <TabsList>
             <TabsTrigger value="general" asChild>
               <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings01Icon size={16} className="mr-2" />
                 General
               </Link>
             </TabsTrigger>
             <TabsTrigger value="members" asChild>
               <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <Users className="mr-2 h-4 w-4" />
+                <UserMultiple02Icon size={16} className="mr-2" />
                 Members
               </Link>
             </TabsTrigger>
             <TabsTrigger value="api-keys" asChild>
               <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key className="mr-2 h-4 w-4" />
+                <Key01Icon size={16} className="mr-2" />
                 API Keys
               </Link>
             </TabsTrigger>
@@ -251,7 +251,7 @@ export default function ApiKeysPage() {
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               Create API Key
             </Button>
           </DialogTrigger>
@@ -293,7 +293,7 @@ export default function ApiKeysPage() {
                 disabled={createApiKey.isPending}
               >
                 {createApiKey.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loading03Icon size={16} className="mr-2 animate-spin" />
                 )}
                 Create API Key
               </Button>
@@ -307,7 +307,7 @@ export default function ApiKeysPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <Alert01Icon size={20} className="text-amber-500" />
               Save Your API Key
             </DialogTitle>
             <DialogDescription>
@@ -329,9 +329,9 @@ export default function ApiKeysPage() {
                     onClick={() => setShowSecretKey(!showSecretKey)}
                   >
                     {showSecretKey ? (
-                      <EyeOff className="h-4 w-4" />
+                      <ViewOffIcon size={16} />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <ViewIcon size={16} />
                     )}
                   </Button>
                   <Button
@@ -339,7 +339,7 @@ export default function ApiKeysPage() {
                     size="sm"
                     onClick={() => copyToClipboard(createdKeyPair?.secretKey.fullKey || '', 'API key')}
                   >
-                    <Copy className="h-4 w-4" />
+                    <Copy01Icon size={16} />
                   </Button>
                 </div>
               </div>
@@ -386,7 +386,7 @@ export default function ApiKeysPage() {
             >
               {revokeApiKey.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loading03Icon size={16} className="mr-2 animate-spin" />
                   Revoking...
                 </>
               ) : (
@@ -410,11 +410,11 @@ export default function ApiKeysPage() {
         <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
             </div>
           ) : keyPairs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Key className="h-12 w-12 text-muted-foreground mb-4" />
+              <Key01Icon size={48} className="text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground max-w-sm">
                 API keys allow your applications to authenticate with BillingOS.
                 Create your first key pair to get started.
@@ -463,7 +463,7 @@ export default function ApiKeysPage() {
                           size="sm"
                           onClick={() => setRevokeKeyId(pair.secretKey?.id || pair.publishableKey?.id || '')}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Delete02Icon size={16} />
                         </Button>
                       )}
                     </TableCell>

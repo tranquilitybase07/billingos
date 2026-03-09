@@ -6,7 +6,7 @@ import { usePortalData } from '../hooks/usePortalData'
 import { useParentMessaging } from '../hooks/useParentMessaging'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { Loading03Icon } from 'hugeicons-react'
 import {
   Dialog,
   DialogContent,
@@ -77,7 +77,7 @@ export function PortalContent({ sessionId, defaultTab = 'subscription' }: Portal
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loading03Icon size={32} className="animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading your portal...</p>
         </div>
       </div>

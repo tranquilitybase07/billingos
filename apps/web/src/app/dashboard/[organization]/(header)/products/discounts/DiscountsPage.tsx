@@ -13,7 +13,7 @@ import {
   serializeSearchParams,
 } from '@/utils/datatable'
 import { getDiscountDisplay, Discount } from '@/utils/discount'
-import { Add as AddOutlined, MoreVert as MoreVertOutlined, Search, Discount as DiscountOutlined } from '@mui/icons-material'
+import { PlusSignIcon, MoreVerticalIcon, Search01Icon, DiscountTag01Icon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -133,7 +133,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search01Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
               placeholder="Search Discounts"
@@ -146,7 +146,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
             className="flex flex-row items-center gap-x-2"
             onClick={() => setShowNewModal(true)}
           >
-            <AddOutlined className="h-4 w-4" />
+            <PlusSignIcon size={16} />
             <span>New Discount</span>
           </Button>
         </div>
@@ -206,7 +206,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
                             size="icon"
                             className="opacity-50 transition-opacity hover:opacity-100"
                           >
-                            <MoreVertOutlined />
+                            <MoreVerticalIcon size={16} />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -239,7 +239,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-y-6 rounded-lg border bg-card py-48 shadow-sm">
-            <DiscountOutlined className="text-5xl text-muted-foreground/30" />
+            <DiscountTag01Icon size={48} className="text-muted-foreground/30" />
             <div className="flex flex-col items-center gap-y-6">
               <div className="flex flex-col items-center gap-y-2">
                 <h3 className="text-lg font-medium">No discounts found</h3>

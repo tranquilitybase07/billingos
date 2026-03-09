@@ -44,7 +44,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Plus, Trash2, Crown, Settings, Users, Key } from 'lucide-react'
+import {
+  Loading03Icon,
+  PlusSignIcon,
+  Delete02Icon,
+  CrownIcon,
+  Settings01Icon,
+  UserMultiple02Icon,
+  Key01Icon,
+} from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function MembersPage() {
@@ -103,7 +111,7 @@ export default function MembersPage() {
     return (
       <DashboardBody>
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
         </div>
       </DashboardBody>
     )
@@ -124,19 +132,19 @@ export default function MembersPage() {
           <TabsList>
             <TabsTrigger value="general" asChild>
               <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings01Icon size={16} className="mr-2" />
                 General
               </Link>
             </TabsTrigger>
             <TabsTrigger value="members" asChild>
               <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <Users className="mr-2 h-4 w-4" />
+                <UserMultiple02Icon size={16} className="mr-2" />
                 Members
               </Link>
             </TabsTrigger>
             <TabsTrigger value="api-keys" asChild>
               <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key className="mr-2 h-4 w-4" />
+                <Key01Icon size={16} className="mr-2" />
                 API Keys
               </Link>
             </TabsTrigger>
@@ -158,7 +166,7 @@ export default function MembersPage() {
               <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
                 <DialogTrigger asChild>
                   <Button>
-                    <Plus className="mr-2 h-4 w-4" />
+                    <PlusSignIcon size={16} className="mr-2" />
                     Invite Member
                   </Button>
                 </DialogTrigger>
@@ -188,7 +196,7 @@ export default function MembersPage() {
                     >
                       {inviteMember.isPending ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <Loading03Icon size={16} className="mr-2 animate-spin" />
                           Sending...
                         </>
                       ) : (
@@ -242,7 +250,7 @@ export default function MembersPage() {
                         variant={isAdmin ? 'default' : 'secondary'}
                         className="gap-1"
                       >
-                        {isAdmin && <Crown className="h-3 w-3" />}
+                        {isAdmin && <CrownIcon size={12} />}
                         {isAdmin ? 'Admin' : 'Member'}
                       </Badge>
                     </TableCell>
@@ -256,7 +264,7 @@ export default function MembersPage() {
                           size="sm"
                           onClick={() => setMemberToRemove(member.user_id)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Delete02Icon size={16} className="text-destructive" />
                         </Button>
                       )}
                     </TableCell>
@@ -289,7 +297,7 @@ export default function MembersPage() {
             >
               {removeMember.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loading03Icon size={16} className="mr-2 animate-spin" />
                   Removing...
                 </>
               ) : (

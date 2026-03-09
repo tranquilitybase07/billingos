@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
 import { PortalContent } from './components/PortalContent'
-import { Loader2 } from 'lucide-react'
 
 export default async function PortalEmbedPage({
   params,

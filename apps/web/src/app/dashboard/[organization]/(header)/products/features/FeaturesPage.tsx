@@ -8,14 +8,14 @@ import { EditFeatureDialog } from '@/components/Features/EditFeatureDialog'
 import { DeleteFeatureConfirmation } from '@/components/Features/DeleteFeatureConfirmation'
 import { FeatureTypeTag } from '@/components/Features/FeatureTypeTag'
 import {
-  Layers as LayersIcon,
-  Add,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon
-} from '@mui/icons-material'
+  Layers01Icon,
+  PlusSignIcon,
+  Edit01Icon,
+  Delete01Icon,
+  CheckmarkCircle01Icon,
+  Alert01Icon,
+  AlertCircleIcon,
+} from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -118,7 +118,7 @@ export default function FeaturesPage({
         return (
           <Tooltip>
             <TooltipTrigger>
-              <CheckCircleIcon className="h-4 w-4 text-green-500" />
+              <CheckmarkCircle01Icon size={16} className="text-green-500" />
             </TooltipTrigger>
             <TooltipContent>Synced with Stripe</TooltipContent>
           </Tooltip>
@@ -127,7 +127,7 @@ export default function FeaturesPage({
         return (
           <Tooltip>
             <TooltipTrigger>
-              <WarningIcon className="h-4 w-4 text-yellow-500" />
+              <Alert01Icon size={16} className="text-yellow-500" />
             </TooltipTrigger>
             <TooltipContent>Sync pending</TooltipContent>
           </Tooltip>
@@ -136,7 +136,7 @@ export default function FeaturesPage({
         return (
           <Tooltip>
             <TooltipTrigger>
-              <ErrorIcon className="h-4 w-4 text-red-500" />
+              <AlertCircleIcon size={16} className="text-red-500" />
             </TooltipTrigger>
             <TooltipContent>Sync failed</TooltipContent>
           </Tooltip>
@@ -145,7 +145,7 @@ export default function FeaturesPage({
         return (
           <Tooltip>
             <TooltipTrigger>
-              <WarningIcon className="h-4 w-4 text-gray-400" />
+              <Alert01Icon size={16} className="text-gray-400" />
             </TooltipTrigger>
             <TooltipContent>Not synced</TooltipContent>
           </Tooltip>
@@ -185,7 +185,7 @@ export default function FeaturesPage({
       <DashboardBody>
         <div className="flex h-full flex-col items-center justify-center pt-32">
           <div className="flex flex-col items-center justify-center gap-y-8">
-            <ErrorIcon className="text-5xl text-destructive" />
+            <AlertCircleIcon size={48} className="text-destructive" />
             <div className="flex flex-col items-center justify-center gap-y-2">
               <h3 className="text-xl">Failed to load features</h3>
               <p className="text-muted-foreground">
@@ -207,7 +207,7 @@ export default function FeaturesPage({
       <>
         <div className="flex h-full flex-col items-center justify-center pt-32">
           <div className="flex flex-col items-center justify-center gap-y-8">
-            <LayersIcon className="text-5xl text-muted-foreground/30" />
+            <Layers01Icon size={48} className="text-muted-foreground/30" />
             <div className="flex flex-col items-center justify-center gap-y-2">
               <h3 className="text-xl">No Features</h3>
               <p className="text-muted-foreground">
@@ -215,7 +215,7 @@ export default function FeaturesPage({
               </p>
             </div>
             <Button onClick={showCreateModal}>
-              <Add className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               Create Feature
             </Button>
           </div>
@@ -242,7 +242,7 @@ export default function FeaturesPage({
               <p className="text-muted-foreground">Manage product features and entitlements</p>
             </div>
             <Button onClick={showCreateModal}>
-              <Add className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               Create Feature
             </Button>
           </div>
@@ -315,7 +315,7 @@ export default function FeaturesPage({
                             size="sm"
                             onClick={() => handleEditFeature(feature)}
                           >
-                            <EditIcon className="h-4 w-4" />
+                            <Edit01Icon size={16} />
                           </Button>
                           <Button
                             variant="ghost"
@@ -323,7 +323,7 @@ export default function FeaturesPage({
                             onClick={() => handleDeleteFeature(feature)}
                             disabled={(feature.product_features?.length ?? 0) > 0}
                           >
-                            <DeleteIcon className="h-4 w-4" />
+                            <Delete01Icon size={16} />
                           </Button>
                         </div>
                       </TableCell>

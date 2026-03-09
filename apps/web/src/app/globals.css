@@ -474,10 +474,19 @@
   --sidebar-ring: oklch(0.546 0.245 262.881);
 }
 
-/* Subtle depth shadow on cards in dark mode */
+/* Subtle depth shadow on cards in dark mode — softened for less harshness */
 .dark [data-slot="card"],
 .dark .card {
-  box-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+/* Glass effect on dropdowns and popovers in dark mode */
+.dark [data-radix-popper-content-wrapper] > *,
+.dark [data-slot="popover-content"],
+.dark [data-slot="dropdown-menu-content"],
+.dark [data-slot="select-content"] {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Sidebar right border — inset variant has no border by default */

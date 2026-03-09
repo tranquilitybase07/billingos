@@ -4,7 +4,7 @@ import { DiscountForm } from './DiscountForm'
 import { useUpdateDiscount } from '@/hooks/queries/discounts'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
-import { X } from 'lucide-react'
+import { Cancel01Icon } from 'hugeicons-react'
 import { Discount } from '@/utils/discount'
 import { useState } from 'react'
 
@@ -53,7 +53,7 @@ export function EditDiscountModalContent({
             <div className="flex shrink-0 items-center justify-between border-b px-8 py-6">
                 <h2 className="text-xl font-semibold">Edit Discount</h2>
                 <Button variant="ghost" size="icon" onClick={hideModal}>
-                    <X className="h-5 w-5" />
+                    <Cancel01Icon size={20} />
                 </Button>
             </div>
 

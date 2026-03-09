@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Tick01Icon } from 'hugeicons-react'
 import { useState } from 'react'
 import { twMerge } from 'tailwind-merge'
 import Button from './Button'
@@ -54,7 +54,7 @@ const CopyToClipboardInput = ({
           onClick={copyToClipboard}
         >
           {isCopied ? (
-            <Check className="text-sm" fontSize="inherit" />
+            <Tick01Icon size={14} />
           ) : (
             buttonLabel || 'Copy'
           )}

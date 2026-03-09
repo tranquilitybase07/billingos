@@ -23,11 +23,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Building2,
-  LogOut,
-  Plus,
-  ChevronDown,
-} from 'lucide-react'
+  Building02Icon,
+  Logout01Icon,
+  PlusSignIcon,
+  ArrowDown01Icon,
+} from 'hugeicons-react'
 import {
   Home01Icon,
   CubeIcon,
@@ -227,11 +227,11 @@ export const DashboardSidebar = () => {
                           )} */}
 
                           <item.icon
+                            size={20}
                             className={cn(
-                              "h-5 w-5 shrink-0 transition-colors",
+                              "shrink-0 transition-colors",
                               isItemActive ? "text-sidebar-primary" : "text-muted-foreground group-hover/item:text-sidebar-foreground"
                             )}
-                            strokeWidth={1.5}
                           />
                           <span className={cn(
                             "font-medium transition-colors",
@@ -275,7 +275,7 @@ export const DashboardSidebar = () => {
                       {organization.slug}
                     </div>
                   </div>
-                  <ChevronDown className="ml-auto h-4 w-4 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  <ArrowDown01Icon size={16} className="ml-auto opacity-50 group-hover:opacity-100 transition-opacity" />
                 </>
               )}
             </button>
@@ -290,7 +290,7 @@ export const DashboardSidebar = () => {
                   org.id === organization.id && "bg-accent/50 text-sidebar-primary"
                 )}
               >
-                <Building2 className="mr-2 h-4 w-4" />
+                <Building02Icon size={16} className="mr-2" />
                 <div className="flex flex-col">
                   <span className="font-medium">{org.name}</span>
                   <span className="text-muted-foreground text-xs">{org.slug}</span>
@@ -299,7 +299,7 @@ export const DashboardSidebar = () => {
             ))}
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem className="focus:bg-accent focus:text-accent-foreground cursor-pointer">
-              <Plus className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               <span>Create Organization</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border" />
@@ -307,7 +307,7 @@ export const DashboardSidebar = () => {
               onClick={handleLogout}
               className="focus:bg-accent focus:text-destructive cursor-pointer text-destructive"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <Logout01Icon size={16} className="mr-2" />
               <span>Log out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

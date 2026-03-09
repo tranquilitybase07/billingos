@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import React from 'react'
 import { twMerge } from 'tailwind-merge'
 import { DataTablePagination } from './DataTablePagination'
@@ -54,6 +55,8 @@ interface DataTableProps<TData, TValue> {
   enableRowSelection?: boolean
   onRowSelectionChange?: OnChangeFn<RowSelectionState>
   onRowClick?: (row: Row<TData>) => void
+  /** Optional component shown when data is empty */
+  emptyState?: React.ReactNode
 }
 
 export type DataTableColumnDef<TData, TValue = unknown> = ColumnDef<
@@ -91,6 +94,7 @@ export function DataTable<TData, TValue>({
   enableRowSelection,
   onRowSelectionChange,
   onRowClick,
+  emptyState,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -121,6 +125,8 @@ export function DataTable<TData, TValue>({
       : (!isLoading.isFetched || isLoading.isLoading) &&
         !queryIsDisabled(isLoading)
 
+  const skeletonRows = 5
+
   return (
     <div className={twMerge('flex flex-col gap-6', className)}>
       <div
@@ -130,14 +136,11 @@ export function DataTable<TData, TValue>({
         )}
       >
         <Table className="table-fixed">
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className={twMerge(
-                  'bg-secondary',
-                  headerClassName,
-                )}
+                className={twMerge('bg-secondary', headerClassName)}
               >
                 {headerGroup.headers.map((header) => {
                   return (
@@ -159,27 +162,30 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {calcLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  Loading...
-                </TableCell>
-              </TableRow>
+              // Skeleton rows matching column count
+              Array.from({ length: skeletonRows }).map((_, rowIdx) => (
+                <TableRow key={rowIdx} className="hover:bg-transparent">
+                  {columns.map((_, colIdx) => (
+                    <TableCell key={colIdx}>
+                      <Skeleton className="h-4 w-full max-w-[180px]" style={{ opacity: 0.5 + (colIdx % 3) * 0.15 }} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : (
               <>
                 {table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className={
+                      className={twMerge(
+                        'transition-colors',
                         enableRowSelection || onRowClick
                           ? row.getCanSelect()
                             ? 'cursor-pointer'
                             : ''
-                          : undefined
-                      }
+                          : undefined,
+                      )}
                       data-state={
                         enableRowSelection
                           ? row.getIsSelected()
@@ -219,12 +225,16 @@ export function DataTable<TData, TValue>({
                     </TableRow>
                   ))
                 ) : (
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableCell
                       colSpan={columns.length}
-                      className="h-24 text-center"
+                      className="p-0"
                     >
-                      No Results
+                      {emptyState ?? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <p className="text-sm text-muted-foreground">No results found</p>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 )}

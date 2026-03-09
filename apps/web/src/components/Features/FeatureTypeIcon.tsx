@@ -1,4 +1,4 @@
-import { Flag, Activity, Hash } from 'lucide-react'
+import { Flag01Icon, Activity01Icon, HashtagIcon } from 'hugeicons-react'
 import { type FeatureType } from '@/lib/validations/feature'
 import { cn } from '@/lib/utils'
 
@@ -21,26 +21,26 @@ export function FeatureTypeIcon({
 }: FeatureTypeIconProps) {
   const config = {
     boolean_flag: {
-      icon: Flag,
+      Icon: Flag01Icon,
       color: 'text-blue-500',
       bgColor: 'bg-blue-500/10',
       label: 'Flag',
     },
     usage_quota: {
-      icon: Activity,
+      Icon: Activity01Icon,
       color: 'text-green-500',
       bgColor: 'bg-green-500/10',
       label: 'Quota',
     },
     numeric_limit: {
-      icon: Hash,
+      Icon: HashtagIcon,
       color: 'text-purple-500',
       bgColor: 'bg-purple-500/10',
       label: 'Limit',
     },
   }
 
-  const { icon: Icon, color, bgColor, label } = config[type]
+  const { Icon, color, bgColor, label } = config[type]
 
   if (showLabel) {
     return (
@@ -52,7 +52,7 @@ export function FeatureTypeIcon({
           className
         )}
       >
-        <Icon className="h-3 w-3" />
+        <Icon size={12} />
         <span>{label}</span>
       </div>
     )
@@ -66,7 +66,7 @@ export function FeatureTypeIcon({
         className
       )}
     >
-      <Icon className={cn('h-4 w-4', color)} />
+      <Icon size={16} className={color} />
     </div>
   )
 }

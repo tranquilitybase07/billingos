@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircleIcon, Loading03Icon } from 'hugeicons-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,7 +67,7 @@ export function DeleteFeatureConfirmation({
           {/* Warning if feature is used by products */}
           {hasProducts && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircleIcon size={16} />
               <AlertDescription>
                 This feature is currently being used by one or more products.
                 You must remove it from all products before you can delete it.
@@ -78,7 +78,7 @@ export function DeleteFeatureConfirmation({
           {/* General warning */}
           {!hasProducts && (
             <Alert>
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircleIcon size={16} />
               <AlertDescription>
                 This action cannot be undone. This will permanently delete the
                 feature and remove it from your organization.
@@ -89,7 +89,7 @@ export function DeleteFeatureConfirmation({
           {/* Stripe sync warning */}
           {feature.stripe_feature_id && !hasProducts && (
             <Alert>
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircleIcon size={16} />
               <AlertDescription>
                 This feature is synced with Stripe. Deleting it will also remove
                 it from your Stripe account.
@@ -110,7 +110,7 @@ export function DeleteFeatureConfirmation({
               <AlertDialogAction>
                 {isDeleting ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loading03Icon size={16} className="mr-2 animate-spin" />
                     Deleting...
                   </>
                 ) : (

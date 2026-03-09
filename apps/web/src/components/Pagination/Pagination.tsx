@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft01Icon, ArrowRight01Icon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { PropsWithChildren } from 'react'
 
@@ -38,7 +38,7 @@ const Pagination = ({
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ArrowLeft01Icon size={16} />
           Previous
         </Button>
         <span className="text-sm text-muted-foreground">
@@ -51,7 +51,7 @@ const Pagination = ({
           disabled={currentPage === totalPages}
         >
           Next
-          <ChevronRight className="h-4 w-4" />
+          <ArrowRight01Icon size={16} />
         </Button>
       </div>
     </div>

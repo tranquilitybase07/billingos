@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertCircle, Loader2, FlaskConical } from 'lucide-react'
+import { AlertCircleIcon, Loading03Icon, TestTube01Icon } from 'hugeicons-react'
 import {
   Select,
   SelectContent,
@@ -38,7 +38,7 @@ export function EnvironmentSwitcher() {
     <div className="flex items-center gap-2">
       {environment === 'sandbox' && (
         <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded text-xs font-semibold border border-orange-500/20">
-          <AlertCircle className="w-3 h-3" />
+          <AlertCircleIcon size={12} />
           TEST
         </div>
       )}
@@ -51,7 +51,7 @@ export function EnvironmentSwitcher() {
         <SelectTrigger className="w-[130px] h-8 text-xs">
           {busy ? (
             <div className="flex items-center gap-1.5">
-              <Loader2 className="w-3 h-3 animate-spin" />
+              <Loading03Icon size={12} className="animate-spin" />
               <span>Switching…</span>
             </div>
           ) : (
@@ -67,7 +67,7 @@ export function EnvironmentSwitcher() {
           </SelectItem>
           <SelectItem value="sandbox">
             <div className="flex items-center gap-2">
-              <FlaskConical className="w-3 h-3 text-orange-500" />
+              <TestTube01Icon size={12} className="text-orange-500" />
               Sandbox
             </div>
           </SelectItem>

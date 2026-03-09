@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
-import { DonutLarge as DonutLargeOutlined } from '@mui/icons-material'
+import { PieChart01Icon } from 'hugeicons-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -17,7 +17,7 @@ export default function MetersPage({ organizationSlug }: MetersPageProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center pt-32">
         <div className="flex flex-col items-center justify-center gap-y-8">
-          <DonutLargeOutlined className="text-5xl text-muted-foreground/30" />
+          <PieChart01Icon size={48} className="text-muted-foreground/30" />
           <div className="flex flex-col items-center justify-center gap-y-2">
             <h3 className="text-xl">No Meters</h3>
             <p className="text-muted-foreground">

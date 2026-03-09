@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { Area, AreaChart, XAxis, YAxis } from 'recharts'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight01Icon } from 'hugeicons-react'
 import {
     CardGhost,
     CardContent,
@@ -74,7 +74,7 @@ export function MetricAreaChart({
                                 className="h-8 w-8 hover:bg-muted -mt-1 -mr-2"
                                 onClick={() => setIsShareModalOpen(true)}
                             >
-                                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                                <ArrowUpRight01Icon size={16} className="text-muted-foreground" />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent>

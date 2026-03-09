@@ -3,7 +3,7 @@
 import { BenefitForm } from './BenefitForm'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
-import { X } from 'lucide-react'
+import { Cancel01Icon } from 'hugeicons-react'
 import { useState } from 'react'
 
 interface CreateBenefitModalContentProps {
@@ -57,7 +57,7 @@ export function CreateBenefitModalContent({
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={hideModal}>
-          <X className="h-5 w-5" />
+          <Cancel01Icon size={20} />
         </Button>
       </div>
 

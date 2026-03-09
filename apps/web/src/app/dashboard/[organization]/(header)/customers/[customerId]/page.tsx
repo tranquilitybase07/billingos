@@ -4,7 +4,7 @@ import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CustomersList } from "@/components/Customers/CustomersList";
 import { CustomerDetails } from "@/components/Customers/CustomerDetails";
-import { Search, ChevronDown, ChevronUp, MoreVertical, Plus, X } from "lucide-react";
+import { Search01Icon, ArrowDown01Icon, ArrowUp01Icon, MoreVerticalIcon, PlusSignIcon, Cancel01Icon } from "hugeicons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,7 +144,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
             {/* Search */}
             <div>
               <div className="relative mr-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search01Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search Customers"
                   value={searchQuery}
@@ -163,9 +163,9 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                 }}
               >
                 {sortOrder === "asc" ? (
-                  <ChevronDown className="h-4 w-4" />
+                  <ArrowDown01Icon size={16} />
                 ) : (
-                  <ChevronUp className="h-4 w-4" />
+                  <ArrowUp01Icon size={16} />
                 )}
               </Button>
               {/* <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -177,7 +177,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                 className="h-8 w-8 text-primary"
                 onClick={() => setIsAddCustomerOpen(true)}
               >
-                <Plus className="h-4 w-4" />
+                <PlusSignIcon size={16} />
               </Button>
             </div>
           </div>
@@ -291,7 +291,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                   onClick={() => setNewCustomerMetadata([...newCustomerMetadata, { key: '', value: '' }])}
                   className="h-8 text-primary"
                 >
-                  <Plus className="h-4 w-4 mr-1" />
+                  <PlusSignIcon size={16} className="mr-1" />
                   Add Field
                 </Button>
               </div>
@@ -332,7 +332,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                     }}
                     className="h-10 w-10 text-muted-foreground hover:text-destructive"
                   >
-                    <X className="h-4 w-4" />
+                    <Cancel01Icon size={16} />
                   </Button>
                 </div>
               ))}

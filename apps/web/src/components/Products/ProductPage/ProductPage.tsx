@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { MoreVert as MoreVertOutlined } from '@mui/icons-material'
+import { MoreVerticalIcon } from 'hugeicons-react'
 import { ProductOverview } from './ProductOverview'
 import { ProductMetricsView } from './ProductMetricsView'
 
@@ -148,7 +148,7 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost">
-                  <MoreVertOutlined fontSize="small" />
+                  <MoreVerticalIcon size={16} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

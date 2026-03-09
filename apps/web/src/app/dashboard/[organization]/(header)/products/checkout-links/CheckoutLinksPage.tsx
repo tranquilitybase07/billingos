@@ -4,7 +4,7 @@ import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { InlineModal } from '@/components/Modal/InlineModal'
 import { useModal } from '@/components/Modal/useModal'
 import { CheckoutLinkForm } from '@/components/CheckoutLinks/CheckoutLinkForm'
-import { Link as LinkOutlined, Add } from '@mui/icons-material'
+import { Link01Icon, PlusSignIcon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -44,7 +44,7 @@ export default function CheckoutLinksPage({
       <>
         <div className="flex h-full flex-col items-center justify-center pt-32">
           <div className="flex flex-col items-center justify-center gap-y-8">
-            <LinkOutlined className="text-5xl text-muted-foreground/30" />
+            <Link01Icon size={48} className="text-muted-foreground/30" />
             <div className="flex flex-col items-center justify-center gap-y-2">
               <h3 className="text-xl">No Checkout Links</h3>
               <p className="text-muted-foreground">
@@ -52,7 +52,7 @@ export default function CheckoutLinksPage({
               </p>
             </div>
             <Button onClick={showCreateModal}>
-              <Add className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               Create Checkout Link
             </Button>
           </div>
@@ -80,7 +80,7 @@ export default function CheckoutLinksPage({
         <div className="flex flex-col gap-y-8">
           <div className="flex justify-end">
             <Button onClick={showCreateModal}>
-              <Add className="mr-2 h-4 w-4" />
+              <PlusSignIcon size={16} className="mr-2" />
               Create Checkout Link
             </Button>
           </div>

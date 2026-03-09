@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatCurrency } from '@/utils/metrics'
-import { Download as DownloadOutlined } from '@mui/icons-material'
+import { Download01Icon } from 'hugeicons-react'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -187,7 +187,7 @@ export default function OrdersPage({
             </Select>
           </div>
           <Button variant="secondary" size="sm" className="gap-x-2">
-            <DownloadOutlined className="h-4 w-4" />
+            <Download01Icon size={16} />
             Export CSV
           </Button>
         </div>

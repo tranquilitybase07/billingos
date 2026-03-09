@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { Save, Eye, EyeOff, Info } from 'lucide-react'
+import { FloppyDiskIcon, ViewIcon, ViewOffIcon, InformationCircleIcon } from 'hugeicons-react'
 import { useProductVisibility } from '@/hooks/useProductVisibility'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
@@ -253,9 +253,9 @@ function EditProductForm({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 {isVisible ? (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <ViewIcon size={16} className="text-muted-foreground" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <ViewOffIcon size={16} className="text-muted-foreground" />
                 )}
                 <span className="text-sm text-muted-foreground">
                   {isVisible ? 'Visible in pricing' : 'Hidden from pricing'}
@@ -267,7 +267,7 @@ function EditProductForm({
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <InformationCircleIcon size={16} className="text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p className="font-medium mb-1">Pricing Table Visibility</p>
@@ -383,7 +383,7 @@ function EditProductForm({
                 </>
               ) : (
                 <>
-                  <Save className="mr-2 h-4 w-4" />
+                  <FloppyDiskIcon size={16} className="mr-2" />
                   Save Changes
                 </>
               )}

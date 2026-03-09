@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ArrowUpRight, Copy, Download } from "lucide-react";
+import { ArrowUpRight01Icon } from "hugeicons-react";
 import Image from "next/image";
 import {
   DropdownMenu,
@@ -166,7 +166,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                 className="hover:bg-base hover:cursor-pointer"
                 onClick={() => setIsShareModalOpen(true)}
               >
-                <ArrowUpRight className="h-5 w-5" />
+                <ArrowUpRight01Icon size={20} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>

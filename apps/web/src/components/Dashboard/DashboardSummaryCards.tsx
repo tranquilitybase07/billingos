@@ -2,50 +2,50 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-    DollarSign,
-    Users,
-    CreditCard,
-    Activity,
-    UserPlus,
-    UserMinus,
-} from 'lucide-react'
+    Dollar01Icon,
+    UserMultiple02Icon,
+    CreditCardIcon,
+    Activity01Icon,
+    UserAdd01Icon,
+    UserMinus01Icon,
+} from 'hugeicons-react'
 
 // Dummy data for now, replacing with real data integration later
 const summaryMetrics = [
     {
         title: 'Total Revenue',
         value: '$48,234.00',
-        icon: DollarSign,
+        icon: Dollar01Icon,
         description: '+20.1% from last month',
     },
     {
         title: 'MRR',
         value: '$12,234.00',
-        icon: CreditCard,
+        icon: CreditCardIcon,
         description: '+4.5% from last month',
     },
     {
         title: 'ARR',
         value: '$146,808.00',
-        icon: Activity,
+        icon: Activity01Icon,
         description: '+12.2% from last year',
     },
     {
         title: 'New Customers',
         value: '+573',
-        icon: UserPlus,
+        icon: UserAdd01Icon,
         description: '+201 since last hour',
     },
     {
         title: 'Active Subscriptions',
         value: '2,350',
-        icon: Users,
+        icon: UserMultiple02Icon,
         description: '+180 from last month',
     },
     {
         title: 'Churn Rate',
         value: '2.4%',
-        icon: UserMinus,
+        icon: UserMinus01Icon,
         description: '-1.1% from last month',
     },
 ]
@@ -59,7 +59,7 @@ export function DashboardSummaryCards() {
                         <CardTitle className="text-sm font-medium">
                             {metric.title}
                         </CardTitle>
-                        <metric.icon className="h-4 w-4 text-muted-foreground" />
+                        <metric.icon size={16} className="text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{metric.value}</div>
