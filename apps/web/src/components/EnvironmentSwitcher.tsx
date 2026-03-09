@@ -48,7 +48,7 @@ export function EnvironmentSwitcher() {
         onValueChange={handleSwitch}
         disabled={busy}
       >
-        <SelectTrigger className="w-[130px] h-8 text-xs">
+        <SelectTrigger className="w-full h-8 text-xs">
           {busy ? (
             <div className="flex items-center gap-1.5">
               <Loading03Icon size={12} className="animate-spin" />

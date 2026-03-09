@@ -522,7 +522,7 @@
 .dark [role="option"]:focus-visible,
 .dark a:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px oklch(0.546 0.245 262.881 / 0.4);
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 3px oklch(0.546 0.245 262.881 / 0.25);
 }
 
 @layer base {

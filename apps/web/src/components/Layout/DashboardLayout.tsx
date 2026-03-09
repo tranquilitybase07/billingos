@@ -75,7 +75,7 @@ export const DashboardBody = ({
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div>
           {/* Page header */}
-          <div className="flex flex-col border-b px-6 py-2.5 gap-0.5">
+          <div className="flex flex-col border-b -mx-4 px-10 py-2.5 gap-0.5">
             <div className="flex items-center justify-between">
               {typeof pageTitle === 'string' ? (
                 <h1 className="text-2xl font-semibold tracking-tight">
