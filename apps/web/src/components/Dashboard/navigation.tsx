@@ -74,7 +74,7 @@ const generalRoutesList = (org?: Organization): Route[] => [
         icon: <Link01Icon size={16} />,
       },
       {
-        title: 'Discounts',
+        title: 'Coupons',
         link: `/dashboard/${org?.slug}/products/discounts`,
         icon: <DiscountTag01Icon size={16} />,
       },

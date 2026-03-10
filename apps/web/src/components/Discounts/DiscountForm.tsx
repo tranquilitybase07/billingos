@@ -187,7 +187,7 @@ export function DiscountForm({
             required
           />
           <p className="text-xs text-muted-foreground">
-            Displayed to customers when they apply the discount
+            Displayed to customers when they apply the coupon
           </p>
         </div>
 
@@ -219,11 +219,11 @@ export function DiscountForm({
           </p>
         </div>
 
-        {/* Discount Type */}
+        {/* Coupon Type */}
         {!isUpdate && (
           <div className="space-y-2">
             <Label>
-              Discount Type <span className="text-destructive">*</span>
+              Coupon Type <span className="text-destructive">*</span>
             </Label>
             <Tabs value={type} onValueChange={(v) => setType(v as any)}>
               <TabsList className="grid w-full grid-cols-2">
@@ -451,7 +451,7 @@ export function DiscountForm({
                 </Popover>
                 <p className="text-xs text-muted-foreground">
                   {selectedProductIds.length === 0
-                    ? 'Discount applies to all products.'
+                    ? 'Coupon applies to all products.'
                     : `Only the ${selectedProductIds.length} selected product${selectedProductIds.length > 1 ? 's' : ''} will be eligible.`}
                 </p>
               </div>
@@ -518,8 +518,8 @@ export function DiscountForm({
               ? 'Updating...'
               : 'Creating...'
             : isUpdate
-              ? 'Update Discount'
-              : 'Create Discount'}
+              ? 'Update Coupon'
+              : 'Create Coupon'}
         </Button>
       </div>
     </form>

@@ -134,7 +134,7 @@ interface CustomersPageProps {
 }
 
 export default function CustomersPage({ params }: CustomersPageProps) {
-  const { organization: organizationSlug } = use(params);
+  use(params);
   const { organization } = useOrganization();
   const orgId = organization.id;
 
@@ -350,8 +350,12 @@ export default function CustomersPage({ params }: CustomersPageProps) {
   );
 
   return (
-    <DashboardBody title="Customers">
+    <DashboardBody>
       <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Customers</h1>
+          <p className="text-muted-foreground">View and manage customer profiles, plans, and lifecycle health</p>
+        </div>
         {/* Stats row */}
         <StatsCards
           mrr={totalMRR}

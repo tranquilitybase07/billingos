@@ -188,6 +188,10 @@ export default function SubscriptionsPage({
   return (
     <DashboardBody>
       <div className="flex flex-col gap-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold">Subscriptions</h1>
+          <p className="text-muted-foreground">Track subscription status, renewals, and retention metrics</p>
+        </div>
         {/* Stats Cards */}
         <SubscriptionStatsCards
           mrr={mrrData?.mrr ?? 0}

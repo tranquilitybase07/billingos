@@ -3,8 +3,7 @@
 import { type CSSProperties, PropsWithChildren, ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { DashboardSidebar } from './DashboardSidebar'
-import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar'
-import { useRoute } from '@/components/Navigation/useRoute'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
 import { CommandPalette } from '@/components/CommandPalette/CommandPalette'
@@ -43,16 +42,7 @@ export const DashboardLayout = ({ children }: PropsWithChildren) => {
  * Dashboard page body wrapper
  * Provides consistent page structure with optional header and context view
  */
-export const DashboardBody = ({
-  children,
-  className,
-  wrapperClassName,
-  title,
-  contextView,
-  contextViewClassName,
-  header,
-  wide = false,
-}: {
+export const DashboardBody = (props: {
   children: ReactNode
   className?: string
   wrapperClassName?: string
@@ -62,42 +52,26 @@ export const DashboardBody = ({
   header?: ReactNode
   wide?: boolean
 }) => {
-  const { currentRoute, currentSubRoute } = useRoute()
-  const { state } = useSidebar()
-  const isCollapsed = state === 'collapsed'
-
-  // Use current route title if no title provided
-  const pageTitle = title ?? currentSubRoute?.title ?? currentRoute?.title
+  const {
+    children,
+    className,
+    contextView,
+    contextViewClassName,
+  } = props
 
   return (
     <div className="flex h-full w-full flex-row gap-4 p-4">
       {/* Main content */}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <div>
-          {/* Page header */}
-          <div className="flex flex-col border-b -mx-4 px-10 py-2.5 gap-0.5">
-            <div className="flex items-center justify-between">
-              {typeof pageTitle === 'string' ? (
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {pageTitle}
-                </h1>
-              ) : (
-                pageTitle
-              )}
-              {header}
-            </div>
-          </div>
-
-          {/* Page content */}
-          <motion.div
-            className={cn('flex w-full flex-col p-6', className)}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            {children}
-          </motion.div>
-        </div>
+        {/* Page content */}
+        <motion.div
+          className={cn('flex w-full flex-col p-6', className)}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          {children}
+        </motion.div>
       </div>
 
       {/* Optional context view (right sidebar) */}

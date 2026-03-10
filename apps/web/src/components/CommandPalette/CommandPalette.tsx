@@ -87,7 +87,7 @@ export function CommandPalette() {
       group: 'Navigate',
     },
     {
-      label: 'Discounts',
+      label: 'Coupons',
       icon: <DiscountTag01Icon size={16} />,
       href: `/dashboard/${slug}/products/discounts`,
       group: 'Navigate',

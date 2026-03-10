@@ -28,15 +28,15 @@ export function CreateDiscountModalContent({
       await createDiscount.mutateAsync(data)
 
       toast({
-        title: 'Discount Created',
-        description: `Discount "${data.name}" was created successfully`,
+        title: 'Coupon Created',
+        description: `Coupon "${data.name}" was created successfully`,
       })
 
       onDiscountCreated()
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error?.response?.data?.message || error.message || 'Failed to create discount',
+        description: error?.response?.data?.message || error.message || 'Failed to create coupon',
         variant: 'destructive',
       })
     } finally {
@@ -49,7 +49,7 @@ export function CreateDiscountModalContent({
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b px-8 py-6">
-        <h2 className="text-xl font-semibold">Create Discount</h2>
+        <h2 className="text-xl font-semibold">Create Coupon</h2>
         <Button variant="ghost" size="icon" onClick={hideModal}>
           <Cancel01Icon size={20} />
         </Button>

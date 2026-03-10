@@ -31,15 +31,15 @@ export function EditDiscountModalContent({
             await updateDiscount.mutateAsync({ id: discount.id, body: data })
 
             toast({
-                title: 'Discount Updated',
-                description: `Discount "${data.name}" was updated successfully`,
+                title: 'Coupon Updated',
+                description: `Coupon "${data.name}" was updated successfully`,
             })
 
             onDiscountUpdated()
         } catch (error: any) {
             toast({
                 title: 'Error',
-                description: error?.response?.data?.message || error.message || 'Failed to update discount',
+                description: error?.response?.data?.message || error.message || 'Failed to update coupon',
                 variant: 'destructive',
             })
         } finally {
@@ -51,7 +51,7 @@ export function EditDiscountModalContent({
         <div className="flex h-full flex-col overflow-hidden">
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b px-8 py-6">
-                <h2 className="text-xl font-semibold">Edit Discount</h2>
+                <h2 className="text-xl font-semibold">Edit Coupon</h2>
                 <Button variant="ghost" size="icon" onClick={hideModal}>
                     <Cancel01Icon size={20} />
                 </Button>
