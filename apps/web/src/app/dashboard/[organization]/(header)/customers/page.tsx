@@ -8,14 +8,14 @@ import { useListCustomers, useCreateCustomer } from "@/hooks/queries/customers";
 import { useOrganizationSubscriptions } from "@/hooks/queries/subscriptions";
 import type { Subscription, Product } from "@/hooks/queries/subscriptions";
 import type { Column, Row, ColumnDef } from "@tanstack/react-table";
-import { useMRR, useChurnRate, useRevenueTrend } from "@/hooks/queries/analytics";
+import { useMRR, useChurnRate } from "@/hooks/queries/analytics";
 import { DataTable, DataTableColumnHeader } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { MiniMetricChartBox } from "@/components/Metrics/MiniMetricChartBox";
 import {
   Select,
   SelectContent,
@@ -30,15 +30,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  Dollar01Icon,
-  UserMultiple02Icon,
-  Activity01Icon,
-  UserMinus01Icon,
   Search01Icon,
   PlusSignIcon,
   Cancel01Icon,
-  ChartIncreaseIcon,
-  ChartDecreaseIcon,
 } from "hugeicons-react";
 import { CustomerDrawer, type EnrichedCustomer } from "@/components/Customers/CustomerDrawer";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -101,78 +95,18 @@ function formatDate(dateStr: string) {
 
 interface StatsCardsProps {
   mrr: number;
-  mrrTrend: number | null;
   totalCustomers: number;
   activeCustomers: number;
   churnRate: number | null;
-  churnTrend: number | null;
 }
 
-function TrendLine({ trend, inverted = false }: { trend: number | null; inverted?: boolean }) {
-  if (trend === null) return null;
-  const isPositive = inverted ? trend <= 0 : trend >= 0;
-  return (
-    <div className={`flex items-center gap-1 text-sm mt-2 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
-      {isPositive ? <ChartIncreaseIcon size={14} /> : <ChartDecreaseIcon size={14} />}
-      <span>{Math.abs(trend).toFixed(1)}% vs last month</span>
-    </div>
-  );
-}
-
-function StatsCards({ mrr, mrrTrend, totalCustomers, activeCustomers, churnRate, churnTrend }: StatsCardsProps) {
+function StatsCards({ mrr, totalCustomers, activeCustomers, churnRate }: StatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total MRR</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Dollar01Icon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{formatCurrency(mrr)}</div>
-          {/* <TrendLine trend={mrrTrend} /> */}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Customers</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <UserMultiple02Icon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{totalCustomers}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Customers</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Activity01Icon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{activeCustomers}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Churn Rate</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <UserMinus01Icon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">
-            {churnRate !== null ? `${churnRate.toFixed(1)}%` : "0%"}
-          </div>
-          <TrendLine trend={churnTrend} inverted />
-        </CardContent>
-      </Card>
+      <MiniMetricChartBox title="Total MRR" value={mrr} type="currency" />
+      <MiniMetricChartBox title="Total Customers" value={totalCustomers} type="scalar" />
+      <MiniMetricChartBox title="Active Customers" value={activeCustomers} type="scalar" />
+      <MiniMetricChartBox title="Churn Rate" value={churnRate ?? 0} type="percentage" />
     </div>
   );
 }
@@ -234,7 +168,6 @@ export default function CustomersPage({ params }: CustomersPageProps) {
   const { data: subscriptions, isLoading: isLoadingSubs } = useOrganizationSubscriptions(orgId);
   const { data: mrrData } = useMRR(orgId);
   const { data: churnData } = useChurnRate({ organization_id: orgId });
-  const { data: revenueTrend } = useRevenueTrend({ organization_id: orgId, granularity: "month" });
 
   const isLoading = isLoadingCustomers || isLoadingSubs;
 
@@ -318,23 +251,6 @@ export default function CustomersPage({ params }: CustomersPageProps) {
     return data[data.length - 1].churn_rate ?? null;
   }, [churnData]);
 
-  // Trends
-  const mrrTrend = useMemo(() => {
-    const pts = revenueTrend?.data ?? [];
-    if (pts.length < 2) return null;
-    const prev = pts[pts.length - 2].revenue;
-    const curr = pts[pts.length - 1].revenue;
-    if (!prev) return null;
-    return ((curr - prev) / prev) * 100;
-  }, [revenueTrend]);
-  const churnTrend = useMemo(() => {
-    const pts = churnData?.data ?? [];
-    if (pts.length < 2) return null;
-    const prev = pts[pts.length - 2].churn_rate;
-    const curr = pts[pts.length - 1].churn_rate;
-    if (!prev) return null;
-    return ((curr - prev) / prev) * 100;
-  }, [churnData]);
 
   // Drawer state via URL
   const selectedCustomer = useMemo(
@@ -439,11 +355,9 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         {/* Stats row */}
         <StatsCards
           mrr={totalMRR}
-          mrrTrend={mrrTrend}
           totalCustomers={totalCustomers}
           activeCustomers={activeCustomers}
           churnRate={latestChurnRate}
-          churnTrend={churnTrend}
         />
 
         {/* Filters + Add Customer */}

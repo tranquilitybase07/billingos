@@ -1,77 +1,27 @@
 'use client'
 
 import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
-import { OrderStatus } from '@/components/Orders/OrderStatus'
-import { SubscriptionStatus } from '@/components/Subscriptions/SubscriptionStatus'
-import { RevenueWidget } from '@/components/Widgets/RevenueWidget'
 import {
   Product,
   useProductSubscriptionCount,
-  useProductRevenueMetrics
+  useProductRevenueMetrics,
 } from '@/hooks/queries/products'
-import { useProductSubscriptions } from '@/hooks/queries/subscriptions'
 import {
   DataTable,
   DataTableColumnHeader,
 } from '@/components/atoms/datatable'
-import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/utils/metrics'
 import Link from 'next/link'
-
-// ── Mock Data ──────────────────────────────────────────────
-// TODO: Implement real API hooks when orders and discounts features are ready
-
-const MOCK_ORDERS = [
-  {
-    id: 'ord_1',
-    customer: { id: 'cust_1', name: 'Sarah Chen', email: 'sarah@example.com' },
-    net_amount: 4900,
-    currency: 'usd',
-    status: 'paid',
-    created_at: '2026-01-25T08:30:00Z',
-  },
-  {
-    id: 'ord_2',
-    customer: { id: 'cust_2', name: 'James Wilson', email: 'james@acme.co' },
-    net_amount: 9900,
-    currency: 'usd',
-    status: 'paid',
-    created_at: '2026-01-22T14:15:00Z',
-  },
-  {
-    id: 'ord_3',
-    customer: { id: 'cust_6', name: 'David Kim', email: 'david@tech.io' },
-    net_amount: 4900,
-    currency: 'usd',
-    status: 'pending',
-    created_at: '2026-01-20T10:00:00Z',
-  },
-  {
-    id: 'ord_4',
-    customer: { id: 'cust_3', name: 'Maria Garcia', email: 'maria@startup.io' },
-    net_amount: 9900,
-    currency: 'usd',
-    status: 'paid',
-    created_at: '2026-01-18T09:45:00Z',
-  },
-  {
-    id: 'ord_5',
-    customer: { id: 'cust_7', name: 'Lisa Wang', email: 'lisa@creative.co' },
-    net_amount: 4900,
-    currency: 'usd',
-    status: 'refunded',
-    created_at: '2026-01-15T16:30:00Z',
-  },
-]
-
-
-
-// ── Component ──────────────────────────────────────────────
+import { ArrowRight01Icon } from 'hugeicons-react'
+import { useProductDiscounts } from '@/hooks/queries/discounts'
+import { getDiscountDisplay } from '@/utils/discount'
+import { useProductSubscriptions } from '@/hooks/queries/subscriptions'
+import { Button } from '@/components/ui/button'
+import { ProductPreviewCard } from './ProductPreviewCard'
 
 export interface ProductOverviewProps {
   organizationSlug: string
   product: Product
-  isRecurring: boolean
+  isRecurring: boolean | undefined
 }
 
 function formatDate(dateStr: string) {
@@ -82,326 +32,240 @@ function formatDate(dateStr: string) {
   })
 }
 
-import { useProductDiscounts } from '@/hooks/queries/discounts'
-import { getDiscountDisplay } from '@/utils/discount'
-
 export const ProductOverview = ({
   organizationSlug,
   product,
   isRecurring,
 }: ProductOverviewProps) => {
-  // Fetch real subscription count
   const { data: subscriptionCount, isLoading: isLoadingSubscriptionCount } =
     useProductSubscriptionCount(product.id)
 
-  // Fetch real subscriptions for the product
-  const { data: subscriptionsData, isLoading: isLoadingSubscriptions } =
-    useProductSubscriptions(product.id, { limit: 10 })
-
-  // Fetch real revenue metrics
   const { data: revenueMetrics, isLoading: isLoadingRevenue } =
     useProductRevenueMetrics(product.id)
 
-  // Fetch applicable discounts
   const { data: discounts, isLoading: isLoadingDiscounts } = useProductDiscounts(
     product.id,
     product.organization_id
   )
 
-  return (
-    <div className="flex flex-col gap-y-16">
-      {/* Metric Summary Cards */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {isRecurring ? (
-          <>
-            <MiniMetricChartBox
-              title="Active Subscriptions"
-              value={subscriptionCount?.active ?? 0}
-              type="scalar"
-              isLoading={isLoadingSubscriptionCount}
-            />
-            <MiniMetricChartBox
-              title="Monthly Recurring Revenue"
-              value={revenueMetrics?.mrr ?? 0}
-              type="currency"
-              isLoading={isLoadingRevenue}
-            />
-          </>
-        ) : (
-          <>
-            <MiniMetricChartBox
-              title="One-Time Products"
-              value={284}
-              type="scalar"
-            />
-            <MiniMetricChartBox
-              title="Today's Revenue"
-              value={34900}
-              type="currency"
-            />
-          </>
-        )}
-        <MiniMetricChartBox
-          title="Revenue Last 30 Days"
-          value={revenueMetrics?.revenueLastThirtyDays ?? 0}
-          type="currency"
-          isLoading={isLoadingRevenue}
-        />
-      </div>
+  const { data: subscriptionsData, isLoading: isLoadingSubscriptions } =
+    useProductSubscriptions(product.id, { limit: 5 })
 
-      {/* Subscriptions Table (recurring products only) */}
-      {isRecurring && (
-        <div className="flex flex-col gap-y-6">
-          <div className="flex flex-row items-center justify-between gap-x-6">
-            <div className="flex flex-col gap-y-1">
-              <h2 className="text-lg font-medium">Subscriptions</h2>
+  // Deduplicate customers from subscriptions (latest 5 unique)
+  const recentCustomers = (() => {
+    const seen = new Set<string>()
+    const customers: Array<{ id: string; name: string | null; email: string; subscribedAt: string }> = []
+    for (const sub of subscriptionsData?.subscriptions ?? []) {
+      if (!sub.customer) continue
+      if (seen.has(sub.customer.id)) continue
+      seen.add(sub.customer.id)
+      customers.push({
+        id: sub.customer.id,
+        name: sub.customer.name,
+        email: sub.customer.email,
+        subscribedAt: sub.created_at,
+      })
+      if (customers.length === 5) break
+    }
+    return customers
+  })()
+
+  return (
+    <div className="flex flex-col gap-y-8 lg:flex-row lg:items-start lg:gap-x-10">
+      {/* Left column */}
+      <div className="flex flex-col gap-y-10 lg:flex-1 min-w-0">
+        {/* Stat cards */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {isRecurring ? (
+            <>
+              <MiniMetricChartBox
+                title="Active Subscriptions"
+                value={subscriptionCount?.active ?? 0}
+                type="scalar"
+                isLoading={isLoadingSubscriptionCount}
+              />
+              <MiniMetricChartBox
+                title="Monthly Recurring Revenue"
+                value={revenueMetrics?.mrr ?? 0}
+                type="currency"
+                isLoading={isLoadingRevenue}
+              />
+            </>
+          ) : (
+            <>
+              <MiniMetricChartBox
+                title="One-Time Products"
+                value={284}
+                type="scalar"
+              />
+              <MiniMetricChartBox
+                title="Today's Revenue"
+                value={34900}
+                type="currency"
+              />
+            </>
+          )}
+          <MiniMetricChartBox
+            title="Revenue Last 30 Days"
+            value={revenueMetrics?.revenueLastThirtyDays ?? 0}
+            type="currency"
+            isLoading={isLoadingRevenue}
+          />
+        </div>
+
+        {/* Recent Customers */}
+        <div className="flex flex-col gap-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-medium">Recent Customers</h2>
               <p className="text-sm text-muted-foreground">
-                Showing 10 most recent subscriptions for {product.name}
+                Latest customers subscribed to {product.name}
               </p>
             </div>
-            <Link
-              href={`/dashboard/${organizationSlug}/sales/subscriptions?product_id=${product.id}`}
-            >
-              <Button size="sm" variant="secondary">
+            <Button size="sm" variant="secondary" asChild>
+              <Link href={`/dashboard/${organizationSlug}/customers`}>
                 View All
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
           <DataTable
-            data={subscriptionsData?.subscriptions || []}
+            data={recentCustomers}
             columns={[
               {
                 id: 'customer',
-                accessorKey: 'customer',
+                accessorKey: 'email',
                 header: ({ column }) => (
                   <DataTableColumnHeader column={column} title="Customer" />
                 ),
-                cell: ({ row: { original: sub } }) => {
-                  if (!sub.customer) {
-                    return <span className="text-sm text-muted-foreground">Unknown</span>
-                  }
-                  const displayName = sub.customer.name || sub.customer.email
-                  const initial = displayName?.charAt(0).toUpperCase() || '?'
+                cell: ({ row: { original: c } }) => {
+                  const displayName = c.name || c.email
+                  const initial = displayName.charAt(0).toUpperCase()
                   return (
-                    <div className="flex flex-row items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                         {initial}
                       </div>
-                      <div className="truncate text-sm">{sub.customer.email}</div>
+                      <div className="min-w-0">
+                        {c.name && (
+                          <div className="text-sm font-medium truncate">{c.name}</div>
+                        )}
+                        <div className="text-xs text-muted-foreground truncate">{c.email}</div>
+                      </div>
                     </div>
                   )
                 },
               },
               {
-                accessorKey: 'status',
+                accessorKey: 'subscribedAt',
                 header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Status" />
+                  <DataTableColumnHeader column={column} title="Subscribed" />
                 ),
-                cell: ({ row: { original: sub } }) => (
-                  <SubscriptionStatus status={sub.status} />
+                cell: ({ row: { original: c } }) => (
+                  <span className="text-sm text-muted-foreground">
+                    {formatDate(c.subscribedAt)}
+                  </span>
                 ),
-              },
-              {
-                accessorKey: 'created_at',
-                header: ({ column }) => (
-                  <DataTableColumnHeader
-                    column={column}
-                    title="Subscription Date"
-                  />
-                ),
-                cell: ({ row: { original: sub } }) => (
-                  <span className="text-sm">{formatDate(sub.created_at)}</span>
-                ),
-              },
-              {
-                accessorKey: 'current_period_end',
-                header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Renewal Date" />
-                ),
-                cell: ({ row: { original: sub } }) => {
-                  const willRenew =
-                    (sub.status === 'active' || sub.status === 'trialing') &&
-                    !sub.cancel_at_period_end
-                  return willRenew ? (
-                    <span className="text-sm">
-                      {formatDate(sub.current_period_end)}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">&mdash;</span>
-                  )
-                },
               },
               {
                 id: 'actions',
                 header: () => null,
-                cell: ({ row: { original: sub } }) => (
-                  <span className="flex flex-row justify-end gap-x-2">
-                    <Link
-                      href={`/dashboard/${organizationSlug}/customers/${sub.customer?.id || sub.customer_id}`}
-                    >
-                      <Button variant="secondary" size="sm" className="hover:cursor-pointer">
-                        View Customer
-                      </Button>
-                    </Link>
-                  </span>
+                cell: ({ row: { original: c } }) => (
+                  <div className="flex justify-end">
+                    <Button variant="secondary" size="sm" asChild>
+                      <Link href={`/dashboard/${organizationSlug}/customers/${c.id}`}>
+                        View
+                      </Link>
+                    </Button>
+                  </div>
                 ),
               },
             ]}
             isLoading={isLoadingSubscriptions}
           />
         </div>
-      )}
 
-      {/* Orders Table */}
-      {/* <div className="flex flex-col gap-y-6">
-        <div className="flex flex-row items-center justify-between gap-x-6">
-          <div className="flex flex-col gap-y-1">
-            <h2 className="text-lg font-medium">Orders</h2>
-            <p className="text-sm text-muted-foreground">
-              Showing last 10 orders for {product.name}
-            </p>
-          </div>
-          <Link
-            href={`/dashboard/${organizationSlug}/sales?product_id=${product.id}`}
-          >
-            <Button size="sm" variant="secondary">
-              View All
-            </Button>
-          </Link>
-        </div>
-        <DataTable
-          data={MOCK_ORDERS}
-          columns={[
-            {
-              id: 'customer',
-              accessorKey: 'customer',
-              header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Customer" />
-              ),
-              cell: ({ row: { original: order } }) => (
-                <div className="flex flex-row items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                    {order.customer.name.charAt(0)}
-                  </div>
-                  <div className="truncate text-sm">
-                    {order.customer.email}
-                  </div>
-                </div>
-              ),
-            },
-            {
-              accessorKey: 'net_amount',
-              header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Amount" />
-              ),
-              cell: ({ row: { original: order } }) => (
-                <span className="text-sm">
-                  {formatCurrency(order.net_amount, order.currency)}
-                </span>
-              ),
-            },
-            {
-              accessorKey: 'status',
-              header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Status" />
-              ),
-              cell: ({ row: { original: order } }) => (
-                <OrderStatus status={order.status} />
-              ),
-            },
-            {
-              accessorKey: 'created_at',
-              header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Date" />
-              ),
-              cell: ({ row: { original: order } }) => (
-                <span className="text-sm">{formatDate(order.created_at)}</span>
-              ),
-            },
-            {
-              id: 'actions',
-              header: () => null,
-              cell: ({ row: { original: order } }) => (
-                <span className="flex flex-row justify-end">
-                  <Link
-                    href={`/dashboard/${organizationSlug}/sales/${order.id}`}
-                  >
-                    <Button variant="secondary" size="sm">
-                      View
-                    </Button>
-                  </Link>
-                </span>
-              ),
-            },
-          ]}
-          isLoading={false}
-        />
-      </div> */}
-
-      {/* Revenue Widget */}
-      <RevenueWidget />
-
-      {/* Applicable Discounts */}
-      {!product.is_archived && (
-        <div className="flex flex-col gap-y-6">
-          <div className="flex flex-row items-center justify-between gap-x-6">
-            <div className="flex flex-col gap-y-1">
-              <h2 className="text-lg font-medium">Applicable Discounts</h2>
+        {/* Applicable Discounts */}
+        {!product.is_archived && (
+          <div className="flex flex-col gap-y-4">
+            <div>
+              <h2 className="text-base font-medium">Applicable Discounts</h2>
               <p className="text-sm text-muted-foreground">
                 All discounts valid for {product.name}
               </p>
             </div>
+            <DataTable
+              data={discounts || []}
+              columns={[
+                {
+                  accessorKey: 'name',
+                  header: ({ column }) => (
+                    <DataTableColumnHeader column={column} title="Name" />
+                  ),
+                  cell: ({ row: { original: discount } }) => (
+                    <span className="text-sm font-medium">{discount.name}</span>
+                  ),
+                },
+                {
+                  accessorKey: 'code',
+                  header: ({ column }) => (
+                    <DataTableColumnHeader column={column} title="Code" />
+                  ),
+                  cell: ({ row: { original: discount } }) =>
+                    discount.code ? (
+                      <code className="rounded bg-muted px-2 py-0.5 text-xs">
+                        {discount.code}
+                      </code>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    ),
+                },
+                {
+                  id: 'amount',
+                  header: ({ column }) => (
+                    <DataTableColumnHeader column={column} title="Amount" />
+                  ),
+                  cell: ({ row: { original: discount } }) => (
+                    <span className="text-sm">{getDiscountDisplay(discount)}</span>
+                  ),
+                },
+                {
+                  accessorKey: 'created_at',
+                  header: ({ column }) => (
+                    <DataTableColumnHeader column={column} title="Date" />
+                  ),
+                  cell: ({ row: { original: discount } }) => (
+                    <span className="text-sm">{formatDate(discount.created_at)}</span>
+                  ),
+                },
+              ]}
+              isLoading={isLoadingDiscounts}
+            />
           </div>
-          <DataTable
-            data={discounts || []}
-            columns={[
-              {
-                accessorKey: 'name',
-                header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Name" />
-                ),
-                cell: ({ row: { original: discount } }) => (
-                  <span className="text-sm font-medium">{discount.name}</span>
-                ),
-              },
-              {
-                accessorKey: 'code',
-                header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Code" />
-                ),
-                cell: ({ row: { original: discount } }) => (
-                  discount.code ? (
-                    <code className="rounded bg-muted px-2 py-0.5 text-xs">
-                      {discount.code}
-                    </code>
-                  ) : <span className="text-muted-foreground text-sm">—</span>
-                ),
-              },
-              {
-                id: 'amount',
-                header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Amount" />
-                ),
-                cell: ({ row: { original: discount } }) => (
-                  <span className="text-sm">{getDiscountDisplay(discount)}</span>
-                ),
-              },
-              {
-                accessorKey: 'created_at',
-                header: ({ column }) => (
-                  <DataTableColumnHeader column={column} title="Date" />
-                ),
-                cell: ({ row: { original: discount } }) => (
-                  <span className="text-sm">
-                    {formatDate(discount.created_at)}
-                  </span>
-                ),
-              },
-            ]}
-            isLoading={isLoadingDiscounts}
-          />
+        )}
+
+        {/* Quick Links */}
+        <div className="flex flex-row flex-wrap gap-2">
+          {isRecurring && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/dashboard/${organizationSlug}/sales/subscriptions?product_id=${product.id}`}>
+                View All Subscriptions
+                <ArrowRight01Icon size={14} />
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/dashboard/${organizationSlug}/analytics`}>
+              View Analytics
+              <ArrowRight01Icon size={14} />
+            </Link>
+          </Button>
         </div>
-      )}
+      </div>
+
+      {/* Right sidebar */}
+      <div className="w-full lg:w-[380px] lg:shrink-0">
+        <ProductPreviewCard product={product} />
+      </div>
     </div>
   )
 }

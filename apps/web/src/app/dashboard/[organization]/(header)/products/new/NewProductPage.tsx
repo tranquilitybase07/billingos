@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -144,7 +144,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
         {/* Left Column: Configuration Forms (70%) */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>
@@ -177,10 +177,10 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 </p>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Pricing Engine */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <div className="flex items-center gap-2">
 
@@ -200,10 +200,10 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 onCurrencyChange={form.setCurrency}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Features & Entitlements */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Features & Entitlements</CardTitle>
               <CardDescription>
@@ -219,7 +219,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 organizationId={organization.id}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Actions */}
           <div className="flex items-center justify-between rounded-lg border-t bg-muted/30 p-6">

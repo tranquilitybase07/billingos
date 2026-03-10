@@ -16,14 +16,8 @@ import {
 } from '@/components/ui/select'
 import {
   Download01Icon,
-  Dollar01Icon,
-  CreditCardIcon,
-  PercentCircleIcon,
-  RefreshIcon,
-  ChartIncreaseIcon,
-  ChartDecreaseIcon,
 } from 'hugeicons-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
 import { useMRR } from '@/hooks/queries/analytics'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
@@ -44,16 +38,6 @@ function formatDate(dateStr: string) {
 
 // ── Stats Cards ────────────────────────────────────────────
 
-function TrendLine({ trend }: { trend: number }) {
-  const isPositive = trend >= 0
-  return (
-    <div className={`flex items-center gap-1 text-sm mt-2 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-      {isPositive ? <ChartIncreaseIcon size={14} /> : <ChartDecreaseIcon size={14} />}
-      <span>{Math.abs(trend).toFixed(1)}% vs last month</span>
-    </div>
-  )
-}
-
 interface SubscriptionStatsCardsProps {
   mrr: number
   activeSubscriptions: number
@@ -64,57 +48,10 @@ interface SubscriptionStatsCardsProps {
 function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate, nrr }: SubscriptionStatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">MRR</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Dollar01Icon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{formatCurrency(mrr)}</div>
-          {/* <TrendLine trend={0} /> */}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Subscriptions</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <CreditCardIcon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{activeSubscriptions}</div>
-          {/* <TrendLine trend={0} /> */}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trial Conversion</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <PercentCircleIcon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{trialConversionRate.toFixed(1)}%</div>
-          {/* <TrendLine trend={0} /> */}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Net Revenue Retention</p>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <RefreshIcon size={15} className="text-primary" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold">{nrr.toFixed(1)}%</div>
-          {/* <TrendLine trend={0} /> */}
-        </CardContent>
-      </Card>
+      <MiniMetricChartBox title="MRR" value={mrr} type="currency" />
+      <MiniMetricChartBox title="Active Subscriptions" value={activeSubscriptions} type="scalar" />
+      <MiniMetricChartBox title="Trial Conversion" value={trialConversionRate} type="percentage" />
+      <MiniMetricChartBox title="Net Revenue Retention" value={nrr} type="percentage" />
     </div>
   )
 }

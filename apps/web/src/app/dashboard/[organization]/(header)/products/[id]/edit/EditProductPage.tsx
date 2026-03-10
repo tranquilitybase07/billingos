@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -289,7 +289,7 @@ function EditProductForm({
         {/* Left Column: Configuration Forms */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>
@@ -322,10 +322,10 @@ function EditProductForm({
                 </p>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Pricing Engine */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Pricing Engine</CardTitle>
               <CardDescription>
@@ -342,10 +342,10 @@ function EditProductForm({
                 onCurrencyChange={form.setCurrency}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Features & Entitlements */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Features & Entitlements</CardTitle>
               <CardDescription>
@@ -361,7 +361,7 @@ function EditProductForm({
                 organizationId={organizationId}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Actions */}
           <div className="flex items-center justify-between rounded-lg border-t bg-muted/30 p-6">
