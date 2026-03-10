@@ -30,6 +30,7 @@ import { UsageOverviewResponseDto } from './dto/usage-overview-response.dto';
 import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
 import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
 import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
+import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
 import { Granularity } from './dto/analytics-query.dto';
 
 @Injectable()
@@ -1164,4 +1165,120 @@ export class AnalyticsService {
       // Don't throw - cache invalidation failure shouldn't block operations
     }
   }
+
+  /**
+   * Get subscription conversion funnel
+   * Stages: Sign-ups / Leads → Free Trial Users → Paying Customers
+   */
+  async getConversionFunnel(
+    organizationId: string,
+  ): Promise<ConversionFunnelResponseDto> {
+    const cacheKey = `analytics:${organizationId}:conversion-funnel`;
+
+    const cached =
+      await this.cacheManager.get<ConversionFunnelResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `Conversion funnel cache HIT for organization ${organizationId}`,
+      );
+      return cached;
+    }
+
+    this.logger.log(
+      `Conversion funnel cache MISS for organization ${organizationId}`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+
+    // Stage 1: Total customers
+    const { count: totalCustomers, error: customersError } = await supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null);
+
+    if (customersError) {
+      this.logger.error(
+        `Failed to count customers: ${customersError.message}`,
+        customersError,
+      );
+      throw new BadRequestException('Failed to fetch conversion funnel');
+    }
+
+    // Stage 2: Free Trial Users — customers currently trialing
+    const { data: trialingCustomers, error: trialingError } = await supabase
+      .from('subscriptions')
+      .select('customer_id')
+      .eq('organization_id', organizationId)
+      .eq('status', 'trialing');
+
+    if (trialingError) {
+      this.logger.error(
+        `Failed to count trialing customers: ${trialingError.message}`,
+        trialingError,
+      );
+      throw new BadRequestException('Failed to fetch conversion funnel');
+    }
+
+    const uniqueTrialing = new Set(
+      (trialingCustomers ?? []).map((s) => s.customer_id),
+    ).size;
+
+    // Stage 3: Paying Customers — active subscriptions
+    const { data: activeCustomers, error: activeError } = await supabase
+      .from('subscriptions')
+      .select('customer_id')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active');
+
+    if (activeError) {
+      this.logger.error(
+        `Failed to count active customers: ${activeError.message}`,
+        activeError,
+      );
+      throw new BadRequestException('Failed to fetch conversion funnel');
+    }
+
+    const uniqueActive = new Set(
+      (activeCustomers ?? []).map((s) => s.customer_id),
+    ).size;
+
+    const top = totalCustomers ?? 0;
+    const overallRate =
+      top > 0 ? Math.round((uniqueActive / top) * 10000) / 100 : 0;
+
+    const response: ConversionFunnelResponseDto = {
+      stages: [
+        {
+          label: 'Sign-ups / Leads',
+          value: top,
+          description: 'Total customers created for your organization',
+        },
+        {
+          label: 'Free Trial Users',
+          value: uniqueTrialing,
+          description: 'Customers currently in a free trial',
+        },
+        {
+          label: 'Paying Customers',
+          value: uniqueActive,
+          description: 'Customers with an active paid subscription',
+        },
+      ],
+      overall_conversion_rate: overallRate,
+      as_of: new Date().toISOString(),
+    };
+
+    // Cache for 5 minutes
+    await this.cacheManager.set(cacheKey, response, 300000);
+
+    this.logger.log(
+      `Conversion funnel for organization ${organizationId}: ${top} → ${uniqueActive} (${overallRate}%)`,
+    );
+
+    return response;
+  }
 }
+
+
+

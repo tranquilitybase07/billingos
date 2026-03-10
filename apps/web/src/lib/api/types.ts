@@ -323,6 +323,18 @@ export interface UsageTrendsResponse {
   period: number
 }
 
+export interface ConversionFunnelStage {
+  label: string
+  value: number
+  description: string
+}
+
+export interface ConversionFunnelResponse {
+  stages: ConversionFunnelStage[]
+  overall_conversion_rate: number
+  as_of: string
+}
+
 // Subscription Upgrade/Downgrade Types
 export type ChangeEffectiveTiming = 'immediate' | 'period_end'
 export type ChangeType = 'upgrade' | 'downgrade'

@@ -20,6 +20,7 @@ import {
   useMRR,
 } from '@/hooks/queries/analytics'
 import { useListCustomers } from '@/hooks/queries/customers'
+import { ConversionFunnelChart } from '@/components/Dashboard/ConversionFunnelChart'
 
 interface AnalyticsPageProps {
   organizationId: string
@@ -302,6 +303,9 @@ export default function AnalyticsPage({
             </CardContent>
           </CardFlat>
         </div>
+
+        {/* Conversion Funnel */}
+        <ConversionFunnelChart organizationId={organizationId} />
 
         {/* Usage Trends */}
         <CardGhost>

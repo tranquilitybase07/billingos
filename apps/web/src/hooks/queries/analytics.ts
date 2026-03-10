@@ -12,6 +12,7 @@ import type {
   UsageByFeatureResponse,
   AtRiskCustomersResponse,
   UsageTrendsResponse,
+  ConversionFunnelResponse,
 } from '@/lib/api/types'
 
 export const analyticsKeys = {
@@ -108,5 +109,13 @@ export function useUsageTrends(organizationId: string, featureName: string, peri
     queryKey: analyticsKeys.usageTrends(organizationId, featureName, period),
     queryFn: () => api.get<UsageTrendsResponse>(`/analytics/usage/trends?organization_id=${organizationId}&feature_name=${featureName}&period=${period}`),
     enabled: !!organizationId && !!featureName,
+  })
+}
+
+export function useConversionFunnel(organizationId: string) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'conversion-funnel', organizationId] as const,
+    queryFn: () => api.get<ConversionFunnelResponse>(`/analytics/conversion-funnel?organization_id=${organizationId}`),
+    enabled: !!organizationId,
   })
 }
