@@ -14,7 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download01Icon } from 'hugeicons-react'
+import {
+  Download01Icon,
+  Dollar01Icon,
+  CreditCardIcon,
+  PercentCircleIcon,
+  RefreshIcon,
+  ChartIncreaseIcon,
+  ChartDecreaseIcon,
+} from 'hugeicons-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { useMRR } from '@/hooks/queries/analytics'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import type { SortingState } from '@tanstack/react-table'
@@ -30,6 +40,83 @@ function formatDate(dateStr: string) {
     month: 'short',
     day: 'numeric',
   })
+}
+
+// ── Stats Cards ────────────────────────────────────────────
+
+function TrendLine({ trend }: { trend: number }) {
+  const isPositive = trend >= 0
+  return (
+    <div className={`flex items-center gap-1 text-sm mt-2 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+      {isPositive ? <ChartIncreaseIcon size={14} /> : <ChartDecreaseIcon size={14} />}
+      <span>{Math.abs(trend).toFixed(1)}% vs last month</span>
+    </div>
+  )
+}
+
+interface SubscriptionStatsCardsProps {
+  mrr: number
+  activeSubscriptions: number
+  trialConversionRate: number
+  nrr: number
+}
+
+function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate, nrr }: SubscriptionStatsCardsProps) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">MRR</p>
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Dollar01Icon size={15} className="text-primary" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold">{formatCurrency(mrr)}</div>
+          {/* <TrendLine trend={0} /> */}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Subscriptions</p>
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CreditCardIcon size={15} className="text-primary" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold">{activeSubscriptions}</div>
+          {/* <TrendLine trend={0} /> */}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trial Conversion</p>
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <PercentCircleIcon size={15} className="text-primary" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold">{trialConversionRate.toFixed(1)}%</div>
+          {/* <TrendLine trend={0} /> */}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Net Revenue Retention</p>
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <RefreshIcon size={15} className="text-primary" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold">{nrr.toFixed(1)}%</div>
+          {/* <TrendLine trend={0} /> */}
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -59,6 +146,19 @@ export default function SubscriptionsPage({
 
   // Fetch real subscriptions for the organization
   const { data: subscriptions, isLoading: isLoadingSubscriptions } = useOrganizationSubscriptions(organizationId)
+
+  // Fetch MRR for stats cards
+  const { data: mrrData } = useMRR(organizationId)
+
+  // Compute stats from subscription data
+  const subscriptionStats = useMemo(() => {
+    if (!subscriptions) return { activeCount: 0, trialConversionRate: 0, nrr: 0 }
+    const active = subscriptions.filter((s) => s.status === 'active').length
+    const trialing = subscriptions.filter((s) => s.status === 'trialing').length
+    const total = subscriptions.length
+    const trialConversionRate = total > 0 ? ((active / Math.max(active + trialing, 1)) * 100) : 0
+    return { activeCount: active, trialConversionRate, nrr: 0 }
+  }, [subscriptions])
 
   // Filter and sort subscriptions based on selected filters and sorting state
   const filteredSubscriptions = useMemo(() => {
@@ -96,8 +196,8 @@ export default function SubscriptionsPage({
     if (sorting.length > 0) {
       const { id, desc } = sorting[0]
       filtered.sort((a, b) => {
-        let valA: any = ''
-        let valB: any = ''
+        let valA: string | number = ''
+        let valB: string | number = ''
 
         if (id === 'customer') {
           valA = a.customer?.name || a.customer?.email || ''
@@ -151,6 +251,14 @@ export default function SubscriptionsPage({
   return (
     <DashboardBody>
       <div className="flex flex-col gap-y-8">
+        {/* Stats Cards */}
+        <SubscriptionStatsCards
+          mrr={mrrData?.mrr ?? 0}
+          activeSubscriptions={subscriptionStats.activeCount}
+          trialConversionRate={subscriptionStats.trialConversionRate}
+          nrr={subscriptionStats.nrr}
+        />
+
         {/* Filters & Actions */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-4 md:flex-row md:items-center">
