@@ -78,7 +78,11 @@
       "WebFetch(domain:www.anthropic.com)",
       "WebFetch(domain:dometrain.com)",
       "WebFetch(domain:arize.com)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:ui.bklit.com)",
+      "Bash(nvm use:*)"
     ],
     "deny": [],
     "ask": []

@@ -27,8 +27,9 @@ import {
 } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
 import { useCustomerState, useUpdateCustomer } from "@/hooks/queries/customers";
-import { useProducts } from "@/hooks/queries/products";
+import { useProducts, type Product } from "@/hooks/queries/products";
 import { useCreateSubscription } from "@/hooks/queries/subscriptions";
+import type { Subscription, Product as SubProduct } from "@/hooks/queries/subscriptions";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -47,13 +48,14 @@ interface Customer {
   lifetimeRevenue: number;
   orders: number;
   balance: number;
-  subscriptions?: any[];
+  subscriptions?: Subscription[];
   external_id?: string;
 }
 
 interface CustomerDetailsProps {
   customer: Customer;
   organizationId?: string;
+  variant?: 'full' | 'drawer';
 }
 
 function formatDate(dateStr: string) {
@@ -72,7 +74,7 @@ function formatTime(dateStr: string) {
   });
 }
 
-export function CustomerDetails({ customer, organizationId }: CustomerDetailsProps) {
+export function CustomerDetails({ customer, organizationId, variant = 'full' }: CustomerDetailsProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "events" | "usage">(
     "overview"
   );
@@ -99,21 +101,6 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
     customer.id,
     organizationId
   );
-
-  console.log("DEBUG: CustomerDetails", {
-    customerId: customer.id,
-    organizationId,
-    customerState,
-    isLoadingState,
-    grantedFeatures: customerState?.granted_features,
-    grantedFeaturesCount: customerState?.granted_features?.length || 0,
-    // Debug properties for each feature
-    featuresWithProperties: customerState?.granted_features?.map(f => ({
-      name: f.feature_name,
-      properties: f.properties,
-      limit: (f as any).properties?.limit
-    }))
-  });
 
   const handleAddMetadataField = () => {
     setMetadataFields([...metadataFields, { key: '', value: '' }]);
@@ -146,7 +133,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           acc[field.key] = field.value;
         }
         return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, string>);
 
       await updateCustomer.mutateAsync({
         customerId: customer.id,
@@ -164,18 +151,12 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
         description: "Customer details have been successfully updated.",
       });
 
-      // Update the customer prop directly for immediate feedback
-      customer.name = editFormData.name;
-      customer.email = editFormData.email;
-      if (editFormData.external_id) {
-        customer.external_id = editFormData.external_id;
-      }
-
       setIsEditDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to update customer details.";
       toast({
         title: "Error updating customer",
-        description: error.message || "Failed to update customer details.",
+        description: message,
         variant: "destructive",
       });
     }
@@ -202,7 +183,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
+      {/* Header — hidden in drawer variant (drawer provides its own header) */}
+      {/* {variant === 'full' && ( */}
       <div className="p-6">
         <div className="flex items-start justify-between">
           {/* Customer Info */}
@@ -224,55 +206,12 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <div className="flex items-center gap-2 text-popover-foreground">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="bg-base">
-                  {timePeriod}
-                  <ArrowDown01Icon size={16} className="ml-2" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setTimePeriod("Hourly")}>Hourly</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimePeriod("Daily")}>Daily</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimePeriod("Weekly")}>Weekly</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimePeriod("Monthly")}>Monthly</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimePeriod("Yearly")}>Yearly</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* <Button variant="outline" size="icon" className="bg-base">
-              <Calendar className="h-4 w-4" />
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="bg-base">
-                  All Time
-                  <ArrowDown01Icon size={16} className="ml-2" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>Today</DropdownMenuItem>
-                <DropdownMenuItem>Yesterday</DropdownMenuItem>
-                <DropdownMenuItem>This Week</DropdownMenuItem>
-                <DropdownMenuItem>This Month</DropdownMenuItem>
-                <DropdownMenuItem>Last Month</DropdownMenuItem>
-                <DropdownMenuItem>Last 3 Month</DropdownMenuItem>
-                <DropdownMenuItem>This Year</DropdownMenuItem>
-                <DropdownMenuItem>Last Year</DropdownMenuItem>
-                <DropdownMenuItem>All Time</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu> */}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <MoreVerticalIcon size={16} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {/* <DropdownMenuItem>Copy Customer Portal</DropdownMenuItem> */}
-                {/* <DropdownMenuItem>Contact Customer</DropdownMenuItem> */}
                 <DropdownMenuItem onClick={() => {
-                  // Pre-select the product if customer has a subscription
                   const existingSubscription = customer.subscriptions?.[0];
                   if (existingSubscription?.product_id) {
                     setSelectedProductId(existingSubscription.product_id);
@@ -286,7 +225,6 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 <DropdownMenuItem
                   className="border-b pb-3"
                   onClick={() => {
-                    // Reset form with current customer data
                     setEditFormData({
                       name: customer.name,
                       email: customer.email,
@@ -306,6 +244,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           </div>
         </div>
       </div>
+      {/* )} */}
 
       {/* Tabs */}
       <div className="border-b border-border">
@@ -313,8 +252,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <button
             onClick={() => setActiveTab("overview")}
             className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "overview"
-                ? "border-primary text-popover-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
+              ? "border-primary text-popover-foreground font-medium"
+              : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
               }`}
           >
             Overview
@@ -322,8 +261,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <button
             onClick={() => setActiveTab("events")}
             className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "events"
-                ? "border-primary text-popover-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
+              ? "border-primary text-popover-foreground font-medium"
+              : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
               }`}
           >
             Events
@@ -331,8 +270,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
           <button
             onClick={() => setActiveTab("usage")}
             className={`py-4 px-1 border-b-2 transition-colors hover:cursor-pointer ${activeTab === "usage"
-                ? "border-primary text-popover-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
+              ? "border-primary text-popover-foreground font-medium"
+              : "border-transparent text-muted-foreground hover:text-accent-foreground font-medium"
               }`}
           >
             Usage
@@ -344,46 +283,31 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
       <div className="flex-1 overflow-auto p-6">
         {activeTab === "overview" && (
           <div className="space-y-6">
-            {/* Stats Cards */}
-            {/* <div className="grid grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-normal text-muted-foreground">
-                    Lifetime Revenue
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">${customer.lifetimeRevenue}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-normal text-muted-foreground">
-                    Orders
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">-</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-normal text-muted-foreground">
-                    Customer Balance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">-</div>
-                </CardContent>
-              </Card>
+            {/* Time period + actions row (visible in both variants) */}
+            {/* <div className="flex items-center justify-between">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-base">
+                    {timePeriod}
+                    <ArrowDown01Icon size={16} className="ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => setTimePeriod("Hourly")}>Hourly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTimePeriod("Daily")}>Daily</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTimePeriod("Weekly")}>Weekly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTimePeriod("Monthly")}>Monthly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTimePeriod("Yearly")}>Yearly</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div> */}
 
             {/* Revenue Chart */}
-            <CardGhost>
+            {/* <CardGhost>
               <CardContent className="pt-6">
                 <RevenueChart timePeriod={timePeriod} />
               </CardContent>
-            </CardGhost>
+            </CardGhost> */}
 
             {/*subscriptions table */}
             <div className="space-y-4">
@@ -397,7 +321,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       <DataTableColumnHeader column={column} title="Product Name" />
                     ),
                     cell: ({ row: { original: sub } }) => {
-                      const product = Array.isArray(sub.product) ? sub.product[0] : sub.product;
+                      const productField = sub.product as SubProduct | SubProduct[] | undefined;
+                      const product = Array.isArray(productField) ? productField[0] : productField;
                       return (
                         <span className="text-sm">{product?.name || "Unknown Product"}</span>
                       );
@@ -418,8 +343,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       <DataTableColumnHeader column={column} title="Amount" />
                     ),
                     cell: ({ row: { original: sub } }) => {
-                      const product = Array.isArray(sub.products) ? sub.products[0] : sub.products;
-                      const productPrice = Array.isArray(sub.product_prices) ? sub.product_prices[0] : sub.product_prices;
+                      const productPrice = sub.price;
                       const amount = `${sub.currency?.toUpperCase() || "USD"} ${(sub.amount / 100).toFixed(2)}`;
 
                       // Format duration (e.g., "monthly", "yearly", "every 3 months")
@@ -484,7 +408,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                       <DataTableColumnHeader column={column} title="Limit" />
                     ),
                     cell: ({ row: { original: feat } }) => {
-                      const limit = (feat as any).properties?.limit;
+                      const limit = feat.properties?.limit;
                       return (
                         <span className="text-sm">
                           {limit !== undefined && limit !== null ? limit : 'Unlimited'}
@@ -724,8 +648,8 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 {/* Expanded User Info */}
                 <div
                   className={`border-t border-border bg-base/50 overflow-hidden transition-all duration-300 ease-in-out ${expandedEventId === "event-1"
-                      ? "max-h-20 opacity-100"
-                      : "max-h-0 opacity-0"
+                    ? "max-h-20 opacity-100"
+                    : "max-h-0 opacity-0"
                     }`}
                 >
                   <div className="p-4 flex items-center justify-between">
@@ -781,7 +705,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                   {isLoadingProducts ? (
                     <SelectItem value="loading" disabled>Loading products...</SelectItem>
                   ) : products?.items && products.items.length > 0 ? (
-                    products.items.map((product: any) => {
+                    products.items.map((product: Product) => {
                       // Determine version display
                       let versionLabel = '';
                       if (product.version) {
@@ -796,7 +720,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
 
                       // Check if customer is already subscribed to this product
                       const isSubscribed = customer.subscriptions?.some(
-                        (sub: any) => sub.product_id === product.id
+                        (sub) => sub.product_id === product.id
                       );
 
                       return (
@@ -841,10 +765,11 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
 
                   setIsAttachSubscriptionOpen(false);
                   setSelectedProductId("");
-                } catch (error: any) {
+                } catch (error: unknown) {
+                  const message = error instanceof Error ? error.message : "Failed to attach subscription.";
                   toast({
                     title: "Error attaching subscription",
-                    description: error.message || "Failed to attach subscription.",
+                    description: message,
                     variant: "destructive",
                   });
                 }
@@ -904,7 +829,7 @@ export function CustomerDetails({ customer, organizationId }: CustomerDetailsPro
                 External ID
               </Label>
               <p className="text-sm text-muted-foreground">
-                An optional ID of the customer in your system. Once set, it can't be updated.
+                An optional ID of the customer in your system. Once set, it can&apos;t be updated.
               </p>
               <Input
                 id="external_id"

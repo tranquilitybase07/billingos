@@ -12,6 +12,13 @@ interface Customer {
   metadata: Record<string, any>
   created_at: string
   updated_at: string
+  billing_address?: {
+    street?: string
+    city?: string
+    state?: string
+    postal_code?: string
+    country?: string
+  } | null
 }
 
 interface ListCustomersResponse {
