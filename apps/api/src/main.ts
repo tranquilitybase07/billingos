@@ -26,6 +26,7 @@ async function bootstrap() {
     'http://localhost:3003', // final-test app
     'http://localhost:61000', // Ladle development server
     'http://localhost:61001', // Ladle alternate port
+    'http://localhost:5173', // Vite playground
     'https://billingos-web.vercel.app', // Production frontend
     'https://*.vercel.app', // All Vercel preview deployments
   ];

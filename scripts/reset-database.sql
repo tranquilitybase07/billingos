@@ -18,23 +18,27 @@
 -- Show current statistics BEFORE deletion
 DO $$
 DECLARE
-  table_name TEXT;
+  tbl TEXT;
   row_count BIGINT;
 BEGIN
   RAISE NOTICE '';
   RAISE NOTICE '📊 Current Database Statistics:';
   RAISE NOTICE '';
 
-  FOR table_name IN
+  FOR tbl IN
     SELECT unnest(ARRAY[
       'users', 'organizations', 'accounts', 'user_organizations',
       'products', 'product_prices', 'features', 'product_features',
-      'customers', 'subscriptions', 'feature_grants', 'usage_records',
+      'customers', 'subscriptions', 'subscription_changes',
+      'feature_grants', 'usage_records', 'idempotency_keys',
+      'checkout_metadata', 'checkout_sessions', 'payment_intents',
+      'portal_sessions', 'discounts', 'discount_products',
+      'refunds', 'reconciliation_queue',
       'webhook_events', 'api_keys', 'session_tokens'
     ])
   LOOP
-    EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO row_count;
-    RAISE NOTICE '  %: % records', table_name, row_count;
+    EXECUTE format('SELECT COUNT(*) FROM %I', tbl) INTO row_count;
+    RAISE NOTICE '  %: % records', tbl, row_count;
   END LOOP;
 
   RAISE NOTICE '';
@@ -49,7 +53,6 @@ END $$;
 --   target_org_id UUID;
 --   target_account_id UUID;
 -- BEGIN
---   -- Get organization ID
 --   SELECT id, account_id INTO target_org_id, target_account_id
 --   FROM organizations
 --   WHERE slug = 'YOUR_ORG_SLUG_HERE'
@@ -61,23 +64,23 @@ END $$;
 --
 --   RAISE NOTICE 'Deleting organization: % (%)', 'YOUR_ORG_SLUG_HERE', target_org_id;
 --
---   -- Delete in correct order
---   DELETE FROM usage_records WHERE customer_id IN (
---     SELECT id FROM customers WHERE organization_id = target_org_id
---   );
---   DELETE FROM feature_grants WHERE customer_id IN (
---     SELECT id FROM customers WHERE organization_id = target_org_id
---   );
+--   DELETE FROM idempotency_keys WHERE customer_id IN (SELECT id FROM customers WHERE organization_id = target_org_id);
+--   DELETE FROM portal_sessions WHERE organization_id = target_org_id;
+--   DELETE FROM usage_records WHERE customer_id IN (SELECT id FROM customers WHERE organization_id = target_org_id);
+--   DELETE FROM feature_grants WHERE customer_id IN (SELECT id FROM customers WHERE organization_id = target_org_id);
+--   DELETE FROM subscription_changes WHERE organization_id = target_org_id;
+--   DELETE FROM checkout_metadata WHERE organization_id = target_org_id;
+--   DELETE FROM checkout_sessions WHERE organization_id = target_org_id;
+--   DELETE FROM refunds WHERE organization_id = target_org_id;
 --   DELETE FROM subscriptions WHERE organization_id = target_org_id;
+--   DELETE FROM payment_intents WHERE organization_id = target_org_id;
 --   DELETE FROM customers WHERE organization_id = target_org_id;
---   DELETE FROM product_features WHERE product_id IN (
---     SELECT id FROM products WHERE organization_id = target_org_id
---   );
---   DELETE FROM product_prices WHERE product_id IN (
---     SELECT id FROM products WHERE organization_id = target_org_id
---   );
+--   DELETE FROM discount_products WHERE discount_id IN (SELECT id FROM discounts WHERE organization_id = target_org_id);
+--   DELETE FROM product_features WHERE product_id IN (SELECT id FROM products WHERE organization_id = target_org_id);
+--   DELETE FROM product_prices WHERE product_id IN (SELECT id FROM products WHERE organization_id = target_org_id);
 --   DELETE FROM products WHERE organization_id = target_org_id;
 --   DELETE FROM features WHERE organization_id = target_org_id;
+--   DELETE FROM discounts WHERE organization_id = target_org_id;
 --   DELETE FROM session_tokens WHERE organization_id = target_org_id;
 --   DELETE FROM api_keys WHERE organization_id = target_org_id;
 --   DELETE FROM webhook_events WHERE organization_id = target_org_id;
@@ -89,89 +92,119 @@ END $$;
 -- END $$;
 
 -- ============================================================
--- OPTION 2: Delete ALL organizations and data
+-- OPTION 2: Delete ALL organizations and data (keep users)
 -- ============================================================
--- Uncomment the lines below to delete EVERYTHING:
 
 BEGIN;
 
--- 1. Delete usage records
+-- 1. Idempotency keys (references customers)
+DELETE FROM idempotency_keys;
+
+-- 2. Portal sessions (references customers + organizations)
+DELETE FROM portal_sessions;
+
+-- 3. Usage records
 DELETE FROM usage_records;
 
--- 2. Delete feature grants
+-- 4. Feature grants
 DELETE FROM feature_grants;
 
--- 3. Delete subscriptions
+-- 5. Subscription changes (references product_prices with NO ACTION — must come before product_prices)
+DELETE FROM subscription_changes;
+
+-- 6. Checkout metadata (references product_prices + products with RESTRICT — must come before both)
+DELETE FROM checkout_metadata;
+
+-- 7. Checkout sessions (references payment_intents + organizations)
+DELETE FROM checkout_sessions;
+
+-- 8. Refunds
+DELETE FROM refunds;
+
+-- 9. Reconciliation queue (standalone)
+DELETE FROM reconciliation_queue;
+
+-- 10. Subscriptions
 DELETE FROM subscriptions;
 
--- 4. Delete customers
+-- 11. Payment intents
+DELETE FROM payment_intents;
+
+-- 12. Customers
 DELETE FROM customers;
 
--- 5. Delete product features (junction table)
+-- 13. Discount products (junction table)
+DELETE FROM discount_products;
+
+-- 14. Product features (junction table)
 DELETE FROM product_features;
 
--- 6. Delete product prices
+-- 15. Product prices
 DELETE FROM product_prices;
 
--- 7. Delete products
+-- 16. Products
 DELETE FROM products;
 
--- 8. Delete features
+-- 17. Features
 DELETE FROM features;
 
--- 9. Delete session tokens
+-- 18. Discounts
+DELETE FROM discounts;
+
+-- 19. Session tokens
 DELETE FROM session_tokens;
 
--- 10. Delete API keys
+-- 20. API keys
 DELETE FROM api_keys;
 
--- 11. Delete webhook events
+-- 21. Webhook events
 DELETE FROM webhook_events;
 
--- 12. Delete user-organization relationships
+-- 22. User-organization relationships
 DELETE FROM user_organizations;
 
--- 13. Delete Stripe Connect accounts
+-- 23. Stripe Connect accounts
 DELETE FROM accounts;
 
--- 14. Delete organizations
+-- 24. Organizations
 DELETE FROM organizations;
 
--- 15. Delete users (OPTIONAL - comment out to keep users)
--- DELETE FROM users;
+-- Users are intentionally kept.
 
 COMMIT;
 
 -- Show statistics AFTER deletion
 DO $$
 DECLARE
-  table_name TEXT;
+  tbl TEXT;
   row_count BIGINT;
 BEGIN
   RAISE NOTICE '';
   RAISE NOTICE '📊 Database Statistics After Reset:';
   RAISE NOTICE '';
 
-  FOR table_name IN
+  FOR tbl IN
     SELECT unnest(ARRAY[
       'users', 'organizations', 'accounts', 'user_organizations',
       'products', 'product_prices', 'features', 'product_features',
-      'customers', 'subscriptions', 'feature_grants', 'usage_records',
+      'customers', 'subscriptions', 'subscription_changes',
+      'feature_grants', 'usage_records', 'idempotency_keys',
+      'checkout_metadata', 'checkout_sessions', 'payment_intents',
+      'portal_sessions', 'discounts', 'discount_products',
+      'refunds', 'reconciliation_queue',
       'webhook_events', 'api_keys', 'session_tokens'
     ])
   LOOP
-    EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO row_count;
-    RAISE NOTICE '  %: % records', table_name, row_count;
+    EXECUTE format('SELECT COUNT(*) FROM %I', tbl) INTO row_count;
+    RAISE NOTICE '  %: % records', tbl, row_count;
   END LOOP;
 
   RAISE NOTICE '';
   RAISE NOTICE '✅ Database reset complete!';
   RAISE NOTICE '';
   RAISE NOTICE '⚠️  REMINDER: Manually clean up Stripe Dashboard:';
-  RAISE NOTICE '   - Products';
-  RAISE NOTICE '   - Prices';
-  RAISE NOTICE '   - Customers';
-  RAISE NOTICE '   - Subscriptions';
+  RAISE NOTICE '   - Products & Prices';
+  RAISE NOTICE '   - Customers & Subscriptions';
   RAISE NOTICE '   - Connected Accounts';
   RAISE NOTICE '';
 END $$;

@@ -11,11 +11,6 @@ interface OrganizationLayoutProps {
   }>
 }
 
-/**
- * Organization Layout - Server Component
- * Follows Polar's pattern: validates user membership and provides organization context
- * Implements dual-pass verification to handle race conditions after org creation
- */
 export default async function OrganizationLayout({
   children,
   params,
@@ -30,7 +25,6 @@ export default async function OrganizationLayout({
     let userOrganizations = await getUserOrganizations()
 
     // Handle race condition: new org might not be in cached list yet
-    // This matches Polar's dual-pass verification pattern
     if (!userOrganizations.some((org) => org.id === organization.id)) {
       // Wait a moment for database to sync, then bypass cache
       await new Promise((resolve) => setTimeout(resolve, 500))

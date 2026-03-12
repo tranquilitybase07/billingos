@@ -6,10 +6,6 @@ import type { Organization } from '@/lib/api/types'
 const LAST_VISITED_ORG_COOKIE_PREFIX = 'billingos_last_org'
 const ENVIRONMENT_COOKIE = 'billingos-environment'
 
-/**
- * Dashboard entry point - Server Component
- * Follows Polar's pattern: check if user has organizations and redirect accordingly
- */
 export default async function DashboardPage() {
   console.log('[Dashboard] Page component executing...')
 

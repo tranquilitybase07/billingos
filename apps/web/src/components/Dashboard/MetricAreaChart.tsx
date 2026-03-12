@@ -216,7 +216,6 @@ export function MetricAreaChart({
                                 </div>
                             </div>
 
-                            {/* Polar Logo */}
                             <div className="relative mt-10 flex items-center justify-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
                                     <div className="h-6 w-6 rounded-full border-2 border-white"></div>

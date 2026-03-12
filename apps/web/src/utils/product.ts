@@ -1,75 +1,74 @@
-// Product utility functions adapted from Polar
 // TODO: Update with actual API types when available
 
 export interface ProductPrice {
-  id: string
-  type: 'one_time' | 'recurring'
-  amount_type: 'fixed' | 'custom' | 'free' | 'metered_unit' | 'seat_based'
-  recurring_interval?: 'day' | 'week' | 'month' | 'year'
-  price_amount?: number
-  price_currency?: string
+  id: string;
+  type: "one_time" | "recurring";
+  amount_type: "fixed" | "custom" | "free" | "metered_unit" | "seat_based";
+  recurring_interval?: "day" | "week" | "month" | "year";
+  price_amount?: number;
+  price_currency?: string;
 }
 
 export interface ProductFeature {
-  product_id: string
-  feature_id: string
-  display_order: number
-  config: Record<string, any>
-  created_at: string
+  product_id: string;
+  feature_id: string;
+  display_order: number;
+  config: Record<string, any>;
+  created_at: string;
   features?: {
-    id: string
-    name: string
-    title: string
-    description?: string
-    type: string
-  }
+    id: string;
+    name: string;
+    title: string;
+    description?: string;
+    type: string;
+  };
   feature?: {
-    id: string
-    name: string
-    title: string
-    description?: string
-    type: string
-  }
+    id: string;
+    name: string;
+    title: string;
+    description?: string;
+    type: string;
+  };
 }
 
 export interface Product {
-  id: string
-  name: string
-  description?: string
-  prices: ProductPrice[]
-  features: ProductFeature[]
-  is_archived: boolean
-  is_recurring?: boolean
-  recurring_interval?: 'day' | 'week' | 'month' | 'year'
-  recurring_interval_count?: number
-  medias: Array<{ id: string; public_url: string }>
-  metadata: Record<string, any>
-  created_at: string
-  modified_at?: string
-  version?: number
-  version_status?: 'current' | 'superseded' | null
-  visible_in_pricing_table?: boolean
+  id: string;
+  name: string;
+  description?: string;
+  prices: ProductPrice[];
+  features: ProductFeature[];
+  is_archived: boolean;
+  is_recurring?: boolean;
+  recurring_interval?: "day" | "week" | "month" | "year";
+  recurring_interval_count?: number;
+  medias: Array<{ id: string; public_url: string }>;
+  metadata: Record<string, any>;
+  created_at: string;
+  modified_at?: string;
+  version?: number;
+  version_status?: "current" | "superseded" | null;
+  visible_in_pricing_table?: boolean;
 }
 
 export const hasIntervals = (
   product: Product,
 ): [boolean, boolean, boolean, boolean, boolean] => {
   const hasDayInterval = product.prices.some(
-    (price) => price.type === 'recurring' && price.recurring_interval === 'day',
-  )
+    (price) => price.type === "recurring" && price.recurring_interval === "day",
+  );
   const hasWeekInterval = product.prices.some(
     (price) =>
-      price.type === 'recurring' && price.recurring_interval === 'week',
-  )
+      price.type === "recurring" && price.recurring_interval === "week",
+  );
   const hasMonthInterval = product.prices.some(
     (price) =>
-      price.type === 'recurring' && price.recurring_interval === 'month',
-  )
+      price.type === "recurring" && price.recurring_interval === "month",
+  );
   const hasYearInterval = product.prices.some(
     (price) =>
-      price.type === 'recurring' && price.recurring_interval === 'year',
-  )
-  const hasBothIntervals = hasMonthInterval && hasYearInterval
+      price.type === "recurring" && price.recurring_interval === "year",
+  );
+  const hasBothIntervals = hasMonthInterval && hasYearInterval;
 
   return [
     hasDayInterval,
@@ -77,22 +76,22 @@ export const hasIntervals = (
     hasMonthInterval,
     hasYearInterval,
     hasBothIntervals,
-  ]
-}
+  ];
+};
 
 export const isLegacyRecurringPrice = (price: ProductPrice): boolean => {
-  return 'legacy' in price
-}
+  return "legacy" in price;
+};
 
 export const hasLegacyRecurringPrices = (product: Product): boolean => {
-  return product.prices.some(isLegacyRecurringPrice)
-}
+  return product.prices.some(isLegacyRecurringPrice);
+};
 
 export const isStaticPrice = (price: ProductPrice): boolean =>
-  ['fixed', 'custom', 'free', 'seat_based'].includes(price.amount_type)
+  ["fixed", "custom", "free", "seat_based"].includes(price.amount_type);
 
 export const isMeteredPrice = (price: ProductPrice): boolean =>
-  price.amount_type === 'metered_unit'
+  price.amount_type === "metered_unit";
 
 export const isSeatBasedPrice = (price: ProductPrice): boolean =>
-  price.amount_type === 'seat_based'
+  price.amount_type === "seat_based";

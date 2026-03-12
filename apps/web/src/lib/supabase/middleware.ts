@@ -1,8 +1,8 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-const LAST_VISITED_ORG_COOKIE = 'billingos_last_org'
-const ENVIRONMENT_COOKIE = 'billingos-environment'
+const LAST_VISITED_ORG_COOKIE = "billingos_last_org";
+const ENVIRONMENT_COOKIE = "billingos-environment";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -19,17 +19,17 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
+            request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({
             request,
           });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options),
           );
         },
       },
-    }
+    },
   );
 
   // IMPORTANT: Avoid writing any logic between createServerClient and
@@ -40,16 +40,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes logic - Following Polar's pattern: middleware only validates auth
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
-                     request.nextUrl.pathname.startsWith('/signup') ||
-                     request.nextUrl.pathname.startsWith('/auth');
-  const isDashboard = request.nextUrl.pathname.startsWith('/dashboard');
+  const isAuthPage =
+    request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/signup") ||
+    request.nextUrl.pathname.startsWith("/auth");
+  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
 
   if (!user && isDashboard) {
     // Redirect to login if accessing dashboard without auth
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
@@ -57,24 +57,24 @@ export async function updateSession(request: NextRequest) {
     // User is authenticated but on auth page - redirect to dashboard
     // Let the dashboard page component handle organization routing
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
   // Track last visited organization per environment for smart redirects
   // Match pattern: /dashboard/[org-slug] or /dashboard/[org-slug]/...
   const orgMatch = request.nextUrl.pathname.match(/^\/dashboard\/([^\/]+)/);
-  if (user && orgMatch && orgMatch[1] !== 'create') {
+  if (user && orgMatch && orgMatch[1] !== "create") {
     const orgSlug = orgMatch[1];
-    const env = request.cookies.get(ENVIRONMENT_COOKIE)?.value || 'production';
+    const env = request.cookies.get(ENVIRONMENT_COOKIE)?.value || "production";
     const envCookieName = `${LAST_VISITED_ORG_COOKIE}_${env}`;
 
     // Set env-specific cookie to remember last visited org per environment
     supabaseResponse.cookies.set(envCookieName, orgSlug, {
-      path: '/',
+      path: "/",
       maxAge: 60 * 60 * 24 * 365, // 1 year
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
     });
   }
 
