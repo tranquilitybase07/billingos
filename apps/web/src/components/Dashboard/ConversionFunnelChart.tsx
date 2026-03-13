@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { FunnelChart } from '@/components/charts/funnel-chart'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
+import { ArrowRight01Icon, ChartDecreaseIcon, ChartIncreaseIcon } from 'hugeicons-react'
 import { Badge } from '@/components/ui/badge'
 import { useConversionFunnel } from '@/hooks/queries/analytics'
 
@@ -49,20 +49,35 @@ export function ConversionFunnelChart({
     const overall = data?.overall_conversion_rate ?? 0
     const realMax = Math.max(rawStages[0]?.value ?? 0, 1)
 
-    let prevChartVal = realMax
-    const chartStages = DISPLAY_ORDER.map((origIdx, dispIdx) => {
+    const chartStages = DISPLAY_ORDER.reduce<Array<{
+        label: string
+        value: number
+        displayValue: string
+        gradient: { offset: string, color: string }[]
+        accent: string
+        description: string | undefined
+        realValue: number
+    }>>((stages, origIdx, dispIdx) => {
         const s = rawStages[origIdx]
-        if (!s) return null
+        if (!s) return stages
+
         const cfg = STAGE_CFG[dispIdx] ?? STAGE_CFG[STAGE_CFG.length - 1]!
         const minVal = Math.ceil(realMax * (MIN_FRACTION[dispIdx] ?? 0.05))
+        const prevChartVal = stages[stages.length - 1]?.value ?? realMax
         const chartVal = Math.max(Math.min(s.value, prevChartVal), minVal)
-        prevChartVal = chartVal
-        return {
-            label: s.label, value: chartVal, displayValue: fmt(s.value),
-            gradient: cfg.gradient, accent: cfg.accent,
-            description: s.description, realValue: s.value,
-        }
-    }).filter((s): s is NonNullable<typeof s> => s !== null)
+
+        stages.push({
+            label: s.label,
+            value: chartVal,
+            displayValue: fmt(s.value),
+            gradient: cfg.gradient,
+            accent: cfg.accent,
+            description: s.description,
+            realValue: s.value,
+        })
+
+        return stages
+    }, [])
 
     const chartMax = chartStages[0]?.value ?? 1
     const realPctMap = new Map(
@@ -92,7 +107,7 @@ export function ConversionFunnelChart({
                         </div>
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                             style={{ background: 'var(--chart-1)', opacity: 0.15 }}>
-                            <TrendingUp className="h-5 w-5" style={{ color: 'var(--chart-1)' }} />
+                            <ChartIncreaseIcon className="h-5 w-5" style={{ color: 'var(--chart-1)' }} />
                         </div>
                     </div>
                 </div>
@@ -146,7 +161,7 @@ export function ConversionFunnelChart({
                                         <div className="space-y-2 pt-1 border-t">
                                             <div className="flex items-center justify-between text-xs">
                                                 <span className="text-muted-foreground flex items-center gap-1">
-                                                    <ArrowRight className="h-3 w-3" /> Step conversion
+                                                    <ArrowRight01Icon className="h-3 w-3" /> Step conversion
                                                 </span>
                                                 <Badge variant="secondary" className="font-semibold"
                                                     style={{ color: stepConv >= 50 ? 'var(--chart-2)' : 'var(--chart-5)' }}>
@@ -155,7 +170,7 @@ export function ConversionFunnelChart({
                                             </div>
                                             <div className="flex items-center justify-between text-xs">
                                                 <span className="text-muted-foreground flex items-center gap-1">
-                                                    <TrendingDown className="h-3 w-3" /> Drop-off
+                                                    <ChartDecreaseIcon className="h-3 w-3" /> Drop-off
                                                 </span>
                                                 <span className="font-medium text-destructive">{dropOff}%</span>
                                             </div>
