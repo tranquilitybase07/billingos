@@ -19,6 +19,7 @@ import { UsageOverviewResponseDto } from './dto/usage-overview-response.dto';
 import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
 import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
 import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
+import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
 
 @ApiTags('Analytics')
 
@@ -217,5 +218,17 @@ export class AnalyticsController {
       featureName,
       period || 30,
     );
+  }
+
+  /**
+   * Get subscription conversion funnel
+   * GET /analytics/conversion-funnel?organization_id=xxx
+   */
+  @Get('conversion-funnel')
+  async getConversionFunnel(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<ConversionFunnelResponseDto> {
+    return this.analyticsService.getConversionFunnel(organizationId);
   }
 }
