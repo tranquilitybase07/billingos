@@ -12,6 +12,7 @@ interface CheckoutSession {
   product: {
     id: string
     name: string
+    description?: string
     interval: 'day' | 'week' | 'month' | 'year'
     features: string[]
   }

@@ -1,11 +1,15 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
 import { CheckoutMetadataService } from './checkout-metadata.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
-import Stripe from 'stripe';
 
 export interface CheckoutProduct {
   name: string;
@@ -27,6 +31,8 @@ export interface CheckoutSession {
   amount: number;
   currency: string;
   totalAmount: number; // Total amount after discounts and taxes
+  status?: 'pending' | 'processing' | 'completed' | 'failed' | 'expired';
+  expiresAt?: string;
   product: CheckoutProduct;
   customer: CheckoutCustomer;
   stripeAccountId?: string;
@@ -73,10 +79,12 @@ export class CheckoutService {
     // 1. Fetch the price and product details
     const { data: price, error: priceError } = await supabase
       .from('product_prices')
-      .select(`
+      .select(
+        `
         *,
         product:products(*)
-      `)
+      `,
+      )
       .eq('id', dto.priceId)
       .eq('product.organization_id', organizationId)
       .eq('is_archived', false)
@@ -100,12 +108,16 @@ export class CheckoutService {
       .single();
 
     if (!organization?.accounts) {
-      throw new BadRequestException('Organization does not have a Stripe Connect account');
+      throw new BadRequestException(
+        'Organization does not have a Stripe Connect account',
+      );
     }
 
     const stripeAccountId = (organization.accounts as any).stripe_id;
     if (!stripeAccountId) {
-      throw new BadRequestException('Organization Stripe account not properly configured');
+      throw new BadRequestException(
+        'Organization Stripe account not properly configured',
+      );
     }
 
     // 3. Get or create customer in database and Stripe
@@ -139,16 +151,21 @@ export class CheckoutService {
       customerId = existingCustomer.id;
     } else {
       // Create new Stripe customer on the CONNECTED ACCOUNT
-      const stripeCustomer = await this.stripeService.getClient().customers.create({
-        email: customerEmail,
-        name: customerName,
-        metadata: {
-          organizationId,
-          externalUserId,
-        },
-      }, {
-        stripeAccount: stripeAccountId, // Create customer on connected account
-      });
+      const stripeCustomer = await this.stripeService
+        .getClient()
+        .customers.create(
+          {
+            email: customerEmail,
+            name: customerName,
+            metadata: {
+              organizationId,
+              externalUserId,
+            },
+          },
+          {
+            stripeAccount: stripeAccountId, // Create customer on connected account
+          },
+        );
       stripeCustomerId = stripeCustomer.id;
 
       // Create or update customer in our database immediately to avoid race conditions
@@ -203,8 +220,10 @@ export class CheckoutService {
       trialPeriodDays: product.trial_days || undefined,
       shouldGrantTrial: false, // Will be determined later based on eligibility
       featuresToGrant: [], // Will be populated from product features
-      successUrl: dto.successUrl || `${process.env.APP_URL}/dashboard/billing/success`,
-      cancelUrl: dto.cancelUrl || `${process.env.APP_URL}/dashboard/billing/cancel`,
+      successUrl:
+        dto.successUrl || `${process.env.APP_URL}/dashboard/billing/success`,
+      cancelUrl:
+        dto.cancelUrl || `${process.env.APP_URL}/dashboard/billing/cancel`,
       metadata: {
         externalUserId,
         ...dto.metadata,
@@ -212,25 +231,33 @@ export class CheckoutService {
     });
 
     // Only pass metadata ID to Stripe (not all our internal data)
-    const paymentIntent = await this.stripeService.getClient().paymentIntents.create({
-      amount,
-      currency,
-      customer: stripeCustomerId,
-      setup_future_usage: 'off_session', // Save payment method for future subscriptions
-      application_fee_amount: applicationFeeAmount, // Platform fee
-      metadata: {
-        metadataId: checkoutMetadata.id, // Primary reference to our metadata
-        organizationId, // Keep these for backward compatibility
-        externalUserId,
-        productId: product.id,
-        priceId: price.id,
-      },
-    }, {
-      stripeAccount: stripeAccountId, // Create payment intent on connected account
-    });
+    const paymentIntent = await this.stripeService
+      .getClient()
+      .paymentIntents.create(
+        {
+          amount,
+          currency,
+          customer: stripeCustomerId,
+          setup_future_usage: 'off_session', // Save payment method for future subscriptions
+          application_fee_amount: applicationFeeAmount, // Platform fee
+          metadata: {
+            metadataId: checkoutMetadata.id, // Primary reference to our metadata
+            organizationId, // Keep these for backward compatibility
+            externalUserId,
+            productId: product.id,
+            priceId: price.id,
+          },
+        },
+        {
+          stripeAccount: stripeAccountId, // Create payment intent on connected account
+        },
+      );
 
     // Link metadata to payment intent
-    await this.metadataService.linkToCheckoutSession(checkoutMetadata.id, paymentIntent.id);
+    await this.metadataService.linkToCheckoutSession(
+      checkoutMetadata.id,
+      paymentIntent.id,
+    );
 
     // 5. Store payment intent in database
     const { data: paymentIntentRecord, error: piError } = await supabase
@@ -241,7 +268,7 @@ export class CheckoutService {
         stripe_payment_intent_id: paymentIntent.id,
         stripe_customer_id: stripeCustomerId,
         stripe_account_id: stripeAccountId, // Store the connected account ID
-        client_secret: paymentIntent.client_secret!,  // client_secret is always present for new payment intents
+        client_secret: paymentIntent.client_secret!, // client_secret is always present for new payment intents
         amount,
         currency,
         application_fee_amount: applicationFeeAmount, // Store platform fee
@@ -271,10 +298,17 @@ export class CheckoutService {
 
       // Cancel the Stripe payment intent if we can't store it
       try {
-        await this.stripeService.getClient().paymentIntents.cancel(paymentIntent.id);
-        this.logger.warn(`Cancelled Stripe payment intent ${paymentIntent.id} due to database error`);
+        await this.stripeService
+          .getClient()
+          .paymentIntents.cancel(paymentIntent.id);
+        this.logger.warn(
+          `Cancelled Stripe payment intent ${paymentIntent.id} due to database error`,
+        );
       } catch (cancelError) {
-        this.logger.error('Failed to cancel payment intent after database error:', cancelError);
+        this.logger.error(
+          'Failed to cancel payment intent after database error:',
+          cancelError,
+        );
       }
 
       throw new BadRequestException(
@@ -326,7 +360,9 @@ export class CheckoutService {
       .eq('product_id', product.id)
       .order('display_order', { ascending: true });
 
-    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
 
     // Calculate total amount (for now, same as amount since we don't have discounts/tax yet)
     const totalAmount = amount;
@@ -356,7 +392,14 @@ export class CheckoutService {
   async confirmCheckout(
     clientSecret: string,
     dto: ConfirmCheckoutDto,
-  ): Promise<{ status: string; requiresAction: boolean; actionUrl?: string; success: boolean; subscriptionId?: string; message?: string }> {
+  ): Promise<{
+    status: string;
+    requiresAction: boolean;
+    actionUrl?: string;
+    success: boolean;
+    subscriptionId?: string;
+    message?: string;
+  }> {
     try {
       // Handle free checkouts (empty client secret)
       if (!clientSecret || clientSecret === '') {
@@ -385,14 +428,15 @@ export class CheckoutService {
       }
 
       // RETRIEVE the payment intent from Stripe (don't confirm - it's already confirmed by the frontend)
-      const paymentIntent = await this.stripeService.getClient().paymentIntents.retrieve(
-        paymentIntentId,
-        {
+      const paymentIntent = await this.stripeService
+        .getClient()
+        .paymentIntents.retrieve(paymentIntentId, {
           stripeAccount: paymentIntentRecord.stripe_account_id,
-        }
-      );
+        });
 
-      this.logger.log(`Payment Intent ${paymentIntentId} status: ${paymentIntent.status}`);
+      this.logger.log(
+        `Payment Intent ${paymentIntentId} status: ${paymentIntent.status}`,
+      );
 
       // Update status in our database
       await supabase
@@ -430,9 +474,11 @@ export class CheckoutService {
       }
 
       // Check if additional action is required (3D Secure, etc.)
-      if (paymentIntent.status === 'requires_action' &&
-          paymentIntent.next_action?.type === 'redirect_to_url' &&
-          paymentIntent.next_action.redirect_to_url?.url) {
+      if (
+        paymentIntent.status === 'requires_action' &&
+        paymentIntent.next_action?.type === 'redirect_to_url' &&
+        paymentIntent.next_action.redirect_to_url?.url
+      ) {
         return {
           status: 'requires_action',
           requiresAction: true,
@@ -447,25 +493,43 @@ export class CheckoutService {
         success: false,
       };
     } catch (error) {
+      const errorDetails =
+        error instanceof Error
+          ? error
+          : new Error(
+              typeof error === 'string' ? error : 'Unknown error occurred',
+            );
+      const stripeErrorType =
+        typeof error === 'object' &&
+        error !== null &&
+        'type' in error &&
+        typeof error.type === 'string'
+          ? error.type
+          : undefined;
+
       this.logger.error('Failed to confirm payment:', error);
       this.logger.error('Error details:', {
         clientSecret: clientSecret.substring(0, 20) + '...', // Log partial secret for debugging
         paymentMethodId: dto.paymentMethodId,
-        errorMessage: error.message,
-        errorStack: error.stack,
+        errorMessage: errorDetails.message,
+        errorStack: errorDetails.stack,
       });
 
       // Provide more specific error messages
-      if (error.type === 'StripeCardError') {
-        throw new BadRequestException(`Card error: ${error.message}`);
-      } else if (error.type === 'StripeInvalidRequestError') {
-        throw new BadRequestException(`Invalid request: ${error.message}`);
-      } else if (error.type === 'StripeAPIError') {
-        throw new BadRequestException('Payment service temporarily unavailable. Please try again.');
+      if (stripeErrorType === 'StripeCardError') {
+        throw new BadRequestException(`Card error: ${errorDetails.message}`);
+      } else if (stripeErrorType === 'StripeInvalidRequestError') {
+        throw new BadRequestException(
+          `Invalid request: ${errorDetails.message}`,
+        );
+      } else if (stripeErrorType === 'StripeAPIError') {
+        throw new BadRequestException(
+          'Payment service temporarily unavailable. Please try again.',
+        );
       }
 
       throw new BadRequestException(
-        `Failed to confirm payment: ${error.message || 'Unknown error occurred'}`,
+        `Failed to confirm payment: ${errorDetails.message}`,
       );
     }
   }
@@ -476,14 +540,16 @@ export class CheckoutService {
     // Fetch checkout session with all related data
     const { data: session, error: sessionError } = await supabase
       .from('checkout_sessions')
-      .select(`
+      .select(
+        `
         *,
         payment_intent:payment_intents(
           *,
           price:product_prices(*),
           product:products(*)
         )
-      `)
+      `,
+      )
       .eq('id', sessionId)
       .single();
 
@@ -500,11 +566,13 @@ export class CheckoutService {
         // Subscription exists - return full subscription data
         const { data: subscription } = await supabase
           .from('subscriptions')
-          .select(`
+          .select(
+            `
             *,
             product:products(*),
             price:product_prices(*)
-          `)
+          `,
+          )
           .eq('id', sessionWithSubscription.subscription_id)
           .single();
 
@@ -513,7 +581,9 @@ export class CheckoutService {
           const price = subscription.price;
 
           if (!product || !price) {
-            throw new NotFoundException('Product or price not found for free subscription');
+            throw new NotFoundException(
+              'Product or price not found for free subscription',
+            );
           }
 
           // Fetch product features
@@ -523,7 +593,9 @@ export class CheckoutService {
             .eq('product_id', product.id)
             .order('display_order', { ascending: true });
 
-          const features = (productFeatures || []).map((pf: any) => pf.features.title);
+          const features = (productFeatures || []).map(
+            (pf: any) => pf.features.title,
+          );
 
           // Return free checkout session status with subscription
           return {
@@ -533,6 +605,8 @@ export class CheckoutService {
             amount: 0,
             currency: price.price_currency || 'usd',
             totalAmount: 0,
+            status: session.completed_at ? 'completed' : 'pending',
+            expiresAt: session.expires_at,
             product: {
               name: product.name,
               description: product.description || undefined,
@@ -564,7 +638,9 @@ export class CheckoutService {
         const priceId = metadata.priceId;
 
         if (!productId || !priceId) {
-          throw new BadRequestException('Product or price ID missing in session metadata');
+          throw new BadRequestException(
+            'Product or price ID missing in session metadata',
+          );
         }
 
         // Fetch product and price details
@@ -591,7 +667,9 @@ export class CheckoutService {
           .eq('product_id', product.id)
           .order('display_order', { ascending: true });
 
-        const features = (productFeatures || []).map((pf: any) => pf.features.title);
+        const features = (productFeatures || []).map(
+          (pf: any) => pf.features.title,
+        );
 
         // Return free checkout session WITHOUT subscription (pending user confirmation)
         return {
@@ -601,6 +679,11 @@ export class CheckoutService {
           amount: 0,
           currency: price.price_currency || 'usd',
           totalAmount: 0,
+          status:
+            new Date(session.expires_at) < new Date() && !session.completed_at
+              ? 'expired'
+              : 'pending',
+          expiresAt: session.expires_at,
           product: {
             name: product.name,
             description: product.description || undefined,
@@ -632,7 +715,8 @@ export class CheckoutService {
     }
 
     // Check if session has expired
-    const isExpired = new Date(session.expires_at) < new Date() && !session.completed_at;
+    const isExpired =
+      new Date(session.expires_at) < new Date() && !session.completed_at;
 
     // Fetch product features
     const { data: productFeatures } = await supabase
@@ -641,7 +725,9 @@ export class CheckoutService {
       .eq('product_id', product.id)
       .order('display_order', { ascending: true });
 
-    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
 
     // Check if subscription exists for this payment intent
     let subscription: any = null;
@@ -656,14 +742,18 @@ export class CheckoutService {
     }
 
     // Map Stripe status to our status
-    let status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired' = 'pending';
+    let status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired' =
+      'pending';
     if (isExpired) {
       status = 'expired';
     } else if (paymentIntent.status === 'succeeded') {
       status = 'completed';
     } else if (paymentIntent.status === 'processing') {
       status = 'processing';
-    } else if (paymentIntent.status === 'canceled' || paymentIntent.status.includes('failed')) {
+    } else if (
+      paymentIntent.status === 'canceled' ||
+      paymentIntent.status.includes('failed')
+    ) {
       status = 'failed';
     }
 
@@ -688,6 +778,8 @@ export class CheckoutService {
       amount: paymentIntent.amount,
       currency: paymentIntent.currency,
       totalAmount, // Add totalAmount for frontend display
+      status,
+      expiresAt: session.expires_at,
       product: {
         name: product.name,
         interval: price.recurring_interval || 'month',
@@ -700,17 +792,215 @@ export class CheckoutService {
       },
       stripeAccountId: paymentIntent.stripe_account_id || undefined,
       trialDays: product.trial_days || 0,
-      subscription: subscription ? {
-        id: subscription.id,
-        customerId: subscription.customer_id,
-        productId: subscription.product_id,
-        priceId: subscription.price_id,
-        status: subscription.status,
-        currentPeriodStart: subscription.current_period_start,
-        currentPeriodEnd: subscription.current_period_end,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-      } : undefined,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            customerId: subscription.customer_id,
+            productId: subscription.product_id,
+            priceId: subscription.price_id,
+            status: subscription.status,
+            currentPeriodStart: subscription.current_period_start,
+            currentPeriodEnd: subscription.current_period_end,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+          }
+        : undefined,
     };
+  }
+
+  async applyDiscount(
+    sessionId: string,
+    code: string,
+  ): Promise<{
+    discountAmount: number;
+    totalAmount: number;
+    discountLabel: string;
+  }> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: session, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .select('*, payment_intent:payment_intents(*)')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      throw new NotFoundException('Checkout session not found');
+    }
+
+    if (session.completed_at) {
+      throw new BadRequestException('Checkout session already completed');
+    }
+
+    const paymentIntent = session.payment_intent as any;
+    if (!paymentIntent) {
+      throw new BadRequestException('Payment intent not found for session');
+    }
+
+    const organizationId = session.organization_id;
+    const productId = paymentIntent.product_id;
+    const amount = paymentIntent.amount as number;
+    const stripeAccountId = paymentIntent.stripe_account_id as string;
+    const stripePaymentIntentId =
+      paymentIntent.stripe_payment_intent_id as string;
+
+    // Look up discount by code
+    const { data: discount } = await supabase
+      .from('discounts')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('code', code)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (!discount) {
+      throw new BadRequestException('Invalid or expired code');
+    }
+
+    // Check product restrictions
+    const { data: productRestrictions } = await supabase
+      .from('discount_products')
+      .select('product_id')
+      .eq('discount_id', discount.id);
+
+    if (productRestrictions && productRestrictions.length > 0) {
+      const applicableProductIds = productRestrictions.map(
+        (restriction: { product_id: string }) => restriction.product_id,
+      );
+      if (!applicableProductIds.includes(productId)) {
+        throw new BadRequestException('Code not valid for this product');
+      }
+    }
+
+    // Check redemption limits
+    if (
+      discount.max_redemptions &&
+      discount.redemptions_count >= discount.max_redemptions
+    ) {
+      throw new BadRequestException('Code has reached its redemption limit');
+    }
+
+    // Calculate discount amount
+    let discountAmount: number;
+    let discountLabel: string;
+
+    if (discount.type === 'percentage') {
+      const basisPoints = discount.basis_points ?? 0;
+      discountAmount = Math.round((amount * basisPoints) / 100);
+      discountLabel = `${basisPoints}% off`;
+    } else {
+      const fixedAmount = discount.amount ?? 0;
+      discountAmount = Math.min(fixedAmount, amount);
+      const formatted = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: (discount.currency || 'usd').toUpperCase(),
+      }).format(fixedAmount / 100);
+      discountLabel = `-${formatted}`;
+    }
+
+    const newAmount = amount - discountAmount;
+    const applicationFeeAmount = Math.round(newAmount * 0.05);
+
+    // Update Stripe PaymentIntent
+    await this.stripeService
+      .getClient()
+      .paymentIntents.update(
+        stripePaymentIntentId,
+        { amount: newAmount, application_fee_amount: applicationFeeAmount },
+        { stripeAccount: stripeAccountId },
+      );
+
+    // Update payment_intents DB row
+    await supabase
+      .from('payment_intents')
+      .update({
+        amount: newAmount,
+        application_fee_amount: applicationFeeAmount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', paymentIntent.id);
+
+    // Update checkout_sessions.metadata
+    const existingMetadata = (session.metadata as any) || {};
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        metadata: {
+          ...existingMetadata,
+          appliedDiscountId: discount.id,
+          appliedDiscountCode: code,
+          discountAmount,
+          originalAmount: amount,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId);
+
+    return { discountAmount, totalAmount: newAmount, discountLabel };
+  }
+
+  async removeDiscount(sessionId: string): Promise<{ totalAmount: number }> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: session, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .select('*, payment_intent:payment_intents(*)')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      throw new NotFoundException('Checkout session not found');
+    }
+
+    const metadata = (session.metadata as any) || {};
+    const paymentIntent = session.payment_intent as any;
+
+    // Idempotent — no discount applied
+    if (!metadata.appliedDiscountId) {
+      return { totalAmount: paymentIntent?.amount ?? 0 };
+    }
+
+    const originalAmount = metadata.originalAmount as number;
+    const stripePaymentIntentId =
+      paymentIntent.stripe_payment_intent_id as string;
+    const stripeAccountId = paymentIntent.stripe_account_id as string;
+    const applicationFeeAmount = Math.round(originalAmount * 0.05);
+
+    // Restore Stripe PaymentIntent to original amount
+    await this.stripeService.getClient().paymentIntents.update(
+      stripePaymentIntentId,
+      {
+        amount: originalAmount,
+        application_fee_amount: applicationFeeAmount,
+      },
+      { stripeAccount: stripeAccountId },
+    );
+
+    // Update payment_intents DB row
+    await supabase
+      .from('payment_intents')
+      .update({
+        amount: originalAmount,
+        application_fee_amount: applicationFeeAmount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', paymentIntent.id);
+
+    // Clear discount keys from metadata
+    const cleanMetadata = { ...metadata };
+    delete cleanMetadata.appliedDiscountId;
+    delete cleanMetadata.appliedDiscountCode;
+    delete cleanMetadata.discountAmount;
+    delete cleanMetadata.originalAmount;
+
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        metadata: cleanMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId);
+
+    return { totalAmount: originalAmount };
   }
 
   async cleanupExpiredSessions(): Promise<void> {
@@ -770,7 +1060,10 @@ export class CheckoutService {
       .single();
 
     if (sessionError) {
-      this.logger.error('Failed to create free checkout session:', sessionError);
+      this.logger.error(
+        'Failed to create free checkout session:',
+        sessionError,
+      );
       throw new BadRequestException('Failed to create checkout session');
     }
 
@@ -781,7 +1074,9 @@ export class CheckoutService {
       .eq('product_id', product.id)
       .order('display_order', { ascending: true });
 
-    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
 
     // Return checkout session WITHOUT subscription (subscription will be created on confirmation)
     return {
@@ -830,7 +1125,9 @@ export class CheckoutService {
     // 2. Validate it's a free product session
     const sessionMetadata = checkoutSession.metadata as any;
     if (!sessionMetadata?.isFreeProduct) {
-      throw new BadRequestException('This endpoint is only for free product confirmations');
+      throw new BadRequestException(
+        'This endpoint is only for free product confirmations',
+      );
     }
 
     // 3. Check if already confirmed/completed
@@ -844,7 +1141,9 @@ export class CheckoutService {
           .single();
 
         if (existingSubscription) {
-          this.logger.log(`Checkout session already completed, returning existing subscription: ${existingSubscription.id}`);
+          this.logger.log(
+            `Checkout session already completed, returning existing subscription: ${existingSubscription.id}`,
+          );
           return existingSubscription;
         }
       }
@@ -858,7 +1157,9 @@ export class CheckoutService {
     const metadata = sessionMetadata;
 
     if (!customerId || !productId || !priceId) {
-      throw new BadRequestException('Missing required data in checkout session');
+      throw new BadRequestException(
+        'Missing required data in checkout session',
+      );
     }
 
     // 5. Fetch product and price details
@@ -892,13 +1193,23 @@ export class CheckoutService {
 
     if (existingSubscription) {
       // Subscription exists - check status
-      if (existingSubscription.status === 'active' || existingSubscription.status === 'trialing') {
+      if (
+        existingSubscription.status === 'active' ||
+        existingSubscription.status === 'trialing'
+      ) {
         // Already has active subscription - return it
-        this.logger.log(`Customer already has active subscription: ${existingSubscription.id}`);
+        this.logger.log(
+          `Customer already has active subscription: ${existingSubscription.id}`,
+        );
         subscription = existingSubscription;
-      } else if (existingSubscription.status === 'canceled' || existingSubscription.status === 'ended') {
+      } else if (
+        existingSubscription.status === 'canceled' ||
+        existingSubscription.status === 'ended'
+      ) {
         // Reactivate cancelled/ended subscription
-        this.logger.log(`Reactivating subscription: ${existingSubscription.id}`);
+        this.logger.log(
+          `Reactivating subscription: ${existingSubscription.id}`,
+        );
 
         const { data: reactivated, error: reactivateError } = await supabase
           .from('subscriptions')
@@ -915,7 +1226,7 @@ export class CheckoutService {
             ended_at: null,
             updated_at: new Date().toISOString(),
             metadata: {
-              ...(existingSubscription.metadata as any || {}),
+              ...((existingSubscription.metadata as any) || {}),
               isFreeProduct: true,
               reactivatedAt: new Date().toISOString(),
               checkoutSessionId: checkoutSession.id,
@@ -926,14 +1237,19 @@ export class CheckoutService {
           .single();
 
         if (reactivateError) {
-          this.logger.error('Failed to reactivate subscription:', reactivateError);
+          this.logger.error(
+            'Failed to reactivate subscription:',
+            reactivateError,
+          );
           throw new BadRequestException('Failed to reactivate subscription');
         }
 
         subscription = reactivated;
       } else {
         // Other status - create new (shouldn't happen often)
-        throw new BadRequestException(`Cannot subscribe: existing subscription in ${existingSubscription.status} status`);
+        throw new BadRequestException(
+          `Cannot subscribe: existing subscription in ${existingSubscription.status} status`,
+        );
       }
     } else {
       // No existing subscription - create new
@@ -969,7 +1285,10 @@ export class CheckoutService {
         .single();
 
       if (subscriptionError) {
-        this.logger.error('Failed to create free subscription:', subscriptionError);
+        this.logger.error(
+          'Failed to create free subscription:',
+          subscriptionError,
+        );
         throw new BadRequestException('Failed to create subscription');
       }
 
@@ -986,7 +1305,9 @@ export class CheckoutService {
       })
       .eq('id', checkoutSession.id);
 
-    this.logger.log(`Free checkout confirmed, subscription created/reactivated: ${subscription.id}`);
+    this.logger.log(
+      `Free checkout confirmed, subscription created/reactivated: ${subscription.id}`,
+    );
 
     return subscription;
   }
@@ -1006,7 +1327,7 @@ export class CheckoutService {
         endDate.setDate(endDate.getDate() + intervalCount);
         break;
       case 'week':
-        endDate.setDate(endDate.getDate() + (7 * intervalCount));
+        endDate.setDate(endDate.getDate() + 7 * intervalCount);
         break;
       case 'month':
         endDate.setMonth(endDate.getMonth() + intervalCount);

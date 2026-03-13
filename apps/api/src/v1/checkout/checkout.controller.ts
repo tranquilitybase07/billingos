@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -13,8 +14,12 @@ import { ApiTags } from '@nestjs/swagger';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
+import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
-import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
+import {
+  CurrentCustomer,
+  CustomerContext,
+} from '../../auth/decorators/current-customer.decorator';
 import { Observable, interval, switchMap, from, catchError, of } from 'rxjs';
 
 @ApiTags('SDK - Checkout')
@@ -48,7 +53,9 @@ export class CheckoutController {
     @Param('clientSecret') clientSecret: string,
     @Body() dto: ConfirmCheckoutDto,
   ) {
-    this.logger.log(`Confirming checkout for client secret: ${clientSecret.substring(0, 10)}...`);
+    this.logger.log(
+      `Confirming checkout for client secret: ${clientSecret.substring(0, 10)}...`,
+    );
 
     return this.checkoutService.confirmCheckout(clientSecret, dto);
   }
@@ -77,6 +84,21 @@ export class CheckoutController {
     return this.checkoutService.confirmFreeCheckout(sessionId);
   }
 
+  @Post(':sessionId/apply-discount')
+  // No auth guard — sessionId is cryptographically secure UUID acting as bearer
+  async applyDiscount(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: ApplyDiscountDto,
+  ) {
+    return this.checkoutService.applyDiscount(sessionId, dto.code);
+  }
+
+  @Delete(':sessionId/discount')
+  // No auth guard — sessionId is cryptographically secure UUID acting as bearer
+  async removeDiscount(@Param('sessionId') sessionId: string) {
+    return this.checkoutService.removeDiscount(sessionId);
+  }
+
   @Sse(':sessionId/stream')
   streamCheckoutStatus(
     @Param('sessionId') sessionId: string,
@@ -93,7 +115,9 @@ export class CheckoutController {
             } as MessageEvent),
           ),
           catchError((error) => {
-            this.logger.error(`Error getting checkout status: ${error.message}`);
+            this.logger.error(
+              `Error getting checkout status: ${error.message}`,
+            );
             return of({
               data: { error: 'Failed to get status', sessionId },
             } as MessageEvent);

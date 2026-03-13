@@ -9,9 +9,39 @@ import {
 } from '@stripe/react-stripe-js'
 import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js'
 
+interface CheckoutSubscription {
+  id: string
+  customerId: string
+  productId: string
+  priceId: string
+  status: string
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  cancelAtPeriodEnd: boolean
+}
+
+interface CheckoutSessionDetails {
+  id: string
+  clientSecret: string
+  amount: number
+  currency: string
+  totalAmount: number
+  stripeAccountId?: string
+  customer?: {
+    email?: string
+    name?: string
+  }
+  product?: {
+    name?: string
+    description?: string
+    features?: string[]
+  }
+  subscription?: CheckoutSubscription
+}
+
 interface CheckoutFormProps {
-  session: any // CheckoutSessionDetails
-  onSuccess: (subscription: any) => void
+  session: CheckoutSessionDetails
+  onSuccess: (subscription?: CheckoutSubscription) => void
   onError: (error: Error) => void
   onProcessing: () => void
   onHeightChange: (height: number) => void
@@ -23,8 +53,8 @@ function FreeProductCheckout({
   onSuccess,
   onHeightChange
 }: {
-  session: any
-  onSuccess: (subscription: any) => void
+  session: CheckoutSessionDetails
+  onSuccess: (subscription?: CheckoutSubscription) => void
   onHeightChange: (height: number) => void
 }) {
   const [isActivating, setIsActivating] = useState(false)
@@ -105,7 +135,7 @@ function FreeProductCheckout({
 
       {/* Product Details */}
       <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">What You're Getting</h3>
+        <h3 className="font-semibold text-gray-900 mb-4">What You&apos;re Getting</h3>
         <div className="space-y-3 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Product:</span>
@@ -149,11 +179,10 @@ function FreeProductCheckout({
       <button
         onClick={handleActivate}
         disabled={isActivating}
-        className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-          isActivating
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
+        className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${isActivating
+          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
       >
         {isActivating ? (
           <span className="flex items-center justify-center">
@@ -220,14 +249,76 @@ export function CheckoutForm({
   const options: StripeElementsOptions = {
     clientSecret: session.clientSecret,
     appearance: {
-      theme: 'stripe',
+      theme: 'flat',
       variables: {
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontSizeBase: '13px',
+        fontLineHeight: '1.5',
+        borderRadius: '8px',
+        colorBackground: '#f9fafb',
+        colorText: '#111827',
+        colorTextSecondary: '#6b7280',
+        colorTextPlaceholder: '#9ca3af',
         colorPrimary: '#3b82f6',
-        colorBackground: '#ffffff',
-        colorText: '#1f2937',
         colorDanger: '#ef4444',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        borderRadius: '8px'
+        spacingUnit: '3px',
+        spacingGridRow: '12px',
+      },
+      rules: {
+        '.Input': {
+          padding: '10px 12px',
+          backgroundColor: '#f9fafb',
+          border: '1px solid #e5e7eb',
+          boxShadow: 'none',
+          fontSize: '13px',
+          color: '#111827',
+        },
+        '.Input:focus': {
+          backgroundColor: '#ffffff',
+          border: '1px solid #3b82f6',
+          boxShadow: '0 0 0 3px rgba(59,130,246,0.12)',
+          outline: 'none',
+        },
+        '.Input--invalid': {
+          border: '1px solid #ef4444',
+          boxShadow: 'none',
+        },
+        '.Tab': {
+          padding: '8px 10px 7px 10px',
+          border: '1px solid #e5e7eb',
+          backgroundColor: '#f9fafb',
+          boxShadow: 'none',
+          fontSize: '12px',
+          fontWeight: '500',
+          color: '#374151',
+        },
+        '.Tab:hover': {
+          border: '1px solid #d1d5db',
+          backgroundColor: '#f3f4f6',
+          boxShadow: 'none',
+          color: '#111827',
+        },
+        '.Tab--selected, .Tab--selected:focus, .Tab--selected:hover': {
+          border: '1.5px solid #111827',
+          backgroundColor: '#ffffff',
+          boxShadow: 'none',
+          color: '#111827',
+        },
+        '.Label': {
+          fontSize: '12px',
+          fontWeight: '500',
+          color: '#4b5563',
+          marginBottom: '5px',
+        },
+        '.Error': {
+          fontSize: '11px',
+          color: '#ef4444',
+        },
+        '.Block': {
+          backgroundColor: '#f9fafb',
+          boxShadow: 'none',
+          border: '1px solid #e5e7eb',
+        },
       }
     }
   }
@@ -257,32 +348,14 @@ function CheckoutFormInner({
   const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [email, setEmail] = useState(session.customer?.email || '')
-  const [name, setName] = useState(session.customer?.name || '')
   const formRef = useRef<HTMLFormElement>(null)
 
   // Update state when session customer data changes
   useEffect(() => {
     if (session?.customer?.email) {
-      console.log('[CheckoutForm] Setting email from session:', session.customer.email)
       setEmail(session.customer.email)
     }
-    if (session?.customer?.name) {
-      console.log('[CheckoutForm] Setting name from session:', session.customer.name)
-      setName(session.customer.name)
-    }
   }, [session?.customer])
-
-  // Debug logging
-  useEffect(() => {
-    console.log('[CheckoutForm] Session data received:', {
-      sessionId: session?.id,
-      customer: session?.customer,
-      customerEmail: session?.customer?.email,
-      customerName: session?.customer?.name,
-      initialEmail: email,
-      initialName: name,
-    })
-  }, [session, email, name])
 
   // Monitor height changes
   useEffect(() => {
@@ -391,58 +464,50 @@ function CheckoutFormInner({
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+      {/* Email */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Payment Information</h2>
-      </div>
-
-      {/* Customer Information */}
-      <div className="space-y-3">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email
-          </label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            required
-            disabled={isProcessing}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-            Name on Card
-          </label>
-          <input
-            type="text"
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            required
-            disabled={isProcessing}
-          />
-        </div>
+        <label htmlFor="email" className="block text-xs font-medium text-gray-600 mb-1">
+          Email
+        </label>
+        <input
+          type="email"
+          id="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400"
+          required
+          disabled={isProcessing}
+        />
       </div>
 
       {/* Payment Element */}
-      <div className="mt-4">
+      <div>
         <PaymentElement
           options={{
             layout: 'tabs',
-            paymentMethodOrder: ['card', 'apple_pay', 'google_pay']
+            paymentMethodOrder: ['card', 'apple_pay', 'google_pay', 'link'],
+            terms: {
+              card: 'never',
+              applePay: 'never',
+              googlePay: 'never',
+              paypal: 'never',
+              auBecsDebit: 'never',
+              bancontact: 'never',
+              ideal: 'never',
+              sepaDebit: 'never',
+              sofort: 'never',
+              usBankAccount: 'never',
+            }
           }}
         />
       </div>
 
       {/* Error Message */}
       {errorMessage && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{errorMessage}</p>
+        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-xs text-red-600">{errorMessage}</p>
         </div>
       )}
 
@@ -450,32 +515,31 @@ function CheckoutFormInner({
       <button
         type="submit"
         disabled={!stripe || isProcessing}
-        className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-          isProcessing || !stripe
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-colors ${isProcessing || !stripe
+          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          : 'bg-blue-500 text-white hover:bg-blue-600'
+          }`}
       >
         {isProcessing ? (
           <span className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             Processing...
           </span>
         ) : (
-          `Pay ${formatAmount(session.totalAmount || session.amount, session.currency || 'usd')}`
+          `Continue with ${session.product?.name || 'Plan'}`
         )}
       </button>
 
-      {/* Security Note */}
-      <p className="text-xs text-gray-500 text-center mt-4">
-        <span className="inline-flex items-center">
-          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+      {/* Footer */}
+      <p className="text-xs text-gray-400 text-center">
+        <span className="inline-flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
           </svg>
-          Secured by Stripe
+          Powered by BillingOS
         </span>
       </p>
     </form>
