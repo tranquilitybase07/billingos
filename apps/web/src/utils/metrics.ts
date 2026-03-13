@@ -1,6 +1,6 @@
 // Metric formatting utilities
 
-export type MetricType = 'scalar' | 'currency'
+export type MetricType = 'scalar' | 'currency' | 'percentage'
 
 export interface MetricDefinition {
   slug: string
@@ -34,6 +34,9 @@ export function formatMetricValue(
 ): string {
   if (type === 'currency') {
     return formatCurrency(value, currency)
+  }
+  if (type === 'percentage') {
+    return `${value.toFixed(1)}%`
   }
   return formatScalar(value)
 }

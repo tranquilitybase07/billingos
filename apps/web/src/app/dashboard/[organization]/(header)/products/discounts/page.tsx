@@ -5,7 +5,7 @@ import { getOrganizationBySlug } from '@/lib/organization'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: 'Discounts',
+    title: 'Coupons',
   }
 }
 
@@ -32,7 +32,6 @@ export default async function Page({
   return (
     <DiscountsPage
       organizationId={organization.id}
-      organizationSlug={orgSlug}
       pagination={pagination}
       sorting={sorting}
       query={search.query}

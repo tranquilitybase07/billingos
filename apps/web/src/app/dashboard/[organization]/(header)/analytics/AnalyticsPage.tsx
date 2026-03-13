@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
-import { Card, CardContent, CardGhost, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardGhost, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { DataTable, DataTableColumnDef, DataTableColumnHeader } from '@/components/atoms/datatable'
 import {
   Select,
   SelectContent,
@@ -12,24 +13,38 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   useUsageOverview,
   useUsageByFeature,
   useAtRiskCustomers,
   useUsageTrends,
   useMRR,
 } from '@/hooks/queries/analytics'
+import { useListCustomers } from '@/hooks/queries/customers'
 
 interface AnalyticsPageProps {
   organizationId: string
   organizationSlug: string
+}
+
+interface FeatureUsageRow {
+  feature_key: string
+  feature_title: string
+  total_consumed: number
+  avg_per_customer: number
+  customer_count: number
+  at_limit_count: number
+}
+
+interface AtRiskCustomerRow {
+  customer_id: string
+  name: string
+  email: string | null
+  external_id: string | null
+  feature_key: string
+  consumed: number
+  limit: number
+  percentage_used: number
+  resets_at: string
 }
 
 function formatNumber(n: number): string {
@@ -47,6 +62,7 @@ export default function AnalyticsPage({
   const { data: byFeature, isLoading: byFeatureLoading } = useUsageByFeature(organizationId)
   const { data: atRisk, isLoading: atRiskLoading } = useAtRiskCustomers(organizationId, 80)
   const { data: mrr } = useMRR(organizationId)
+  const { data: customersData } = useListCustomers(organizationId, { limit: 1000, page: 1 })
   const { data: trends } = useUsageTrends(
     organizationId,
     selectedFeature,
@@ -58,16 +74,171 @@ export default function AnalyticsPage({
     setSelectedFeature(byFeature.data[0].feature_key)
   }
 
+  const featureUsageRows = (byFeature?.data ?? []) as FeatureUsageRow[]
+  const atRiskRows = (atRisk?.data ?? []) as AtRiskCustomerRow[]
+  const customerById = useMemo(
+    () => new Map((customersData?.data ?? []).map((customer) => [
+      customer.id,
+      {
+        name: customer.name || '',
+        email: customer.email || '',
+        external_id: customer.external_id || '',
+      },
+    ])),
+    [customersData?.data],
+  )
+
+  const featureUsageColumns = useMemo<DataTableColumnDef<FeatureUsageRow>[]>(
+    () => [
+      {
+        accessorKey: 'feature_title',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Feature" />
+        ),
+        cell: ({ row: { original: feature } }) => (
+          <div>
+            <div className="font-medium">{feature.feature_title}</div>
+            <div className="text-xs text-muted-foreground">{feature.feature_key}</div>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'total_consumed',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Total Consumed" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: feature } }) => (
+          <div className="text-right">{formatNumber(feature.total_consumed)}</div>
+        ),
+      },
+      {
+        accessorKey: 'avg_per_customer',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Avg/Customer" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: feature } }) => (
+          <div className="text-right">{formatNumber(feature.avg_per_customer)}</div>
+        ),
+      },
+      {
+        accessorKey: 'customer_count',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Customers" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: feature } }) => (
+          <div className="text-right">{feature.customer_count}</div>
+        ),
+      },
+      {
+        accessorKey: 'at_limit_count',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="At Limit" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: feature } }) => (
+          <div className="text-right">
+            {feature.at_limit_count > 0 ? (
+              <Badge variant="destructive">{feature.at_limit_count}</Badge>
+            ) : (
+              <span className="text-muted-foreground">0</span>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [],
+  )
+
+  const atRiskColumns = useMemo<DataTableColumnDef<AtRiskCustomerRow>[]>(
+    () => [
+      {
+        accessorKey: 'email',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Customer" />
+        ),
+        cell: ({ row: { original: customer } }) => {
+          const customerDetails = customerById.get(customer.customer_id)
+          const displayName =
+            customerDetails?.name ||
+            customer.name ||
+            customerDetails?.email ||
+            customer.email ||
+            customerDetails?.external_id ||
+            customer.external_id ||
+            customer.customer_id
+          const subtitle =
+            customerDetails?.email ||
+            customer.email ||
+            customerDetails?.external_id ||
+            customer.external_id ||
+            customer.customer_id
+
+          return (
+            <div>
+              <div className="font-medium">{displayName}</div>
+              <div className="text-xs text-muted-foreground">{subtitle}</div>
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'feature_key',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Feature" />
+        ),
+      },
+      {
+        id: 'usage',
+        accessorFn: (customer) => customer.consumed,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Usage" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: customer } }) => (
+          <div className="text-right">
+            {formatNumber(customer.consumed)} / {formatNumber(customer.limit)}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'percentage_used',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="% Used" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: customer } }) => (
+          <div className="text-right">
+            <Badge variant={customer.percentage_used >= 100 ? 'destructive' : 'secondary'}>
+              {customer.percentage_used}%
+            </Badge>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'resets_at',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Resets" className="justify-end text-right" />
+        ),
+        cell: ({ row: { original: customer } }) => (
+          <div className="text-right text-sm text-muted-foreground">
+            {new Date(customer.resets_at).toLocaleDateString()}
+          </div>
+        ),
+      },
+    ],
+    [customerById],
+  )
+
   return (
     <DashboardBody>
       <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Analytics</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <p className="text-muted-foreground">
+            Monitor usage trends, feature consumption, and at-risk customers
+          </p>
         </div>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
+          <CardFlat>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Usage
@@ -81,9 +252,9 @@ export default function AnalyticsPage({
                 units consumed this period
               </p>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Active Metered Customers
@@ -97,9 +268,9 @@ export default function AnalyticsPage({
                 customers with usage
               </p>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 At Limit
@@ -113,9 +284,9 @@ export default function AnalyticsPage({
                 customers at quota
               </p>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 MRR
@@ -129,7 +300,7 @@ export default function AnalyticsPage({
                 monthly recurring revenue
               </p>
             </CardContent>
-          </Card>
+          </CardFlat>
         </div>
 
         {/* Usage Trends */}
@@ -187,103 +358,39 @@ export default function AnalyticsPage({
         </CardGhost>
 
         {/* Per-Feature Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Usage by Feature</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {byFeatureLoading ? (
-              <p className="text-muted-foreground text-sm">Loading...</p>
-            ) : !byFeature?.data?.length ? (
-              <p className="text-muted-foreground text-sm">No metered features found.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Feature</TableHead>
-                    <TableHead className="text-right">Total Consumed</TableHead>
-                    <TableHead className="text-right">Avg/Customer</TableHead>
-                    <TableHead className="text-right">Customers</TableHead>
-                    <TableHead className="text-right">At Limit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {byFeature.data.map((f) => (
-                    <TableRow key={f.feature_key}>
-                      <TableCell className="font-medium">
-                        <div>{f.feature_title}</div>
-                        <div className="text-xs text-muted-foreground">{f.feature_key}</div>
-                      </TableCell>
-                      <TableCell className="text-right">{formatNumber(f.total_consumed)}</TableCell>
-                      <TableCell className="text-right">{formatNumber(f.avg_per_customer)}</TableCell>
-                      <TableCell className="text-right">{f.customer_count}</TableCell>
-                      <TableCell className="text-right">
-                        {f.at_limit_count > 0 ? (
-                          <Badge variant="destructive">{f.at_limit_count}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+        <div className="space-y-3">
+          <h2 className="text-2xl font-semibold">Usage by Feature</h2>
+          <DataTable
+            data={featureUsageRows}
+            columns={featureUsageColumns}
+            isLoading={byFeatureLoading}
+            emptyState={(
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No metered features found.
+              </div>
             )}
-          </CardContent>
-        </Card>
+          />
+        </div>
 
         {/* At-Risk Customers */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              At-Risk Customers
-              {atRisk?.total_at_risk ? (
-                <Badge variant="destructive" className="ml-2">{atRisk.total_at_risk}</Badge>
-              ) : null}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {atRiskLoading ? (
-              <p className="text-muted-foreground text-sm">Loading...</p>
-            ) : !atRisk?.data?.length ? (
-              <p className="text-muted-foreground text-sm">No customers approaching usage limits.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Feature</TableHead>
-                    <TableHead className="text-right">Usage</TableHead>
-                    <TableHead className="text-right">% Used</TableHead>
-                    <TableHead className="text-right">Resets</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {atRisk.data.map((c, i) => (
-                    <TableRow key={`${c.customer_id}-${c.feature_key}-${i}`}>
-                      <TableCell>
-                        <div className="font-medium">{c.email || c.external_id}</div>
-                        <div className="text-xs text-muted-foreground">{c.external_id}</div>
-                      </TableCell>
-                      <TableCell>{c.feature_key}</TableCell>
-                      <TableCell className="text-right">
-                        {formatNumber(c.consumed)} / {formatNumber(c.limit)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={c.percentage_used >= 100 ? 'destructive' : 'secondary'}>
-                          {c.percentage_used}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {new Date(c.resets_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+        <div className="space-y-3">
+          <h2 className="text-2xl font-semibold">
+            At-Risk Customers
+            {atRisk?.total_at_risk ? (
+              <Badge variant="destructive" className="ml-2">{atRisk.total_at_risk}</Badge>
+            ) : null}
+          </h2>
+          <DataTable
+            data={atRiskRows}
+            columns={atRiskColumns}
+            isLoading={atRiskLoading}
+            emptyState={(
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No customers approaching usage limits.
+              </div>
             )}
-          </CardContent>
-        </Card>
+          />
+        </div>
       </div>
     </DashboardBody>
   )

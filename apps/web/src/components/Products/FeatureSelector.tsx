@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { Plus, X, GripVertical, Check, Sparkles } from 'lucide-react'
+import { PlusSignIcon, Cancel01Icon, DragDropVerticalIcon, Tick01Icon, SparklesIcon } from 'hugeicons-react'
 import {
   DndContext,
   closestCenter,
@@ -120,7 +120,7 @@ function SortableFeatureItem({
         {...listeners}
         className="cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
       >
-        <GripVertical className="h-4 w-4" />
+        <DragDropVerticalIcon size={16} />
       </div>
 
       {/* Feature Info */}
@@ -158,7 +158,7 @@ function SortableFeatureItem({
 
         {feature.type === 'boolean_flag' && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Check className="h-3 w-3" />
+            <Tick01Icon size={12} />
             Included
           </div>
         )}
@@ -171,7 +171,7 @@ function SortableFeatureItem({
         className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
         onClick={onRemove}
       >
-        <X className="h-4 w-4" />
+        <Cancel01Icon size={16} />
       </Button>
     </div>
   )
@@ -275,7 +275,7 @@ export function FeatureSelector({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" className="w-full justify-start" disabled={isLoading}>
-            <Plus className="mr-2 h-4 w-4" />
+            <PlusSignIcon size={16} className="mr-2" />
             Add Feature
           </Button>
         </PopoverTrigger>
@@ -308,7 +308,7 @@ export function FeatureSelector({
                 >
                   <div className="flex w-full items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                      <Sparkles className="h-4 w-4 text-primary" />
+                      <SparklesIcon size={16} className="text-primary" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="font-medium">Create New Feature</div>
@@ -400,7 +400,7 @@ export function FeatureSelector({
                         className="h-8 w-8 hover:bg-yellow-500/20 hover:text-yellow-700"
                         onClick={() => handleRemoveFeature(selectedFeature.feature_id)}
                       >
-                        <X className="h-4 w-4" />
+                        <Cancel01Icon size={16} />
                       </Button>
                     </div>
                   )
@@ -423,7 +423,7 @@ export function FeatureSelector({
 
       {selectedFeatures.length === 0 && (
         <div className="flex h-32 flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed">
-          <Sparkles className="h-8 w-8 text-muted-foreground/50" />
+          <SparklesIcon size={32} className="text-muted-foreground/50" />
           <div className="text-center">
             <p className="text-sm font-medium">No features added yet</p>
             <p className="text-xs text-muted-foreground">

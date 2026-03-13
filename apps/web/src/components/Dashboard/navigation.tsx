@@ -2,19 +2,19 @@
 
 import { usePathname } from 'next/navigation'
 import {
-  Home,
-  AttachMoney,
-  Settings,
-  People,
-  Inventory as HiveOutlined,
-  Link as LinkOutlined,
-  Discount as DiscountOutlined,
-  Diamond as DiamondOutlined,
-  DonutLarge as DonutLargeOutlined,
-  ShoppingBag as ShoppingBagOutlined,
-  AllInclusive as AllInclusiveOutlined,
-  BarChart,
-} from '@mui/icons-material'
+  Home01Icon,
+  Dollar01Icon,
+  Settings01Icon,
+  User03Icon,
+  CubeIcon,
+  Link01Icon,
+  DiscountTag01Icon,
+  Diamond01Icon,
+  PieChart01Icon,
+  ShoppingBag01Icon,
+  RepeatIcon,
+  BarChartIcon,
+} from 'hugeicons-react'
 import type { Organization } from '@/lib/api/types'
 
 export type SubRoute = {
@@ -47,7 +47,7 @@ const generalRoutesList = (org?: Organization): Route[] => [
   {
     id: "home",
     title: "Home",
-    icon: <Home fontSize="inherit" />,
+    icon: <Home01Icon size={16} />,
     link: `/dashboard/${org?.slug}`,
     checkIsActive: (currentRoute: string) =>
       currentRoute === `/dashboard/${org?.slug}`,
@@ -56,7 +56,7 @@ const generalRoutesList = (org?: Organization): Route[] => [
   {
     id: 'products',
     title: 'Products',
-    icon: <HiveOutlined fontSize="inherit" />,
+    icon: <CubeIcon size={16} />,
     link: `/dashboard/${org?.slug}/products`,
     checkIsActive: (currentRoute: string): boolean => {
       return currentRoute.startsWith(`/dashboard/${org?.slug}/products`)
@@ -66,34 +66,34 @@ const generalRoutesList = (org?: Organization): Route[] => [
       {
         title: 'Catalogue',
         link: `/dashboard/${org?.slug}/products`,
-        icon: <HiveOutlined fontSize="inherit" />,
+        icon: <CubeIcon size={16} />,
       },
       {
         title: 'Checkout Links',
         link: `/dashboard/${org?.slug}/products/checkout-links`,
-        icon: <LinkOutlined fontSize="inherit" />,
+        icon: <Link01Icon size={16} />,
       },
       {
-        title: 'Discounts',
+        title: 'Coupons',
         link: `/dashboard/${org?.slug}/products/discounts`,
-        icon: <DiscountOutlined fontSize="inherit" />,
+        icon: <DiscountTag01Icon size={16} />,
       },
       {
         title: 'Features',
         link: `/dashboard/${org?.slug}/products/features`,
-        icon: <DiamondOutlined fontSize="inherit" />,
+        icon: <Diamond01Icon size={16} />,
       },
       {
         title: 'Meters',
         link: `/dashboard/${org?.slug}/products/meters`,
-        icon: <DonutLargeOutlined fontSize="inherit" />,
+        icon: <PieChart01Icon size={16} />,
       },
     ],
   },
   {
     id: 'sales',
     title: 'Sales',
-    icon: <ShoppingBagOutlined fontSize="inherit" />,
+    icon: <ShoppingBag01Icon size={16} />,
     link: `/dashboard/${org?.slug}/sales`,
     checkIsActive: (currentRoute: string): boolean => {
       return currentRoute.startsWith(`/dashboard/${org?.slug}/sales`)
@@ -103,12 +103,12 @@ const generalRoutesList = (org?: Organization): Route[] => [
       {
         title: 'Subscriptions',
         link: `/dashboard/${org?.slug}/sales/subscriptions`,
-        icon: <AllInclusiveOutlined fontSize="inherit" />,
+        icon: <RepeatIcon size={16} />,
       },
       {
         title: 'Orders',
         link: `/dashboard/${org?.slug}/sales`,
-        icon: <ShoppingBagOutlined fontSize="inherit" />,
+        icon: <ShoppingBag01Icon size={16} />,
       },
     ],
   },
@@ -122,21 +122,21 @@ const organizationRoutesList = (org?: Organization): Route[] => [
     id: "customers",
     title: "Customers",
     link: `/dashboard/${org?.slug}/customers`,
-    icon: <People fontSize="inherit" />,
+    icon: <User03Icon size={16} />,
     if: true,
   },
   {
     id: "analytics",
     title: "Analytics",
     link: `/dashboard/${org?.slug}/analytics`,
-    icon: <BarChart fontSize="inherit" />,
+    icon: <BarChartIcon size={16} />,
     if: true,
   },
   {
     id: "finance",
     title: "Finance",
     link: `/dashboard/${org?.slug}/finance`,
-    icon: <AttachMoney fontSize="inherit" />,
+    icon: <Dollar01Icon size={16} />,
     if: true,
     subs: [
       {
@@ -149,7 +149,7 @@ const organizationRoutesList = (org?: Organization): Route[] => [
     id: "settings",
     title: "Settings",
     link: `/dashboard/${org?.slug}/settings`,
-    icon: <Settings fontSize="inherit" />,
+    icon: <Settings01Icon size={16} />,
     if: true,
     subs: [
       {

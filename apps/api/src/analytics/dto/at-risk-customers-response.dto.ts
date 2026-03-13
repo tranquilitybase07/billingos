@@ -1,5 +1,6 @@
 export class AtRiskCustomerDto {
   customer_id: string;
+  name: string;
   external_id: string;
   email: string;
   feature_key: string;

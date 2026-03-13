@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Sparkles } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tick01Icon, SparklesIcon } from 'hugeicons-react'
+import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -29,6 +29,11 @@ export function LivePreviewCard({
   trialDays,
   className,
 }: LivePreviewCardProps) {
+  const intervalOrder: Record<string, number> = { month: 0, year: 1, week: 2, day: 3 }
+  const sortedPrices = [...prices].sort(
+    (a, b) => (intervalOrder[a.recurring_interval ?? ''] ?? 99) - (intervalOrder[b.recurring_interval ?? ''] ?? 99)
+  )
+
   const hasMultiplePrices = prices.length > 1
   const [selectedInterval, setSelectedInterval] = useState<string>(
     prices.find((p) => p.recurring_interval === 'month')?.recurring_interval ||
@@ -81,7 +86,7 @@ export function LivePreviewCard({
 
   return (
     <div className={cn('sticky top-6', className)}>
-      <Card className="border-2 shadow-lg">
+      <CardFlat>
         <CardHeader className="space-y-1 pb-4">
           <div className="flex items-start justify-between">
             <CardTitle className="text-2xl">
@@ -121,8 +126,8 @@ export function LivePreviewCard({
                 onValueChange={setSelectedInterval}
                 className="w-full"
               >
-                <TabsList className="grid w-full grid-cols-2">
-                  {prices.map((price, index) => (
+                <TabsList className="grid w-full grid-cols-2 rounded-full">
+                  {sortedPrices.map((price, index) => (
                     <TabsTrigger
                       key={`${price.recurring_interval ?? 'one_time'}-${index}`}
                       value={price.recurring_interval || 'month'}
@@ -138,7 +143,7 @@ export function LivePreviewCard({
             {/* Trial Badge */}
             {trialDays > 0 && (
               <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
-                <Sparkles className="h-4 w-4 text-primary" />
+                <SparklesIcon size={16} className="text-primary" />
                 <span className="text-sm font-medium">
                   {trialDays}-day free trial included
                 </span>
@@ -154,7 +159,7 @@ export function LivePreviewCard({
           {/* Features List */}
           <div className="space-y-3 pt-4">
             <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              What's included
+              What&apos;s included
             </div>
             {features.length > 0 ? (
               <ul className="space-y-3">
@@ -163,7 +168,7 @@ export function LivePreviewCard({
                   .map((feature, index) => (
                     <li key={feature.feature_id || `feature-${index}`} className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                        <Check className="h-3.5 w-3.5 text-primary" />
+                        <Tick01Icon size={14} className="text-primary" />
                       </div>
                       <div className="flex-1 space-y-0.5">
                         <div className="text-sm font-medium leading-none">
@@ -189,7 +194,7 @@ export function LivePreviewCard({
             )}
           </div>
         </CardContent>
-      </Card>
+      </CardFlat>
 
       {/* Preview Label */}
       <div className="mt-2 text-center text-xs text-muted-foreground">

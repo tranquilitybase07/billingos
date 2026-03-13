@@ -8,7 +8,7 @@ import MagicLinkForm from './MagicLinkForm';
 import { EmailPasswordForm } from './EmailPasswordForm';
 import LabeledSeparator from '@/components/atoms/LabeledSeparator';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowDown01Icon, ArrowUp01Icon } from 'hugeicons-react';
 
 interface LoginProps {
   returnTo?: string;
@@ -36,9 +36,9 @@ export default function Login({ returnTo, isSignup = false }: LoginProps) {
         >
           <span>Use magic link instead</span>
           {showMagicLink ? (
-            <ChevronUp className="h-4 w-4" />
+            <ArrowUp01Icon size={16} />
           ) : (
-            <ChevronDown className="h-4 w-4" />
+            <ArrowDown01Icon size={16} />
           )}
         </button>
 

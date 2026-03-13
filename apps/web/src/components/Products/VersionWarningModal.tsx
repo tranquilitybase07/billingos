@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, TrendingDown, Users, DollarSign } from 'lucide-react';
+import { Alert01Icon, ChartDecreaseIcon, UserMultiple02Icon, Dollar01Icon } from 'hugeicons-react';
 
 interface VersioningChange {
   type: 'price_increase' | 'price_decrease' | 'price_archive' | 'feature_removal' | 'feature_reduction' | 'trial_reduction';
@@ -51,25 +51,25 @@ export function VersionWarningModal({
     return changes.map(change => {
       if (change.includes('price')) {
         return {
-          icon: <DollarSign className="h-4 w-4" />,
+          icon: <Dollar01Icon size={16} />,
           text: change,
           type: 'price' as const,
         };
       } else if (change.includes('feature') || change.includes('Feature')) {
         return {
-          icon: <TrendingDown className="h-4 w-4" />,
+          icon: <ChartDecreaseIcon size={16} />,
           text: change,
           type: 'feature' as const,
         };
       } else if (change.includes('trial')) {
         return {
-          icon: <AlertTriangle className="h-4 w-4" />,
+          icon: <Alert01Icon size={16} />,
           text: change,
           type: 'trial' as const,
         };
       }
       return {
-        icon: <AlertTriangle className="h-4 w-4" />,
+        icon: <Alert01Icon size={16} />,
         text: change,
         type: 'other' as const,
       };
@@ -83,7 +83,7 @@ export function VersionWarningModal({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+            <Alert01Icon size={20} className="text-yellow-500" />
             Product Version Warning
           </DialogTitle>
           <DialogDescription>
@@ -110,7 +110,7 @@ export function VersionWarningModal({
 
           {/* Impact Summary */}
           <Alert>
-            <AlertTriangle className="h-4 w-4" />
+            <Alert01Icon size={16} />
             <AlertDescription>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -118,20 +118,20 @@ export function VersionWarningModal({
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center gap-2">
-                    <Users className="h-3 w-3" />
+                    <UserMultiple02Icon size={12} />
                     <span>
                       <strong>{affectedSubscriptions}</strong> existing customers will stay on v{currentVersion}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-3 w-3" />
+                    <Alert01Icon size={12} />
                     <span>
                       New customers will get v{newVersion} with the changes
                     </span>
                   </div>
                   {revenueImpact && (
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-3 w-3" />
+                      <Dollar01Icon size={12} />
                       <span>
                         Revenue impact: <strong className="text-red-600">-${revenueImpact.monthly}/mo</strong> until migration
                       </span>

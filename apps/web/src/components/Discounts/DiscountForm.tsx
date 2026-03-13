@@ -24,7 +24,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Autorenew, X, CalendarMonth as CalendarIcon, Search } from '@mui/icons-material'
+import { Rotate01Icon, Cancel01Icon, Calendar01Icon, Search01Icon } from 'hugeicons-react'
 import { format } from 'date-fns'
 import { useState } from 'react'
 import { Discount } from '@/utils/discount'
@@ -187,7 +187,7 @@ export function DiscountForm({
             required
           />
           <p className="text-xs text-muted-foreground">
-            Displayed to customers when they apply the discount
+            Displayed to customers when they apply the coupon
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export function DiscountForm({
               onClick={generateCode}
               title="Generate code"
             >
-              <Autorenew className="h-4 w-4" />
+              <Rotate01Icon size={16} />
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -219,11 +219,11 @@ export function DiscountForm({
           </p>
         </div>
 
-        {/* Discount Type */}
+        {/* Coupon Type */}
         {!isUpdate && (
           <div className="space-y-2">
             <Label>
-              Discount Type <span className="text-destructive">*</span>
+              Coupon Type <span className="text-destructive">*</span>
             </Label>
             <Tabs value={type} onValueChange={(v) => setType(v as any)}>
               <TabsList className="grid w-full grid-cols-2">
@@ -376,7 +376,7 @@ export function DiscountForm({
                     {/* Search */}
                     <div className="border-b p-2">
                       <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Search01Icon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           placeholder="Search products..."
                           value={productSearch}
@@ -451,7 +451,7 @@ export function DiscountForm({
                 </Popover>
                 <p className="text-xs text-muted-foreground">
                   {selectedProductIds.length === 0
-                    ? 'Discount applies to all products.'
+                    ? 'Coupon applies to all products.'
                     : `Only the ${selectedProductIds.length} selected product${selectedProductIds.length > 1 ? 's' : ''} will be eligible.`}
                 </p>
               </div>
@@ -464,7 +464,7 @@ export function DiscountForm({
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <Calendar01Icon size={16} className="mr-2" />
                       {startsAt ? format(startsAt, 'PPP') : 'Pick a date'}
                     </Button>
                   </PopoverTrigger>
@@ -487,7 +487,7 @@ export function DiscountForm({
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <Calendar01Icon size={16} className="mr-2" />
                       {endsAt ? format(endsAt, 'PPP') : 'Pick a date'}
                     </Button>
                   </PopoverTrigger>
@@ -518,8 +518,8 @@ export function DiscountForm({
               ? 'Updating...'
               : 'Creating...'
             : isUpdate
-              ? 'Update Discount'
-              : 'Create Discount'}
+              ? 'Update Coupon'
+              : 'Create Coupon'}
         </Button>
       </div>
     </form>

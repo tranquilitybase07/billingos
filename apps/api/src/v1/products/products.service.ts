@@ -166,16 +166,21 @@ export class V1ProductsService {
           .sort((a: any, b: any) => a.display_order - b.display_order)
           .map((pf: any) => {
             const feature = pf.features;
+            // Merge feature.properties (global) with pf.config (per-product limits)
+            const properties = {
+              ...(feature.properties || {}),
+              ...(pf.config || {}),
+            } as {
+              limit?: number;
+              period?: 'month' | 'year';
+              unit?: string;
+            };
             return {
               id: feature.id,
               name: feature.name,
               title: feature.title,
               type: feature.type as 'boolean_flag' | 'usage_quota' | 'numeric_limit',
-              properties: (feature.properties || {}) as {
-                limit?: number;
-                period?: 'month' | 'year';
-                unit?: string;
-              },
+              properties,
             };
           });
 

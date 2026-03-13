@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ArrowUpRight, Copy, Download } from "lucide-react";
+import { ArrowUpRight01Icon } from "hugeicons-react";
 import Image from "next/image";
 import {
   DropdownMenu,
@@ -35,7 +35,7 @@ interface RevenueChartProps {
 function generateDateLabels(period: TimePeriod): string[] {
   const now = new Date();
   const labels: string[] = [];
-  
+
   switch (period) {
     case "Hourly":
       // Generate last 9 hours
@@ -48,7 +48,7 @@ function generateDateLabels(period: TimePeriod): string[] {
         labels.push(`${displayHour} ${ampm}`);
       }
       break;
-      
+
     case "Daily":
       // Generate last 9 days
       for (let i = 8; i >= 0; i--) {
@@ -57,14 +57,14 @@ function generateDateLabels(period: TimePeriod): string[] {
         labels.push(date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }));
       }
       break;
-      
+
     case "Weekly":
       // Generate last 9 weeks
       for (let i = 8; i >= 0; i--) {
         labels.push(`Week ${9 - i}`);
       }
       break;
-      
+
     case "Monthly":
       // Generate last 9 months
       for (let i = 8; i >= 0; i--) {
@@ -73,7 +73,7 @@ function generateDateLabels(period: TimePeriod): string[] {
         labels.push(date.toLocaleDateString('en-US', { month: 'short' }));
       }
       break;
-      
+
     case "Yearly":
       // Generate last 9 years
       for (let i = 8; i >= 0; i--) {
@@ -82,7 +82,7 @@ function generateDateLabels(period: TimePeriod): string[] {
       }
       break;
   }
-  
+
   return labels;
 }
 
@@ -97,10 +97,10 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
 
   // Generate date labels for x-axis based on selected time period
   const dates = generateDateLabels(timePeriod);
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: '2-digit', 
-    year: 'numeric' 
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric'
   });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -166,7 +166,7 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                 className="hover:bg-base hover:cursor-pointer"
                 onClick={() => setIsShareModalOpen(true)}
               >
-                <ArrowUpRight className="h-5 w-5" />
+                <ArrowUpRight01Icon size={20} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -314,7 +314,6 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                 </div>
               </div>
 
-              {/* Polar Logo */}
               <div className="relative mt-10 flex items-center justify-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
                   <div className="h-6 w-6 rounded-full border-2 border-white"></div>
@@ -333,11 +332,10 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => setSelectedBackground("color")}
-                        className={`h-7 w-7 hover:cursor-pointer rounded-full overflow-hidden border-2 transition-all relative ${
-                          selectedBackground === "color"
+                        className={`h-7 w-7 hover:cursor-pointer rounded-full overflow-hidden border-2 transition-all relative ${selectedBackground === "color"
                             ? "border-blue-500"
                             : "border-border"
-                        }`}
+                          }`}
                       >
                         <Image
                           src="/color_gradient.jpg"
@@ -358,11 +356,10 @@ export function RevenueChart({ timePeriod = "Daily" }: RevenueChartProps) {
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => setSelectedBackground("silver")}
-                        className={`h-7 ml-2 hover:cursor-pointer w-7 rounded-full overflow-hidden border-2 transition-all relative ${
-                          selectedBackground === "silver"
+                        className={`h-7 ml-2 hover:cursor-pointer w-7 rounded-full overflow-hidden border-2 transition-all relative ${selectedBackground === "silver"
                             ? "border-blue-500"
                             : "border-border"
-                        }`}
+                          }`}
                       >
                         <Image
                           src="/silver_chrome.jpg"

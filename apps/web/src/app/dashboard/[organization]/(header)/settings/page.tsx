@@ -22,7 +22,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Loader2, Trash2, Settings, Users, Key } from 'lucide-react'
+import {
+  Loading03Icon,
+  Delete02Icon,
+  Settings01Icon,
+  UserMultiple02Icon,
+  Key01Icon,
+} from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function SettingsPage() {
@@ -92,19 +98,19 @@ export default function SettingsPage() {
           <TabsList>
             <TabsTrigger value="general" asChild>
               <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings01Icon size={16} className="mr-2" />
                 General
               </Link>
             </TabsTrigger>
             <TabsTrigger value="members" asChild>
               <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <Users className="mr-2 h-4 w-4" />
+                <UserMultiple02Icon size={16} className="mr-2" />
                 Members
               </Link>
             </TabsTrigger>
             <TabsTrigger value="api-keys" asChild>
               <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key className="mr-2 h-4 w-4" />
+                <Key01Icon size={16} className="mr-2" />
                 API Keys
               </Link>
             </TabsTrigger>
@@ -167,7 +173,7 @@ export default function SettingsPage() {
             >
               {updateOrganization.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loading03Icon size={16} className="mr-2 animate-spin" />
                   Saving...
                 </>
               ) : (
@@ -190,7 +196,7 @@ export default function SettingsPage() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Delete02Icon size={16} className="mr-2" />
                 Delete Organization
               </Button>
             </AlertDialogTrigger>
@@ -211,7 +217,7 @@ export default function SettingsPage() {
                 >
                   {deleteOrganization.isPending ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loading03Icon size={16} className="mr-2 animate-spin" />
                       Deleting...
                     </>
                   ) : (

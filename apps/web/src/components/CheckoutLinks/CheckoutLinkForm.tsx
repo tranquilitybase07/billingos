@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { DiscountSelector } from '@/components/Discounts/DiscountSelector'
 import { useToast } from '@/hooks/use-toast'
-import { X } from 'lucide-react'
+import { Cancel01Icon } from 'hugeicons-react'
 import { useState } from 'react'
 
 interface CheckoutLinkFormProps {
@@ -101,7 +101,7 @@ export const CheckoutLinkForm = ({
       <div className="flex shrink-0 items-center justify-between border-b px-8 py-6">
         <h2 className="text-xl font-semibold">Create Checkout Link</h2>
         <Button variant="ghost" size="icon" onClick={() => onClose()}>
-          <X className="h-5 w-5" />
+          <Cancel01Icon size={20} />
         </Button>
       </div>
 
@@ -251,7 +251,7 @@ export const CheckoutLinkForm = ({
                       size="icon"
                       onClick={() => removeMetadataField(index)}
                     >
-                      <X className="h-4 w-4" />
+                      <Cancel01Icon size={16} />
                     </Button>
                   </div>
                 ))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft01Icon, ArrowRight01Icon } from 'hugeicons-react'
 import { useMemo } from 'react'
 import { twMerge } from 'tailwind-merge'
 import Button from './Button'
@@ -73,7 +73,7 @@ const Paginator = ({
             currentPage === 1 ? 'cursor-default opacity-50' : '',
           )}
         >
-          <ChevronLeft fontSize="small" />
+          <ArrowLeft01Icon size={16} />
         </Button>
       </a>
       {paginationRange?.map((pageNumber, idx) => {
@@ -128,7 +128,7 @@ const Paginator = ({
             currentPage >= lastPage ? 'cursor-default opacity-50' : '',
           )}
         >
-          <ChevronRight fontSize="small" />
+          <ArrowRight01Icon size={16} />
         </Button>
       </a>
     </div>

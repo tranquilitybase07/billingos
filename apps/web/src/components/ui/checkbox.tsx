@@ -1,7 +1,7 @@
 'use client'
 
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'
-import { Check } from 'lucide-react'
+import { Tick01Icon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -22,7 +22,7 @@ const Checkbox = ({
     <CheckboxPrimitive.Indicator
       className={cn('flex items-center justify-center text-current')}
     >
-      <Check className="h-4 w-4" />
+      <Tick01Icon size={16} />
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>
 )

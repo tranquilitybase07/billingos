@@ -6,8 +6,7 @@ import { ProductThumbnail } from '@/components/Products/ProductThumbnail'
 import { useUpdateProduct } from '@/hooks/queries/products'
 import { useProductVisibility } from '@/hooks/useProductVisibility'
 import { Product, isMeteredPrice, isSeatBasedPrice } from '@/utils/product'
-import { MoreVert as MoreVertOutlined } from '@mui/icons-material'
-import { Eye, EyeOff } from 'lucide-react'
+import { MoreVerticalIcon, ViewIcon, ViewOffIcon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -158,9 +157,9 @@ export const ProductListItem = ({
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-2">
                         {isVisible ? (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
+                          <ViewIcon size={16} className="text-muted-foreground" />
                         ) : (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          <ViewOffIcon size={16} className="text-muted-foreground" />
                         )}
                         <Switch
                           checked={isVisible}
@@ -186,7 +185,7 @@ export const ProductListItem = ({
                     size="icon"
                     className="opacity-50 transition-opacity hover:opacity-100"
                   >
-                    <MoreVertOutlined />
+                    <MoreVerticalIcon size={20} />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">

@@ -992,7 +992,7 @@ export class AnalyticsService {
     organizationId: string,
     threshold: number = 80,
   ): Promise<AtRiskCustomersResponseDto> {
-    const cacheKey = `analytics:${organizationId}:at-risk:${threshold}`;
+    const cacheKey = `analytics:v3:${organizationId}:at-risk:${threshold}`;
 
     const cached = await this.cacheManager.get<AtRiskCustomersResponseDto>(cacheKey);
     if (cached) return cached;
@@ -1008,6 +1008,12 @@ export class AnalyticsService {
         period_end,
         customer_id,
         feature_id,
+        customers (
+          id,
+          name,
+          email,
+          external_id
+        ),
         features!inner (
           name,
           organization_id
@@ -1022,31 +1028,20 @@ export class AnalyticsService {
       throw new BadRequestException('Failed to fetch at-risk customers');
     }
 
-    // Step 2: Get customer details for the customer IDs found
-    const customerIds = [...new Set((records || []).map(r => r.customer_id))];
-    const customerMap = new Map<string, { external_user_id: string; email: string }>();
-
-    if (customerIds.length > 0) {
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id, external_user_id, email')
-        .in('id', customerIds);
-
-      (customers || []).forEach((c: any) => {
-        customerMap.set(c.id, { external_user_id: c.external_user_id || '', email: c.email || '' });
-      });
-    }
-
     const atRisk = (records || [])
       .filter((r: any) => {
         const pct = ((r.consumed_units || 0) / r.limit_units) * 100;
         return pct >= threshold;
       })
       .map((r: any) => {
-        const customer = customerMap.get(r.customer_id);
+        const customer = Array.isArray(r.customers) ? r.customers[0] : r.customers;
         return {
           customer_id: r.customer_id,
-          external_id: customer?.external_user_id || '',
+          name:
+            customer?.name ||
+            (customer?.email ? customer.email.split('@')[0] : '') ||
+            '',
+          external_id: customer?.external_id || '',
           email: customer?.email || '',
           feature_key: r.features?.name || '',
           consumed: r.consumed_units || 0,

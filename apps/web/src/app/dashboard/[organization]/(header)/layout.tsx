@@ -7,7 +7,6 @@ interface HeaderLayoutProps {
 /**
  * Header Layout - Client Component Wrapper
  * Wraps pages with DashboardLayout (sidebar + main content area)
- * Following Polar's pattern for dashboard routes
  */
 export default function HeaderLayout({ children }: HeaderLayoutProps) {
   return <DashboardLayout>{children}</DashboardLayout>

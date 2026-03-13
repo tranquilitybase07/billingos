@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Eye, EyeOff } from 'lucide-react'
+import { ViewIcon, ViewOffIcon } from 'hugeicons-react'
 
 interface EmailPasswordFormProps {
   isSignup?: boolean
@@ -178,9 +178,9 @@ export function EmailPasswordForm({ isSignup = false, returnTo }: EmailPasswordF
             tabIndex={-1}
           >
             {showPassword ? (
-              <EyeOff className="h-4 w-4" />
+              <ViewOffIcon size={16} />
             ) : (
-              <Eye className="h-4 w-4" />
+              <ViewIcon size={16} />
             )}
           </button>
         </div>

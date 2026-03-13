@@ -2,7 +2,7 @@
 
 import { Slot } from '@radix-ui/react-slot'
 import { cva } from 'class-variance-authority'
-import { PanelLeft } from 'lucide-react'
+import { SidebarLeftIcon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -233,7 +233,7 @@ const Sidebar = ({
             : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
           // Adjust the padding for floating and inset variants.
           variant === 'floating' || variant === 'inset'
-            ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]'
+            ? 'py-2 pl-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]'
             : 'group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l',
           className,
         )}
@@ -272,7 +272,7 @@ const SidebarTrigger = ({
       }}
       {...props}
     >
-      <PanelLeft />
+      <SidebarLeftIcon size={16} />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { Save, Eye, EyeOff, Info } from 'lucide-react'
+import { FloppyDiskIcon, ViewIcon, ViewOffIcon, InformationCircleIcon } from 'hugeicons-react'
 import { useProductVisibility } from '@/hooks/useProductVisibility'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
@@ -253,9 +253,9 @@ function EditProductForm({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 {isVisible ? (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <ViewIcon size={16} className="text-muted-foreground" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <ViewOffIcon size={16} className="text-muted-foreground" />
                 )}
                 <span className="text-sm text-muted-foreground">
                   {isVisible ? 'Visible in pricing' : 'Hidden from pricing'}
@@ -267,7 +267,7 @@ function EditProductForm({
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <InformationCircleIcon size={16} className="text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p className="font-medium mb-1">Pricing Table Visibility</p>
@@ -289,7 +289,7 @@ function EditProductForm({
         {/* Left Column: Configuration Forms */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>
@@ -322,10 +322,10 @@ function EditProductForm({
                 </p>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Pricing Engine */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Pricing Engine</CardTitle>
               <CardDescription>
@@ -342,10 +342,10 @@ function EditProductForm({
                 onCurrencyChange={form.setCurrency}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Features & Entitlements */}
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle>Features & Entitlements</CardTitle>
               <CardDescription>
@@ -361,7 +361,7 @@ function EditProductForm({
                 organizationId={organizationId}
               />
             </CardContent>
-          </Card>
+          </CardFlat>
 
           {/* Actions */}
           <div className="flex items-center justify-between rounded-lg border-t bg-muted/30 p-6">
@@ -383,7 +383,7 @@ function EditProductForm({
                 </>
               ) : (
                 <>
-                  <Save className="mr-2 h-4 w-4" />
+                  <FloppyDiskIcon size={16} className="mr-2" />
                   Save Changes
                 </>
               )}

@@ -4,17 +4,17 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  Sparkles,
-  Loader2,
-  Pencil,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  X,
-  Flag,
-  Activity,
-  Hash,
-} from 'lucide-react'
+  StarIcon,
+  Loading03Icon,
+  Edit01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  PlusSignIcon,
+  Cancel01Icon,
+  Flag01Icon,
+  Activity01Icon,
+  HashtagIcon,
+} from 'hugeicons-react'
 import {
   Sheet,
   SheetContent,
@@ -76,7 +76,7 @@ const TYPE_CARDS = [
     label: 'On/Off Feature',
     description: 'Enabled or disabled per plan',
     examples: 'Priority Support, Custom Branding',
-    icon: Flag,
+    icon: Flag01Icon,
     iconColor: 'text-blue-500',
     iconBg: 'bg-blue-500/10',
   },
@@ -85,7 +85,7 @@ const TYPE_CARDS = [
     label: 'Usage Limit',
     description: 'Resets each billing cycle',
     examples: 'API calls/month, Emails/day',
-    icon: Activity,
+    icon: Activity01Icon,
     iconColor: 'text-green-500',
     iconBg: 'bg-green-500/10',
   },
@@ -94,7 +94,7 @@ const TYPE_CARDS = [
     label: 'Fixed Limit',
     description: "Hard cap that doesn't reset",
     examples: 'Team seats, Storage GB',
-    icon: Hash,
+    icon: HashtagIcon,
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-500/10',
   },
@@ -239,7 +239,7 @@ export function CreateFeatureDialog({
         >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="templates">
-              <Sparkles className="mr-2 h-4 w-4" />
+              <StarIcon size={16} />
               Templates
             </TabsTrigger>
             <TabsTrigger value="custom">Custom</TabsTrigger>
@@ -390,7 +390,7 @@ export function CreateFeatureDialog({
                                 Identifier:{' '}
                                 <code className="font-mono">{nameValue}</code>
                               </span>
-                              <Pencil className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                              <Edit01Icon size={12} className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                             </button>
                           ) : (
                             <Controller
@@ -540,9 +540,9 @@ export function CreateFeatureDialog({
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showAdvanced ? (
-                      <ChevronDown className="h-3 w-3" />
+                      <ArrowDown01Icon size={12} />
                     ) : (
-                      <ChevronRight className="h-3 w-3" />
+                      <ArrowRight01Icon size={12} />
                     )}
                     Advanced options
                   </button>
@@ -578,7 +578,7 @@ export function CreateFeatureDialog({
                             className="h-7 w-7 p-0 flex-none"
                             onClick={() => removeField(index)}
                           >
-                            <X className="h-3 w-3" />
+                            <Cancel01Icon size={12} />
                           </Button>
                         </div>
                       ))}
@@ -589,7 +589,7 @@ export function CreateFeatureDialog({
                         className="h-7 text-xs"
                         onClick={() => appendField({ key: '', value: '' })}
                       >
-                        <Plus className="h-3 w-3 mr-1" />
+                        <PlusSignIcon size={12} className="mr-1" />
                         Add field
                       </Button>
                     </div>
@@ -609,7 +609,7 @@ export function CreateFeatureDialog({
                   <Button type="submit" disabled={createFeature.isPending}>
                     {createFeature.isPending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loading03Icon size={16} className="mr-2 animate-spin" />
                         Creating...
                       </>
                     ) : (

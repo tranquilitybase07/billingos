@@ -53,9 +53,9 @@
   --color-red-100: oklch(0.936 0.032 17.717);
   --color-red-200: oklch(0.885 0.062 18.334);
   --color-red-300: oklch(0.808 0.114 19.571);
-  --color-red-400: oklch(0.704 0.191 22.216);
+  --color-red-400: oklch(0.637 0.237 25.331);
   --color-red-500: oklch(0.637 0.237 25.331);
-  --color-red-600: oklch(0.577 0.245 27.325);
+  --color-red-600: oklch(0.637 0.237 25.331);
   --color-red-700: oklch(0.505 0.213 27.518);
   --color-red-800: oklch(0.444 0.177 26.899);
   --color-red-900: oklch(0.396 0.141 25.723);
@@ -74,21 +74,21 @@
   --color-gray-900: oklch(0.21 0.034 264.665);
   --color-gray-950: oklch(0.13 0.028 261.692);
 
-  /* Dark Mode Palette — "Carbon" Pure Neutral (Vercel-style) */
-  /* Sidebar #0d0d0d (13) < Page #181818 (24) < Card #222222 (34) — clear perceptual depth */
-  --color-dark-50:  #e8e8e8;  /* primary text */
-  --color-dark-100: #c8c8c8;  /* secondary text */
-  --color-dark-200: #9a9a9a;  /* muted text, placeholder */
-  --color-dark-300: #6b6b6b;  /* disabled / dimmed text */
-  --color-dark-400: #515151;  /* icon tint, divider accents */
-  --color-dark-450: #404040;  /* INPUT BORDER + SWITCH TRACK — visible gray */
-  --color-dark-500: #333333;  /* STANDARD BORDER — Vercel-style visible border */
-  --color-dark-600: #1f1f1f;  /* subtle border, secondary surface */
-  --color-dark-700: #2a2a2a;  /* hover / muted bg — above card */
-  --color-dark-800: #222222;  /* CARD background — lift above page bg */
-  --color-dark-850: #111111;  /* POPOVER/DROPDOWN bg — well effect */
-  --color-dark-900: #181818;  /* PAGE/CONTENT background — above sidebar */
-  --color-dark-950: #0d0d0d;  /* SIDEBAR background — deep black anchor */
+  /* Dark Mode Palette — "Midnight Slate" Blue-Tinted (Linear/Vercel-style) */
+  /* Subtle blue-gray tint (hue 264, low chroma) for depth and sophistication */
+  --color-dark-50:  oklch(0.93 0.006 264);   /* #e8eaed — primary text */
+  --color-dark-100: oklch(0.81 0.008 264);   /* #c5c9d0 — secondary text */
+  --color-dark-200: oklch(0.63 0.012 264);   /* #949aaa — muted text */
+  --color-dark-300: oklch(0.48 0.014 264);   /* #686e80 — disabled text */
+  --color-dark-400: oklch(0.38 0.016 264);   /* #4e5468 — icon tint */
+  --color-dark-450: oklch(0.32 0.018 264);   /* #3e4458 — input border */
+  --color-dark-500: oklch(0.27 0.018 264);   /* #33384a — standard border */
+  --color-dark-600: oklch(0.20 0.016 264);   /* #252938 — subtle border */
+  --color-dark-700: oklch(0.195 0.014 264);  /* #262a38 — hover/muted bg */
+  --color-dark-800: oklch(0.165 0.012 264);  /* #1e2230 — card bg */
+  --color-dark-850: oklch(0.105 0.01 264);   /* #141722 — popover/well bg */
+  --color-dark-900: oklch(0.125 0.01 264);   /* #181b28 — page bg */
+  --color-dark-950: oklch(0.085 0.012 264);  /* #0e111a — sidebar bg */
 
   /* Base Colors */
   --color-white: #ffffff;
@@ -221,15 +221,15 @@
   }
 
   :root.dark {
-    /* ── "Carbon" Pure Neutral dark theme (darkened for Polar-like depth) ──
-       Sidebar:   #0f0f0f  (--color-dark-950)  ← deep black anchor
-       Page bg:   #141414  (--color-dark-900)  ← content area
-       Cards:     #1e1e1e  (--color-dark-800)  ← lift above page
-       Input bg:  #111111  (--color-dark-850)  ← well effect on cards
-       Hover bg:  #252525  (--color-dark-700)  ← above card for visible hover
-       Borders:   #2a2a2a  (--color-dark-500)  ← subtle neutral border
+    /* ── "Midnight Slate" Blue-Tinted dark theme ──
+       Sidebar:   #0e111a  (--color-dark-950)  ← deep blue-black anchor
+       Page bg:   #181b28  (--color-dark-900)  ← content area
+       Cards:     #1e2230  (--color-dark-800)  ← lift above page
+       Input bg:  #141722  (--color-dark-850)  ← well effect on cards
+       Hover bg:  #262a38  (--color-dark-700)  ← above card for visible hover
+       Borders:   #33384a  (--color-dark-500)  ← subtle blue-tinted border
        Primary:   blue-600
-       Text:      #e8e8e8 primary, #9a9a9a muted
+       Text:      #e8eaed primary, #949aaa muted
     ──────────────────────────────────────────────────────────────── */
     --background: var(--color-dark-900);         /* #181818 — content area bg */
     --foreground: var(--color-dark-50);          /* #e8e8e8 — primary text */
@@ -260,8 +260,8 @@
     --accent: var(--color-dark-700);         /* #252525 — neutral hover bg */
     --accent-foreground: var(--color-dark-50);
 
-    --destructive: var(--color-red-500);
-    --destructive-foreground: var(--color-red-500);
+    --destructive: oklch(0.637 0.237 25.331);
+    --destructive-foreground: oklch(0.97 0.008 25);
 
     --border: var(--color-dark-500);             /* #333333 — all borders (Vercel-style) */
     --input: var(--color-dark-450);              /* #404040 — input border + switch track */
@@ -338,8 +338,8 @@
 
   background: radial-gradient(
     50% 50% at 50% 50%,
-    rgba(74, 108, 247, 0.06) 0%,
-    rgba(15, 15, 15, 0) 100%
+    rgba(74, 108, 247, 0.08) 0%,
+    rgba(14, 17, 26, 0) 100%
   );
   background-size: 1344px 1284px;
   background-position-y: -405px;
@@ -402,6 +402,21 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-label: var(----chart-label);
+  --color-chart-ring-background: var(----chart-ring-background);
+  --color-chart-marker-foreground: var(----chart-marker-foreground);
+  --color-chart-marker-border: var(----chart-marker-border);
+  --color-chart-marker-background: var(----chart-marker-background);
+  --color-chart-tooltip-muted: var(----chart-tooltip-muted);
+  --color-chart-tooltip-foreground: var(----chart-tooltip-foreground);
+  --color-chart-tooltip-background: var(----chart-tooltip-background);
+  --color-chart-grid: var(----chart-grid);
+  --color-chart-crosshair: var(----chart-crosshair);
+  --chart-line-secondary: var(----chart-line-secondary);
+  --chart-line-primary: var(----chart-line-primary);
+  --color-chart-foreground-muted: var(----chart-foreground-muted);
+  --color-chart-foreground: var(----chart-foreground);
+  --color-chart-background: var(----chart-background);
 }
 
 :root {
@@ -420,7 +435,7 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.637 0.237 25.331);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -437,52 +452,118 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --chart-background: oklch(1 0 0);
+  --chart-foreground: oklch(0.145 0.004 285);
+  --chart-foreground-muted: oklch(0.55 0.014 260);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: oklch(0.4 0.1828 274.34);
+  --chart-grid: oklch(0.9 0 0);
+  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
+  --chart-tooltip-foreground: oklch(0.985 0 0);
+  --chart-tooltip-muted: oklch(0.65 0.01 260);
+  --chart-marker-background: oklch(0.97 0.005 260);
+  --chart-marker-border: oklch(0.85 0.01 260);
+  --chart-marker-foreground: oklch(0.3 0.01 260);
+  --chart-ring-background: oklch(0.9 0.005 260 / 0.25);
+  --chart-label: oklch(0.45 0.01 260);
 }
 
 .dark {
-  /* "Carbon" pure neutral — shadcn/ui compatibility overrides (darkened palette) */
-  --background: oklch(0.111 0 0);             /* #181818 — content area */
-  --foreground: oklch(0.92 0 0);              /* #e8e8e8 — primary text */
-  --card: oklch(0.148 0 0);                   /* #222222 — card/panel (lift above page) */
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.075 0 0);                /* #111111 — dropdown bg */
-  --popover-foreground: oklch(0.92 0 0);
-  --primary: oklch(0.546 0.245 262.881);      /* blue-600 — CTA */
+  /* "Midnight Slate" blue-tinted — shadcn/ui compatibility overrides */
+  --background: oklch(0.125 0.01 264);             /* page bg */
+  --foreground: oklch(0.93 0.006 264);             /* primary text */
+  --card: oklch(0.165 0.012 264);                  /* card/panel bg */
+  --card-foreground: oklch(0.93 0.006 264);
+  --popover: oklch(0.105 0.01 264);                /* dropdown bg */
+  --popover-foreground: oklch(0.93 0.006 264);
+  --primary: oklch(0.546 0.245 262.881);           /* blue-600 — CTA */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.159 0 0);              /* #252525 — secondary btn */
-  --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.159 0 0);                  /* #252525 — muted bg */
-  --muted-foreground: oklch(0.63 0 0);        /* #9a9a9a — muted text */
-  --accent: oklch(0.159 0 0);              /* #252525 — neutral hover bg (was blue-600) */
-  --accent-foreground: oklch(0.92 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.223 0 0);                 /* #333333 — border */
-  --input: oklch(0.267 0 0);                  /* #404040 — input border + switch track */
-  --ring: oklch(0.546 0.245 262.881);         /* BLUE focus ring */
+  --secondary: oklch(0.195 0.014 264);             /* secondary btn */
+  --secondary-foreground: oklch(0.93 0.006 264);
+  --muted: oklch(0.195 0.014 264);                 /* muted bg */
+  --muted-foreground: oklch(0.60 0.015 264);       /* muted text */
+  --accent: oklch(0.195 0.014 264);                /* neutral hover bg */
+  --accent-foreground: oklch(0.93 0.006 264);
+  --destructive: oklch(0.637 0.237 25.331);
+  --destructive-foreground: oklch(0.97 0.008 25);
+  --border: oklch(0.27 0.018 264);                 /* standard border */
+  --input: oklch(0.32 0.018 264);                  /* input border + switch track */
+  --ring: oklch(0.546 0.245 262.881);              /* BLUE focus ring */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.057 0 0);                /* #0d0d0d — sidebar deep black anchor */
-  --sidebar-foreground: oklch(0.81 0 0);      /* #c8c8c8 — sidebar labels */
+  --sidebar: oklch(0.085 0.012 264);               /* sidebar deep anchor */
+  --sidebar-foreground: oklch(0.81 0.008 264);     /* sidebar labels */
   --sidebar-primary: oklch(0.546 0.245 262.881);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.159 0 0);         /* #252525 — nav hover */
-  --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(0.223 0 0);         /* #333333 — sidebar dividers */
+  --sidebar-accent: oklch(0.195 0.014 264);        /* nav hover */
+  --sidebar-accent-foreground: oklch(0.93 0.006 264);
+  --sidebar-border: oklch(0.22 0.016 264);         /* sidebar dividers */
   --sidebar-ring: oklch(0.546 0.245 262.881);
+  --chart-background: oklch(0.145 0 0);
+  --chart-foreground: oklch(0.45 0 0);
+  --chart-foreground-muted: oklch(0.65 0.01 260);
+  --chart-crosshair: oklch(0.45 0 0);
+  --chart-grid: oklch(0.25 0 0);
+  --chart-marker-background: oklch(0.25 0.01 260);
+  --chart-marker-border: oklch(0.4 0.01 260);
+  --chart-marker-foreground: oklch(0.9 0 0);
+  --chart-ring-background: oklch(0.35 0.01 260 / 0.25);
+  --chart-label: oklch(0.75 0.01 260);
 }
 
-/* Subtle depth shadow on cards in dark mode */
+/* Subtle depth shadow on cards in dark mode — tinted for cohesion */
 .dark [data-slot="card"],
 .dark .card {
-  box-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow:
+    0 0 0 1px oklch(0.27 0.018 264 / 0.5),
+    0 2px 8px oklch(0 0 0 / 0.3),
+    0 0 1px oklch(0 0 0 / 0.2);
+}
+
+/* Glass effect on dropdowns and popovers in dark mode */
+.dark [data-radix-popper-content-wrapper] > *,
+.dark [data-slot="popover-content"],
+.dark [data-slot="dropdown-menu-content"],
+.dark [data-slot="select-content"] {
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow:
+    0 0 0 1px oklch(0.27 0.018 264 / 0.6),
+    0 8px 32px oklch(0 0 0 / 0.5);
 }
 
 /* Sidebar right border — inset variant has no border by default */
 .dark [data-sidebar="sidebar"] {
   border-right: 1px solid var(--sidebar-border);
+}
+
+/* Smooth transitions for interactive elements in dark mode */
+.dark button,
+.dark a,
+.dark [role="menuitem"],
+.dark [role="option"],
+.dark [role="row"],
+.dark input,
+.dark select,
+.dark textarea {
+  transition: background-color 150ms ease, color 150ms ease,
+              border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Enhanced focus ring with glow in dark mode — scoped to interactive elements only */
+.dark input:focus-visible,
+.dark select:focus-visible,
+.dark textarea:focus-visible,
+.dark button:focus-visible:not([data-slot="table-head"] *),
+.dark [role="menuitem"]:focus-visible,
+.dark [role="option"]:focus-visible,
+.dark a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 3px oklch(0.546 0.245 262.881 / 0.25);
 }
 
 @layer base {

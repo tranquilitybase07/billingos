@@ -14,7 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download as DownloadOutlined } from '@mui/icons-material'
+import {
+  Download01Icon,
+} from 'hugeicons-react'
+import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
+import { useMRR } from '@/hooks/queries/analytics'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import type { SortingState } from '@tanstack/react-table'
@@ -30,6 +34,26 @@ function formatDate(dateStr: string) {
     month: 'short',
     day: 'numeric',
   })
+}
+
+// ── Stats Cards ────────────────────────────────────────────
+
+interface SubscriptionStatsCardsProps {
+  mrr: number
+  activeSubscriptions: number
+  trialConversionRate: number
+  nrr: number
+}
+
+function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate, nrr }: SubscriptionStatsCardsProps) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <MiniMetricChartBox title="MRR" value={mrr} type="currency" />
+      <MiniMetricChartBox title="Active Subscriptions" value={activeSubscriptions} type="scalar" />
+      <MiniMetricChartBox title="Trial Conversion" value={trialConversionRate} type="percentage" />
+      <MiniMetricChartBox title="Net Revenue Retention" value={nrr} type="percentage" />
+    </div>
+  )
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -59,6 +83,19 @@ export default function SubscriptionsPage({
 
   // Fetch real subscriptions for the organization
   const { data: subscriptions, isLoading: isLoadingSubscriptions } = useOrganizationSubscriptions(organizationId)
+
+  // Fetch MRR for stats cards
+  const { data: mrrData } = useMRR(organizationId)
+
+  // Compute stats from subscription data
+  const subscriptionStats = useMemo(() => {
+    if (!subscriptions) return { activeCount: 0, trialConversionRate: 0, nrr: 0 }
+    const active = subscriptions.filter((s) => s.status === 'active').length
+    const trialing = subscriptions.filter((s) => s.status === 'trialing').length
+    const total = subscriptions.length
+    const trialConversionRate = total > 0 ? ((active / Math.max(active + trialing, 1)) * 100) : 0
+    return { activeCount: active, trialConversionRate, nrr: 0 }
+  }, [subscriptions])
 
   // Filter and sort subscriptions based on selected filters and sorting state
   const filteredSubscriptions = useMemo(() => {
@@ -96,8 +133,8 @@ export default function SubscriptionsPage({
     if (sorting.length > 0) {
       const { id, desc } = sorting[0]
       filtered.sort((a, b) => {
-        let valA: any = ''
-        let valB: any = ''
+        let valA: string | number = ''
+        let valB: string | number = ''
 
         if (id === 'customer') {
           valA = a.customer?.name || a.customer?.email || ''
@@ -151,6 +188,18 @@ export default function SubscriptionsPage({
   return (
     <DashboardBody>
       <div className="flex flex-col gap-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold">Subscriptions</h1>
+          <p className="text-muted-foreground">Track subscription status, renewals, and retention metrics</p>
+        </div>
+        {/* Stats Cards */}
+        <SubscriptionStatsCards
+          mrr={mrrData?.mrr ?? 0}
+          activeSubscriptions={subscriptionStats.activeCount}
+          trialConversionRate={subscriptionStats.trialConversionRate}
+          nrr={subscriptionStats.nrr}
+        />
+
         {/* Filters & Actions */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -206,7 +255,7 @@ export default function SubscriptionsPage({
             className="gap-x-2"
             onClick={handleExportCSV}
           >
-            <DownloadOutlined className="h-4 w-4" />
+            <Download01Icon size={16} />
             Export CSV
           </Button>
         </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { OTPInput, OTPInputContext, RenderProps } from 'input-otp'
-import { Dot } from 'lucide-react'
+import { CircleIcon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -68,7 +68,7 @@ InputOTPSlot.displayName = 'InputOTPSlot'
 
 const InputOTPSeparator = ({ ref, ...props }: React.ComponentProps<'div'>) => (
   <div ref={ref} role="separator" {...props}>
-    <Dot />
+    <CircleIcon size={12} />
   </div>
 )
 InputOTPSeparator.displayName = 'InputOTPSeparator'

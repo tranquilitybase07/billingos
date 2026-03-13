@@ -13,7 +13,7 @@ interface Customer {
 }
 
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ArrowLeft01Icon, ArrowRight01Icon, PreviousIcon, NextIcon } from "hugeicons-react";
 
 interface CustomersListProps {
   customers: Customer[];
@@ -78,7 +78,7 @@ export function CustomersList({
               className="h-8 w-8"
               title="First Page"
             >
-              <ChevronsLeft className="h-4 w-4" />
+              <PreviousIcon size={16} />
             </Button>
             <Button
               variant="outline"
@@ -87,7 +87,7 @@ export function CustomersList({
               disabled={page <= 1}
               className="h-8 px-2"
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
+              <ArrowLeft01Icon size={16} className="mr-1" />
             </Button>
           </div>
           
@@ -103,7 +103,7 @@ export function CustomersList({
               disabled={page >= totalPages}
               className="h-8 px-2"
             >
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <ArrowRight01Icon size={16} className="ml-1" />
             </Button>
             <Button
               variant="outline"
@@ -113,7 +113,7 @@ export function CustomersList({
               className="h-8 w-8"
               title="Last Page"
             >
-              <ChevronsRight className="h-4 w-4" />
+              <NextIcon size={16} />
             </Button>
           </div>
         </div>

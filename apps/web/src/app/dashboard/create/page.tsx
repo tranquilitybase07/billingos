@@ -46,7 +46,6 @@ export default function CreateOrganizationPage() {
         email: email || undefined,
       })
 
-      // Following Polar's pattern: redirect directly to the new organization
       // The organization layout will handle membership verification
       router.push(`/dashboard/${organization.slug}`)
     } catch (error: any) {

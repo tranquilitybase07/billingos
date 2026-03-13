@@ -26,10 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { MoreVert as MoreVertOutlined } from '@mui/icons-material'
+import { MoreVerticalIcon } from 'hugeicons-react'
 import { ProductOverview } from './ProductOverview'
-import { ProductMetricsView } from './ProductMetricsView'
 
 export interface ProductPageProps {
   organizationSlug: string
@@ -148,7 +146,7 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost">
-                  <MoreVertOutlined fontSize="small" />
+                  <MoreVerticalIcon size={16} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -198,27 +196,11 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
           </div>
         }
       >
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-8 w-auto">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="metrics">Metrics</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            <ProductOverview
-              organizationSlug={organizationSlug}
-              product={product}
-              isRecurring={isRecurring}
-            />
-          </TabsContent>
-
-          <TabsContent value="metrics">
-            <ProductMetricsView
-              product={product}
-              isRecurring={isRecurring}
-            />
-          </TabsContent>
-        </Tabs>
+        <ProductOverview
+          organizationSlug={organizationSlug}
+          product={product}
+          isRecurring={isRecurring}
+        />
 
       {/* Archive Confirmation Dialog */}
       <AlertDialog open={isArchiveModalShown} onOpenChange={hideArchiveModal}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardFlat, CardContent, CardHeader } from '@/components/ui/card'
 import { formatMetricValue, MetricType } from '@/utils/metrics'
 
 export interface MiniMetricChartBoxProps {
@@ -19,7 +19,7 @@ export const MiniMetricChartBox = ({
   isLoading = false,
 }: MiniMetricChartBoxProps) => {
   return (
-    <Card className="rounded-2xl">
+    <CardFlat className="rounded-2xl">
       <CardHeader className="pb-2">
         <span className="text-sm text-muted-foreground">{title}</span>
       </CardHeader>
@@ -32,6 +32,6 @@ export const MiniMetricChartBox = ({
           </h3>
         )}
       </CardContent>
-    </Card>
+    </CardFlat>
   )
 }

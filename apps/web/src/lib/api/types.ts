@@ -294,6 +294,7 @@ export interface UsageByFeatureResponse {
 
 export interface AtRiskCustomer {
   customer_id: string
+  name: string
   external_id: string
   email: string
   feature_key: string

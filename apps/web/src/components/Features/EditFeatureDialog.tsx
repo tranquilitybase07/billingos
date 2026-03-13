@@ -4,15 +4,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  X,
-  Flag,
-  Activity,
-  Hash,
-} from 'lucide-react'
+  Loading03Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  PlusSignIcon,
+  Cancel01Icon,
+  Flag01Icon,
+  Activity01Icon,
+  HashtagIcon,
+} from 'hugeicons-react'
 import {
   Sheet,
   SheetContent,
@@ -62,21 +62,21 @@ const TYPE_DISPLAY = {
   boolean_flag: {
     label: 'On/Off Feature',
     description: 'Enabled or disabled per plan',
-    icon: Flag,
+    icon: Flag01Icon,
     iconColor: 'text-blue-500',
     iconBg: 'bg-blue-500/10',
   },
   usage_quota: {
     label: 'Usage Limit',
     description: 'Resets each billing cycle',
-    icon: Activity,
+    icon: Activity01Icon,
     iconColor: 'text-green-500',
     iconBg: 'bg-green-500/10',
   },
   numeric_limit: {
     label: 'Fixed Limit',
     description: "Hard cap that doesn't reset",
-    icon: Hash,
+    icon: HashtagIcon,
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-500/10',
   },
@@ -341,9 +341,9 @@ export function EditFeatureDialog({
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showAdvanced ? (
-                  <ChevronDown className="h-3 w-3" />
+                  <ArrowDown01Icon size={12} />
                 ) : (
-                  <ChevronRight className="h-3 w-3" />
+                  <ArrowRight01Icon size={12} />
                 )}
                 Advanced options
               </button>
@@ -372,7 +372,7 @@ export function EditFeatureDialog({
                         className="h-7 w-7 p-0 flex-none"
                         onClick={() => removeField(index)}
                       >
-                        <X className="h-3 w-3" />
+                        <Cancel01Icon size={12} />
                       </Button>
                     </div>
                   ))}
@@ -383,7 +383,7 @@ export function EditFeatureDialog({
                     className="h-7 text-xs"
                     onClick={() => appendField({ key: '', value: '' })}
                   >
-                    <Plus className="h-3 w-3 mr-1" />
+                    <PlusSignIcon size={12} className="mr-1" />
                     Add field
                   </Button>
                 </div>
@@ -444,7 +444,7 @@ export function EditFeatureDialog({
               <Button type="submit" disabled={updateFeature.isPending}>
                 {updateFeature.isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loading03Icon size={16} className="mr-2 animate-spin" />
                     Updating...
                   </>
                 ) : (

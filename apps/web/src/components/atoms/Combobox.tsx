@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Tick01Icon, ArrowUpDownIcon, Loading03Icon } from 'hugeicons-react'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -100,7 +100,7 @@ export function Combobox<T>({
           )}
         >
           {selectedLabel ?? placeholder}
-          <ChevronsUpDown className="opacity-50" />
+          <ArrowUpDownIcon size={16} className="opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
@@ -114,7 +114,7 @@ export function Combobox<T>({
           <CommandList>
             {isLoading ? (
               <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-4 w-4 animate-spin opacity-50" />
+                <Loading03Icon size={16} className="animate-spin opacity-50" />
               </div>
             ) : items.length === 0 ? (
               <CommandEmpty>{emptyLabel}</CommandEmpty>
@@ -132,7 +132,8 @@ export function Combobox<T>({
                       onSelect={handleSelect}
                     >
                       {renderItem ? renderItem(item) : itemLabel}
-                      <Check
+                      <Tick01Icon
+                        size={16}
                         className={cn(
                           'ml-auto',
                           isSelected ? 'opacity-100' : 'opacity-0',
