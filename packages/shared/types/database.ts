@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           account_type: string
           admin_id: string
+          auto_created: boolean | null
           business_type: string | null
           country: string
           created_at: string
@@ -34,11 +35,13 @@ export type Database = {
           processor_fees_applicable: boolean
           status: string
           stripe_id: string | null
+          test_mode: boolean | null
           updated_at: string
         }
         Insert: {
           account_type?: string
           admin_id: string
+          auto_created?: boolean | null
           business_type?: string | null
           country: string
           created_at?: string
@@ -55,11 +58,13 @@ export type Database = {
           processor_fees_applicable?: boolean
           status?: string
           stripe_id?: string | null
+          test_mode?: boolean | null
           updated_at?: string
         }
         Update: {
           account_type?: string
           admin_id?: string
+          auto_created?: boolean | null
           business_type?: string | null
           country?: string
           created_at?: string
@@ -76,6 +81,7 @@ export type Database = {
           processor_fees_applicable?: boolean
           status?: string
           stripe_id?: string | null
+          test_mode?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -294,6 +300,7 @@ export type Database = {
           product_id: string | null
           session_token: string
           status: string | null
+          stripe_subscription_id: string | null
           subscription_id: string | null
           updated_at: string | null
         }
@@ -313,6 +320,7 @@ export type Database = {
           product_id?: string | null
           session_token: string
           status?: string | null
+          stripe_subscription_id?: string | null
           subscription_id?: string | null
           updated_at?: string | null
         }
@@ -332,6 +340,7 @@ export type Database = {
           product_id?: string | null
           session_token?: string
           status?: string | null
+          stripe_subscription_id?: string | null
           subscription_id?: string | null
           updated_at?: string | null
         }
@@ -824,6 +833,7 @@ export type Database = {
           stripe_account_id: string | null
           stripe_customer_id: string | null
           stripe_payment_intent_id: string
+          stripe_subscription_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -842,6 +852,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           stripe_payment_intent_id: string
+          stripe_subscription_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -860,6 +871,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           stripe_payment_intent_id?: string
+          stripe_subscription_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1087,6 +1099,7 @@ export type Database = {
           recurring_interval: string
           recurring_interval_count: number
           stripe_product_id: string | null
+          sync_status: string | null
           trial_days: number | null
           updated_at: string | null
           version: number
@@ -1108,6 +1121,7 @@ export type Database = {
           recurring_interval: string
           recurring_interval_count?: number
           stripe_product_id?: string | null
+          sync_status?: string | null
           trial_days?: number | null
           updated_at?: string | null
           version?: number
@@ -1129,6 +1143,7 @@ export type Database = {
           recurring_interval?: string
           recurring_interval_count?: number
           stripe_product_id?: string | null
+          sync_status?: string | null
           trial_days?: number | null
           updated_at?: string | null
           version?: number
@@ -1535,6 +1550,9 @@ export type Database = {
           current_period_end: string
           current_period_start: string
           customer_id: string
+          discount_amount: number | null
+          discount_code: string | null
+          discount_id: string | null
           ended_at: string | null
           id: string
           metadata: Json | null
@@ -1558,6 +1576,9 @@ export type Database = {
           current_period_end: string
           current_period_start: string
           customer_id: string
+          discount_amount?: number | null
+          discount_code?: string | null
+          discount_id?: string | null
           ended_at?: string | null
           id?: string
           metadata?: Json | null
@@ -1581,6 +1602,9 @@ export type Database = {
           current_period_end?: string
           current_period_start?: string
           customer_id?: string
+          discount_amount?: number | null
+          discount_code?: string | null
+          discount_id?: string | null
           ended_at?: string | null
           id?: string
           metadata?: Json | null
@@ -1601,6 +1625,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_discount_id_fkey"
+            columns: ["discount_id"]
+            isOneToOne: false
+            referencedRelation: "discounts"
             referencedColumns: ["id"]
           },
           {

@@ -16,6 +16,8 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
   const hasSentReadyMessageRef = useRef(false)
   const [discountAmount, setDiscountAmount] = useState(0)
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
+  const [displayCurrency, setDisplayCurrency] = useState<string | undefined>(undefined)
+  const [clientSecretOverride, setClientSecretOverride] = useState<string | null>(null)
   const { session, loading, error, refreshSession } = useCheckoutSession(sessionId)
   const { sendMessage } = useParentMessaging()
 
@@ -25,12 +27,15 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
 
   const handleApplyDiscount = async (code: string) => {
     try {
-      const result = await api.post<{ discountAmount: number; totalAmount: number; discountLabel: string }>(
+      const result = await api.post<{ discountAmount: number; totalAmount: number; discountLabel: string; clientSecret?: string }>(
         `/v1/checkout/${sessionId}/apply-discount`,
         { code },
       )
       setDiscountAmount(result.discountAmount)
       setDisplayTotal(result.totalAmount)
+      if (result.clientSecret) {
+        setClientSecretOverride(result.clientSecret)
+      }
       return { success: true, discountLabel: result.discountLabel }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Invalid or expired code'
@@ -40,9 +45,12 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
 
   const handleRemoveDiscount = async () => {
     try {
-      const result = await api.delete<{ totalAmount: number }>(`/v1/checkout/${sessionId}/discount`)
+      const result = await api.delete<{ totalAmount: number; clientSecret?: string }>(`/v1/checkout/${sessionId}/discount`)
       setDiscountAmount(0)
       setDisplayTotal(null)
+      if (result.clientSecret) {
+        setClientSecretOverride(result.clientSecret)
+      }
     } catch {
       // Swallow — UI already resets
     }
@@ -152,6 +160,8 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
             taxAmount={session.taxAmount}
             totalAmount={displayTotal ?? session.totalAmount}
             proration={session.proration}
+            displayCurrency={displayCurrency}
+            trialDays={session.trialDays}
           />
           <DiscountCode
             onApply={handleApplyDiscount}
@@ -160,9 +170,11 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
         </div>
 
         {/* Right — scrollable */}
-        <div className="overflow-y-auto py-1 pb-6 pr-1">
+        <div className="scrollbar-thin-hover-group min-h-0">
+        <div className="overflow-y-auto h-full py-1 pb-6 pr-1 scrollbar-thin">
           <CheckoutForm
-            session={session}
+            key={clientSecretOverride ?? session.clientSecret}
+            session={clientSecretOverride ? { ...session, clientSecret: clientSecretOverride } : session}
             onSuccess={(subscription) => {
               sendMessage({
                 type: 'CHECKOUT_SUCCESS',
@@ -184,7 +196,12 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
                 payload: { height }
               })
             }}
+            onTotalChange={(total, currency) => {
+              setDisplayTotal(total)
+              setDisplayCurrency(currency)
+            }}
           />
+        </div>
         </div>
       </div>
     </div>

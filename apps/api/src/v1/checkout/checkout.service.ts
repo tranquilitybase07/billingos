@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import Stripe from 'stripe';
 import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
@@ -37,6 +38,7 @@ export interface CheckoutSession {
   customer: CheckoutCustomer;
   stripeAccountId?: string;
   trialDays?: number;
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial';
   subscription?: {
     id: string;
     customerId: string;
@@ -200,9 +202,38 @@ export class CheckoutService {
       );
     }
 
-    // Calculate platform fee (e.g., 5% of the transaction)
-    const platformFeePercentage = 0.05; // 5% platform fee
-    const applicationFeeAmount = Math.round(amount * platformFeePercentage);
+    // Handle adaptive pricing (Stripe Checkout Session with currency selector)
+    if (dto.adaptivePricing) {
+      return this.handleAdaptiveCheckout(
+        organizationId,
+        externalUserId,
+        product,
+        price,
+        stripeCustomerId,
+        stripeAccountId,
+        customerId,
+        customerEmail,
+        customerName,
+        dto,
+      );
+    }
+
+    // Handle trial products — use SetupIntent instead of PaymentIntent ($0 upfront)
+    const isTrialProduct = (product.trial_days || 0) > 0;
+    if (isTrialProduct) {
+      return this.handleTrialCheckout(
+        organizationId,
+        externalUserId,
+        product,
+        price,
+        stripeCustomerId,
+        stripeAccountId,
+        customerId,
+        customerEmail,
+        customerName,
+        dto,
+      );
+    }
 
     // Create metadata record (Autum pattern - store data separately from Stripe)
     const checkoutMetadata = await this.metadataService.createMetadata({
@@ -218,8 +249,8 @@ export class CheckoutService {
       billingInterval: price.recurring_interval as 'month' | 'year' | undefined,
       billingIntervalCount: price.recurring_interval_count || 1,
       trialPeriodDays: product.trial_days || undefined,
-      shouldGrantTrial: false, // Will be determined later based on eligibility
-      featuresToGrant: [], // Will be populated from product features
+      shouldGrantTrial: false,
+      featuresToGrant: [],
       successUrl:
         dto.successUrl || `${process.env.APP_URL}/dashboard/billing/success`,
       cancelUrl:
@@ -230,55 +261,110 @@ export class CheckoutService {
       },
     });
 
-    // Only pass metadata ID to Stripe (not all our internal data)
-    const paymentIntent = await this.stripeService
-      .getClient()
-      .paymentIntents.create(
-        {
-          amount,
-          currency,
-          customer: stripeCustomerId,
-          setup_future_usage: 'off_session', // Save payment method for future subscriptions
-          application_fee_amount: applicationFeeAmount, // Platform fee
-          metadata: {
-            metadataId: checkoutMetadata.id, // Primary reference to our metadata
-            organizationId, // Keep these for backward compatibility
-            externalUserId,
-            productId: product.id,
-            priceId: price.id,
-          },
-        },
-        {
-          stripeAccount: stripeAccountId, // Create payment intent on connected account
-        },
-      );
+    // --- Direct Subscription Creation (Autumn pattern) ---
+    // Instead of creating a standalone PaymentIntent, create the subscription directly.
+    // Stripe generates a PaymentIntent from the subscription's first invoice.
+    // The client confirms THAT PaymentIntent — single atomic charge, no double-billing.
 
-    // Link metadata to payment intent
+    const stripePriceId = price.stripe_price_id;
+    if (!stripePriceId) {
+      throw new BadRequestException('Product price is not linked to Stripe');
+    }
+
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
+      customer: stripeCustomerId,
+      items: [{ price: stripePriceId }],
+      payment_behavior: 'default_incomplete', // Invoice created but not auto-charged
+      payment_settings: {
+        save_default_payment_method: 'on_subscription',
+      },
+      application_fee_percent: 5, // 5% platform fee on every invoice
+      expand: ['latest_invoice'],
+      metadata: {
+        metadataId: checkoutMetadata.id,
+        organizationId,
+        externalUserId,
+        customerId,
+        productId: product.id,
+        priceId: price.id,
+      },
+    };
+
+    let stripeSubscription: Stripe.Subscription;
+    try {
+      stripeSubscription = await this.stripeService.createSubscription(
+        subscriptionParams,
+        stripeAccountId,
+      );
+    } catch (subError) {
+      this.logger.error('Failed to create Stripe subscription:', subError);
+      throw new BadRequestException('Failed to create subscription with Stripe');
+    }
+
+    // Extract the PaymentIntent from the subscription's first invoice.
+    // In Stripe API 2025-12-15.clover, invoice.payment_intent was removed.
+    // Payment intents are now accessed via invoice.payments.data[].payment.payment_intent.
+    const invoice = stripeSubscription.latest_invoice as Stripe.Invoice;
+
+    // Retrieve the invoice with the payment intent expanded
+    const stripeClient = this.stripeService.getClient();
+    const expandedInvoice = await stripeClient.invoices.retrieve(
+      invoice.id,
+      { expand: ['payments.data.payment.payment_intent'] },
+      { stripeAccount: stripeAccountId },
+    );
+
+    const firstPayment = (expandedInvoice as any).payments?.data?.[0];
+    const paymentIntent = firstPayment?.payment
+      ?.payment_intent as Stripe.PaymentIntent | undefined;
+
+    if (!paymentIntent?.client_secret) {
+      this.logger.error('No PaymentIntent found on subscription invoice', {
+        subscriptionId: stripeSubscription.id,
+        invoiceId: invoice.id,
+        paymentsData: (expandedInvoice as any).payments?.data,
+      });
+      // Clean up: cancel the subscription
+      try {
+        await this.stripeService.cancelSubscription(
+          stripeSubscription.id,
+          stripeAccountId,
+        );
+      } catch (e) {
+        this.logger.error('Failed to cancel orphaned subscription:', e);
+      }
+      throw new BadRequestException('Failed to initialize payment');
+    }
+
+    // Link metadata to the subscription's payment intent
     await this.metadataService.linkToCheckoutSession(
       checkoutMetadata.id,
       paymentIntent.id,
     );
 
-    // 5. Store payment intent in database
+    // Store payment intent record in database
+    const applicationFeeAmount = Math.round(amount * 0.05);
     const { data: paymentIntentRecord, error: piError } = await supabase
       .from('payment_intents')
       .insert({
         organization_id: organizationId,
-        customer_id: customerId, // Now we always have a customer ID
+        customer_id: customerId,
         stripe_payment_intent_id: paymentIntent.id,
         stripe_customer_id: stripeCustomerId,
-        stripe_account_id: stripeAccountId, // Store the connected account ID
-        client_secret: paymentIntent.client_secret!, // client_secret is always present for new payment intents
+        stripe_account_id: stripeAccountId,
+        stripe_subscription_id: stripeSubscription.id,
+        client_secret: paymentIntent.client_secret,
         amount,
         currency,
-        application_fee_amount: applicationFeeAmount, // Store platform fee
+        application_fee_amount: applicationFeeAmount,
         status: paymentIntent.status,
         product_id: product.id,
         price_id: price.id,
         metadata: {
-          metadataId: checkoutMetadata.id, // Reference to metadata record
+          metadataId: checkoutMetadata.id,
           externalUserId,
           productName: product.name,
+          subscriptionCreatedDuringCheckout: true,
           ...dto.metadata,
         },
       })
@@ -287,26 +373,19 @@ export class CheckoutService {
 
     if (piError) {
       this.logger.error('Failed to store payment intent:', piError);
-      this.logger.error('Payment intent details:', {
-        stripePaymentIntentId: paymentIntent.id,
-        organizationId,
-        customerId,
-        amount,
-        errorCode: piError.code,
-        errorDetails: piError.details,
-      });
 
-      // Cancel the Stripe payment intent if we can't store it
+      // Cancel the Stripe subscription if we can't store the PI
       try {
-        await this.stripeService
-          .getClient()
-          .paymentIntents.cancel(paymentIntent.id);
+        await this.stripeService.cancelSubscription(
+          stripeSubscription.id,
+          stripeAccountId,
+        );
         this.logger.warn(
-          `Cancelled Stripe payment intent ${paymentIntent.id} due to database error`,
+          `Cancelled Stripe subscription ${stripeSubscription.id} due to database error`,
         );
       } catch (cancelError) {
         this.logger.error(
-          'Failed to cancel payment intent after database error:',
+          'Failed to cancel subscription after database error:',
           cancelError,
         );
       }
@@ -316,23 +395,61 @@ export class CheckoutService {
       );
     }
 
-    // 5. Create checkout session record
+    // Store subscription record in database (status: incomplete, pending payment)
+    const subData = stripeSubscription as any;
+    const { error: subDbError } = await supabase
+      .from('subscriptions')
+      .insert({
+        customer_id: customerId,
+        organization_id: organizationId,
+        product_id: product.id,
+        price_id: price.id,
+        stripe_subscription_id: stripeSubscription.id,
+        status: stripeSubscription.status, // 'incomplete'
+        current_period_start: subData.current_period_start
+          ? new Date(subData.current_period_start * 1000).toISOString()
+          : new Date().toISOString(),
+        current_period_end: subData.current_period_end
+          ? new Date(subData.current_period_end * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        cancel_at_period_end: false,
+        amount,
+        currency,
+        payment_intent_id: paymentIntentRecord.id,
+        metadata: {
+          created_from: 'direct_subscription_checkout',
+          metadataId: checkoutMetadata.id,
+          externalUserId,
+        },
+      });
+
+    if (subDbError) {
+      this.logger.error('Failed to store subscription in database:', subDbError);
+      // Don't cancel the Stripe subscription — the webhook can still handle it.
+      // The subscription exists in Stripe and will be reconciled.
+    }
+
+    // Create checkout session record
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 1); // Expire after 1 hour
+    expiresAt.setHours(expiresAt.getHours() + 1);
 
     const { data: checkoutSession, error: sessionError } = await supabase
       .from('checkout_sessions')
       .insert({
         organization_id: organizationId,
-        session_token: externalUserId, // Using external user ID as session identifier
+        session_token: externalUserId,
         payment_intent_id: paymentIntentRecord.id,
+        stripe_subscription_id: stripeSubscription.id,
         customer_email: customerEmail,
         customer_name: customerName,
         customer_external_id: externalUserId,
         expires_at: expiresAt.toISOString(),
         metadata: {
           ...dto.metadata,
-          existingSubscriptionId: dto.existingSubscriptionId, // Store for upgrade/downgrade flow
+          checkoutMode: 'standard',
+          stripeSubscriptionId: stripeSubscription.id,
+          stripeAccountId,
+          existingSubscriptionId: dto.existingSubscriptionId,
         },
       })
       .select()
@@ -340,20 +457,12 @@ export class CheckoutService {
 
     if (sessionError) {
       this.logger.error('Failed to create checkout session:', sessionError);
-      this.logger.error('Checkout session details:', {
-        paymentIntentId: paymentIntentRecord.id,
-        organizationId,
-        customerEmail: dto.customerEmail,
-        errorCode: sessionError.code,
-        errorDetails: sessionError.details,
-      });
-
       throw new BadRequestException(
         `Failed to create checkout session: ${sessionError.message || 'Database error occurred'}`,
       );
     }
 
-    // 6. Fetch product features
+    // Fetch product features
     const { data: productFeatures } = await supabase
       .from('product_features')
       .select('features(title, properties)')
@@ -364,16 +473,14 @@ export class CheckoutService {
       (pf: any) => pf.features.title,
     );
 
-    // Calculate total amount (for now, same as amount since we don't have discounts/tax yet)
-    const totalAmount = amount;
-
     return {
       id: checkoutSession.id,
-      clientSecret: paymentIntent.client_secret!,
+      clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       amount,
       currency,
-      totalAmount, // Add totalAmount for frontend display
+      totalAmount: amount,
+      checkoutMode: 'standard' as const,
       product: {
         name: product.name,
         interval: price.recurring_interval || 'month',
@@ -702,6 +809,16 @@ export class CheckoutService {
       }
     }
 
+    // Handle adaptive checkout sessions (no payment_intent row)
+    if (!session.payment_intent && metadata?.checkoutMode === 'adaptive') {
+      return this.getAdaptiveCheckoutStatus(session, metadata);
+    }
+
+    // Handle trial checkout sessions (no payment_intent row — uses SetupIntent)
+    if (!session.payment_intent && metadata?.checkoutMode === 'trial') {
+      return this.getTrialCheckoutStatus(session, metadata);
+    }
+
     const paymentIntent = session.payment_intent;
     if (!paymentIntent) {
       throw new NotFoundException('Payment intent not found for session');
@@ -730,6 +847,7 @@ export class CheckoutService {
     );
 
     // Check if subscription exists for this payment intent
+    // Only return subscriptions that are ready (not still in 'incomplete' status)
     let subscription: any = null;
     if (paymentIntent.stripe_payment_intent_id) {
       const { data: subscriptionData } = await supabase
@@ -738,7 +856,10 @@ export class CheckoutService {
         .eq('payment_intent_id', paymentIntent.id)
         .single();
 
-      subscription = subscriptionData;
+      // Filter out incomplete subscriptions — frontend polls until subscription is active
+      if (subscriptionData && subscriptionData.status !== 'incomplete') {
+        subscription = subscriptionData;
+      }
     }
 
     // Map Stripe status to our status
@@ -779,6 +900,11 @@ export class CheckoutService {
       currency: paymentIntent.currency,
       totalAmount, // Add totalAmount for frontend display
       status,
+      checkoutMode: (metadata?.checkoutMode ?? 'standard') as
+        | 'standard'
+        | 'adaptive'
+        | 'free'
+        | 'trial',
       expiresAt: session.expires_at,
       product: {
         name: product.name,
@@ -807,6 +933,128 @@ export class CheckoutService {
     };
   }
 
+  /**
+   * Cancel an incomplete subscription and recreate it with (or without) discounts.
+   * This ensures the first invoice has the correct discounted amount from the start.
+   */
+  private async recreateSubscriptionForDiscount(
+    stripeSubscriptionId: string,
+    stripeAccountId: string,
+    originalSubParams: {
+      customer: string;
+      price: string;
+      metadata: Record<string, string>;
+      applicationFeePercent: number;
+    },
+    discounts: Stripe.SubscriptionCreateParams.Discount[] | undefined,
+    paymentIntentDbId: string,
+    subscriptionDbId: string,
+    checkoutSessionId: string,
+    newAmount: number,
+    currency: string,
+    supabase: ReturnType<SupabaseService['getClient']>,
+  ): Promise<{ clientSecret: string }> {
+    const stripeClient = this.stripeService.getClient();
+
+    // 1. Cancel the current incomplete subscription
+    await stripeClient.subscriptions.cancel(stripeSubscriptionId, {}, { stripeAccount: stripeAccountId });
+    this.logger.log(`Canceled incomplete subscription ${stripeSubscriptionId} for discount recreation`);
+
+    // 2. Create new subscription with discounts included at creation time
+    const createParams: Stripe.SubscriptionCreateParams = {
+      customer: originalSubParams.customer,
+      items: [{ price: originalSubParams.price }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: {
+        save_default_payment_method: 'on_subscription',
+      },
+      application_fee_percent: originalSubParams.applicationFeePercent,
+      expand: ['latest_invoice'],
+      metadata: {
+        ...originalSubParams.metadata,
+        subscriptionCreatedDuringCheckout: 'true',
+      },
+    };
+
+    if (discounts && discounts.length > 0) {
+      createParams.discounts = discounts;
+    }
+
+    const newSubscription = await this.stripeService.createSubscription(
+      createParams,
+      stripeAccountId,
+    );
+
+    // 3. Retrieve invoice with expanded PaymentIntent
+    const invoice = newSubscription.latest_invoice as Stripe.Invoice;
+    const expandedInvoice = await stripeClient.invoices.retrieve(
+      invoice.id,
+      { expand: ['payments.data.payment.payment_intent'] },
+      { stripeAccount: stripeAccountId },
+    );
+
+    const firstPayment = (expandedInvoice as any).payments?.data?.[0];
+    const newPaymentIntent = firstPayment?.payment
+      ?.payment_intent as Stripe.PaymentIntent | undefined;
+
+    if (!newPaymentIntent?.client_secret) {
+      this.logger.error('No PaymentIntent found on recreated subscription invoice', {
+        subscriptionId: newSubscription.id,
+        invoiceId: invoice.id,
+      });
+      throw new BadRequestException('Failed to recreate subscription for discount');
+    }
+
+    // 4. Update DB records BEFORE the webhook for the old subscription arrives
+    const applicationFeeAmount = Math.round(newAmount * 0.05);
+    const subData = newSubscription as any;
+
+    // Update payment_intents row
+    await supabase
+      .from('payment_intents')
+      .update({
+        stripe_payment_intent_id: newPaymentIntent.id,
+        client_secret: newPaymentIntent.client_secret,
+        stripe_subscription_id: newSubscription.id,
+        amount: newAmount,
+        application_fee_amount: applicationFeeAmount,
+        status: newPaymentIntent.status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', paymentIntentDbId);
+
+    // Update subscriptions row
+    await supabase
+      .from('subscriptions')
+      .update({
+        stripe_subscription_id: newSubscription.id,
+        amount: newAmount,
+        status: newSubscription.status,
+        current_period_start: subData.current_period_start
+          ? new Date(subData.current_period_start * 1000).toISOString()
+          : new Date().toISOString(),
+        current_period_end: subData.current_period_end
+          ? new Date(subData.current_period_end * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .eq('id', subscriptionDbId);
+
+    // Update checkout_sessions row (metadata is updated by the caller)
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        stripe_subscription_id: newSubscription.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checkoutSessionId);
+
+    this.logger.log(
+      `Recreated subscription: ${stripeSubscriptionId} → ${newSubscription.id} (amount: ${newAmount})`,
+    );
+
+    return { clientSecret: newPaymentIntent.client_secret };
+  }
+
   async applyDiscount(
     sessionId: string,
     code: string,
@@ -814,6 +1062,7 @@ export class CheckoutService {
     discountAmount: number;
     totalAmount: number;
     discountLabel: string;
+    clientSecret?: string;
   }> {
     const supabase = this.supabaseService.getClient();
 
@@ -831,17 +1080,31 @@ export class CheckoutService {
       throw new BadRequestException('Checkout session already completed');
     }
 
+    const sessionMetadata = (session.metadata as any) || {};
     const paymentIntent = session.payment_intent as any;
-    if (!paymentIntent) {
+    const isAdaptiveSession = sessionMetadata.checkoutMode === 'adaptive';
+    const isTrialSession = sessionMetadata.checkoutMode === 'trial';
+
+    if (!paymentIntent && !isAdaptiveSession && !isTrialSession) {
       throw new BadRequestException('Payment intent not found for session');
     }
 
     const organizationId = session.organization_id;
-    const productId = paymentIntent.product_id;
-    const amount = paymentIntent.amount as number;
-    const stripeAccountId = paymentIntent.stripe_account_id as string;
-    const stripePaymentIntentId =
-      paymentIntent.stripe_payment_intent_id as string;
+    const productId = isAdaptiveSession || isTrialSession
+      ? sessionMetadata.productId
+      : paymentIntent.product_id;
+    const amount = isAdaptiveSession || isTrialSession
+      ? (sessionMetadata.priceAmount as number)
+      : (paymentIntent.amount as number);
+    const stripeAccountId = isAdaptiveSession || isTrialSession
+      ? (sessionMetadata.stripeAccountId as string)
+      : (paymentIntent.stripe_account_id as string);
+    const currency = isAdaptiveSession || isTrialSession
+      ? (sessionMetadata.priceCurrency as string ?? 'usd')
+      : (paymentIntent?.currency as string ?? 'usd');
+    const stripeCheckoutSessionId = isAdaptiveSession
+      ? (sessionMetadata.stripeCheckoutSessionId as string)
+      : null;
 
     // Look up discount by code
     const { data: discount } = await supabase
@@ -900,27 +1163,118 @@ export class CheckoutService {
     const newAmount = amount - discountAmount;
     const applicationFeeAmount = Math.round(newAmount * 0.05);
 
-    // Update Stripe PaymentIntent
-    await this.stripeService
-      .getClient()
-      .paymentIntents.update(
-        stripePaymentIntentId,
-        { amount: newAmount, application_fee_amount: applicationFeeAmount },
-        { stripeAccount: stripeAccountId },
-      );
+    // Build coupon params (shared by adaptive and standard paths)
+    const buildCouponParams = (settlementCurrency: string) => {
+      const discountDuration = discount.duration || 'once';
+      return discount.type === 'percentage'
+        ? {
+            percent_off: discount.basis_points ?? 0,
+            duration: discountDuration,
+            ...(discountDuration === 'repeating' && discount.duration_in_months
+              ? { duration_in_months: discount.duration_in_months }
+              : {}),
+          }
+        : {
+            amount_off: Math.min(discount.amount ?? 0, amount),
+            currency: settlementCurrency,
+            duration: discountDuration,
+            ...(discountDuration === 'repeating' && discount.duration_in_months
+              ? { duration_in_months: discount.duration_in_months }
+              : {}),
+          };
+    };
 
-    // Update payment_intents DB row
-    await supabase
-      .from('payment_intents')
-      .update({
-        amount: newAmount,
-        application_fee_amount: applicationFeeAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', paymentIntent.id);
+    let stripeCouponId: string | null = null;
+    let clientSecretResult: string | undefined;
+
+    if (isTrialSession) {
+      // Trial path: no Stripe object to update (SetupIntent has no amount).
+      // Discount will be applied as coupon when subscription is created in the webhook.
+      this.logger.log(
+        `Trial session: discount ${code} recorded in metadata (coupon applied at subscription creation)`,
+      );
+    } else if (isAdaptiveSession) {
+      // Adaptive path: create a Stripe coupon and apply to Checkout Session
+      const settlementCurrency = sessionMetadata.priceCurrency ?? 'usd';
+      const coupon = await this.stripeService
+        .getClient()
+        .coupons.create(buildCouponParams(settlementCurrency) as any, { stripeAccount: stripeAccountId });
+      stripeCouponId = coupon.id;
+
+      await this.stripeService
+        .getClient()
+        .checkout.sessions.update(
+          stripeCheckoutSessionId!,
+          { discounts: [{ coupon: coupon.id }] } as any,
+          { stripeAccount: stripeAccountId },
+        );
+    } else {
+      // Standard path: cancel + recreate subscription with discount at creation time
+      // This ensures the first invoice has the correct discounted amount.
+      const stripeSubscriptionId = sessionMetadata.stripeSubscriptionId ||
+        (session as any).stripe_subscription_id;
+
+      if (stripeSubscriptionId) {
+        const coupon = await this.stripeService
+          .getClient()
+          .coupons.create(buildCouponParams(currency) as any, { stripeAccount: stripeAccountId });
+        stripeCouponId = coupon.id;
+
+        // Find the subscription DB record
+        const { data: subscriptionRecord } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('payment_intent_id', paymentIntent.id)
+          .single();
+
+        if (!subscriptionRecord) {
+          throw new BadRequestException('Subscription record not found');
+        }
+
+        // Retrieve original subscription to get customer and price info
+        const originalSub = await this.stripeService.getClient()
+          .subscriptions.retrieve(stripeSubscriptionId, { stripeAccount: stripeAccountId });
+
+        const result = await this.recreateSubscriptionForDiscount(
+          stripeSubscriptionId,
+          stripeAccountId,
+          {
+            customer: originalSub.customer as string,
+            price: (originalSub.items.data[0]?.price as any).id,
+            metadata: originalSub.metadata as Record<string, string>,
+            applicationFeePercent: 5,
+          },
+          [{ coupon: coupon.id }],
+          paymentIntent.id,
+          subscriptionRecord.id,
+          sessionId,
+          newAmount,
+          currency,
+          supabase,
+        );
+
+        clientSecretResult = result.clientSecret;
+
+        this.logger.log(
+          `Applied discount via cancel+recreate: coupon ${coupon.id}, new amount ${newAmount}`,
+        );
+      } else {
+        this.logger.error('No subscription ID found for standard checkout discount');
+        throw new BadRequestException('Unable to apply discount — subscription not found');
+      }
+    }
 
     // Update checkout_sessions.metadata
     const existingMetadata = (session.metadata as any) || {};
+    const newStripeSubscriptionId = clientSecretResult
+      ? (await supabase
+          .from('checkout_sessions')
+          .select('stripe_subscription_id')
+          .eq('id', sessionId)
+          .single()
+        ).data?.stripe_subscription_id
+      : null;
+
     await supabase
       .from('checkout_sessions')
       .update({
@@ -930,15 +1284,19 @@ export class CheckoutService {
           appliedDiscountCode: code,
           discountAmount,
           originalAmount: amount,
+          stripeCouponId: stripeCouponId || discount.stripe_coupon_id || null,
+          discountDuration: discount.duration || 'once',
+          discountDurationInMonths: discount.duration_in_months || null,
+          ...(newStripeSubscriptionId ? { stripeSubscriptionId: newStripeSubscriptionId } : {}),
         },
         updated_at: new Date().toISOString(),
       })
       .eq('id', sessionId);
 
-    return { discountAmount, totalAmount: newAmount, discountLabel };
+    return { discountAmount, totalAmount: newAmount, discountLabel, clientSecret: clientSecretResult };
   }
 
-  async removeDiscount(sessionId: string): Promise<{ totalAmount: number }> {
+  async removeDiscount(sessionId: string): Promise<{ totalAmount: number; clientSecret?: string }> {
     const supabase = this.supabaseService.getClient();
 
     const { data: session, error: sessionError } = await supabase
@@ -953,37 +1311,83 @@ export class CheckoutService {
 
     const metadata = (session.metadata as any) || {};
     const paymentIntent = session.payment_intent as any;
+    const isAdaptiveSession = metadata.checkoutMode === 'adaptive';
+    const isTrialSession = metadata.checkoutMode === 'trial';
 
     // Idempotent — no discount applied
     if (!metadata.appliedDiscountId) {
-      return { totalAmount: paymentIntent?.amount ?? 0 };
+      const fallbackAmount = isAdaptiveSession || isTrialSession
+        ? (metadata.priceAmount ?? 0)
+        : (paymentIntent?.amount ?? 0);
+      return { totalAmount: fallbackAmount };
     }
 
     const originalAmount = metadata.originalAmount as number;
-    const stripePaymentIntentId =
-      paymentIntent.stripe_payment_intent_id as string;
-    const stripeAccountId = paymentIntent.stripe_account_id as string;
-    const applicationFeeAmount = Math.round(originalAmount * 0.05);
+    let clientSecretResult: string | undefined;
 
-    // Restore Stripe PaymentIntent to original amount
-    await this.stripeService.getClient().paymentIntents.update(
-      stripePaymentIntentId,
-      {
-        amount: originalAmount,
-        application_fee_amount: applicationFeeAmount,
-      },
-      { stripeAccount: stripeAccountId },
-    );
+    if (isTrialSession) {
+      // Trial path: nothing to update on Stripe (just clear metadata below)
+      this.logger.log('Trial session: removing discount from metadata only');
+    } else if (isAdaptiveSession) {
+      // Remove discount from Stripe Checkout Session
+      const stripeCheckoutSessionId =
+        metadata.stripeCheckoutSessionId as string;
+      const stripeAccountId = metadata.stripeAccountId as string;
+      await this.stripeService
+        .getClient()
+        .checkout.sessions.update(
+          stripeCheckoutSessionId,
+          { discounts: [] } as any,
+          { stripeAccount: stripeAccountId },
+        );
+    } else {
+      // Standard path: cancel + recreate subscription without discount
+      const stripeSubscriptionId = metadata.stripeSubscriptionId ||
+        (session as any).stripe_subscription_id;
+      const stripeAccountId = paymentIntent?.stripe_account_id as string ||
+        metadata.stripeAccountId as string;
 
-    // Update payment_intents DB row
-    await supabase
-      .from('payment_intents')
-      .update({
-        amount: originalAmount,
-        application_fee_amount: applicationFeeAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', paymentIntent.id);
+      if (stripeSubscriptionId && stripeAccountId) {
+        // Find the subscription DB record
+        const { data: subscriptionRecord } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('payment_intent_id', paymentIntent.id)
+          .single();
+
+        if (!subscriptionRecord) {
+          throw new BadRequestException('Subscription record not found');
+        }
+
+        // Retrieve original subscription to get customer and price info
+        const originalSub = await this.stripeService.getClient()
+          .subscriptions.retrieve(stripeSubscriptionId, { stripeAccount: stripeAccountId });
+
+        const result = await this.recreateSubscriptionForDiscount(
+          stripeSubscriptionId,
+          stripeAccountId,
+          {
+            customer: originalSub.customer as string,
+            price: (originalSub.items.data[0]?.price as any).id,
+            metadata: originalSub.metadata as Record<string, string>,
+            applicationFeePercent: 5,
+          },
+          undefined, // No discounts
+          paymentIntent.id,
+          subscriptionRecord.id,
+          sessionId,
+          originalAmount,
+          paymentIntent.currency,
+          supabase,
+        );
+
+        clientSecretResult = result.clientSecret;
+
+        this.logger.log(
+          `Removed discount via cancel+recreate: restored amount ${originalAmount}`,
+        );
+      }
+    }
 
     // Clear discount keys from metadata
     const cleanMetadata = { ...metadata };
@@ -991,6 +1395,21 @@ export class CheckoutService {
     delete cleanMetadata.appliedDiscountCode;
     delete cleanMetadata.discountAmount;
     delete cleanMetadata.originalAmount;
+    delete cleanMetadata.stripeCouponId;
+    delete cleanMetadata.discountDuration;
+    delete cleanMetadata.discountDurationInMonths;
+
+    // Update stripeSubscriptionId in metadata if subscription was recreated
+    if (clientSecretResult) {
+      const { data: updatedSession } = await supabase
+        .from('checkout_sessions')
+        .select('stripe_subscription_id')
+        .eq('id', sessionId)
+        .single();
+      if (updatedSession?.stripe_subscription_id) {
+        cleanMetadata.stripeSubscriptionId = updatedSession.stripe_subscription_id;
+      }
+    }
 
     await supabase
       .from('checkout_sessions')
@@ -1000,7 +1419,7 @@ export class CheckoutService {
       })
       .eq('id', sessionId);
 
-    return { totalAmount: originalAmount };
+    return { totalAmount: originalAmount, clientSecret: clientSecretResult };
   }
 
   async cleanupExpiredSessions(): Promise<void> {
@@ -1015,6 +1434,496 @@ export class CheckoutService {
       })
       .lt('expires_at', new Date().toISOString())
       .is('completed_at', null);
+  }
+
+  /**
+   * Handle trial product checkout — uses SetupIntent (saves card, $0 upfront).
+   * Subscription with trial_period_days is created in the setup_intent.succeeded webhook.
+   */
+  private async handleTrialCheckout(
+    organizationId: string,
+    externalUserId: string,
+    product: any,
+    price: any,
+    stripeCustomerId: string,
+    stripeAccountId: string,
+    customerId: string,
+    customerEmail?: string,
+    customerName?: string,
+    dto?: any,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+
+    const amount = price.price_amount || 0;
+    const currency = price.price_currency || 'usd';
+
+    // Create metadata record (same as standard checkout)
+    const checkoutMetadata = await this.metadataService.createMetadata({
+      organizationId,
+      customerId,
+      productId: product.id,
+      priceId: price.id,
+      customerEmail: customerEmail || '',
+      customerName: customerName || undefined,
+      productName: product.name,
+      priceAmount: amount,
+      currency,
+      billingInterval: price.recurring_interval as 'month' | 'year' | undefined,
+      billingIntervalCount: price.recurring_interval_count || 1,
+      trialPeriodDays: product.trial_days || undefined,
+      shouldGrantTrial: true,
+      featuresToGrant: [],
+      successUrl:
+        dto?.successUrl || `${process.env.APP_URL}/dashboard/billing/success`,
+      cancelUrl:
+        dto?.cancelUrl || `${process.env.APP_URL}/dashboard/billing/cancel`,
+      metadata: {
+        externalUserId,
+        ...dto?.metadata,
+      },
+    });
+
+    // Create SetupIntent — saves card without charging
+    const setupIntent = await this.stripeService
+      .getClient()
+      .setupIntents.create(
+        {
+          customer: stripeCustomerId,
+          usage: 'off_session',
+          metadata: {
+            metadataId: checkoutMetadata.id,
+            organizationId,
+            externalUserId,
+            productId: product.id,
+            priceId: price.id,
+            trialDays: String(product.trial_days || 0),
+            billingInterval: price.recurring_interval || 'month',
+            billingIntervalCount: String(price.recurring_interval_count || 1),
+            isTrialCheckout: 'true',
+          },
+        },
+        { stripeAccount: stripeAccountId },
+      );
+
+    // Link metadata
+    await this.metadataService.linkToCheckoutSession(
+      checkoutMetadata.id,
+      setupIntent.id,
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    // Create checkout session record (no payment_intent_id — trial uses SetupIntent)
+    const { data: checkoutSession, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .insert({
+        organization_id: organizationId,
+        session_token: externalUserId,
+        payment_intent_id: null,
+        customer_email: customerEmail,
+        customer_name: customerName,
+        customer_external_id: externalUserId,
+        expires_at: expiresAt.toISOString(),
+        metadata: {
+          checkoutMode: 'trial',
+          stripeSetupIntentId: setupIntent.id,
+          clientSecret: setupIntent.client_secret,
+          stripeAccountId,
+          productId: product.id,
+          priceId: price.id,
+          customerId,
+          priceAmount: amount,
+          priceCurrency: currency,
+          metadataId: checkoutMetadata.id,
+          trialDays: product.trial_days,
+          existingSubscriptionId: dto?.existingSubscriptionId,
+          ...(dto?.metadata || {}),
+        },
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      this.logger.error('Failed to create trial checkout session:', sessionError);
+      throw new BadRequestException('Failed to create checkout session');
+    }
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    return {
+      id: checkoutSession.id,
+      clientSecret: setupIntent.client_secret!,
+      paymentIntentId: '',
+      amount: 0,
+      currency,
+      totalAmount: 0,
+      checkoutMode: 'trial',
+      product: {
+        name: product.name,
+        description: product.description,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: customerEmail,
+        name: customerName,
+      },
+      stripeAccountId,
+      trialDays: product.trial_days || 0,
+    };
+  }
+
+  /**
+   * Handle checkout with Stripe Adaptive Pricing (Checkout Session, embedded ui_mode)
+   */
+  private async handleAdaptiveCheckout(
+    organizationId: string,
+    externalUserId: string,
+    product: any,
+    price: any,
+    stripeCustomerId: string,
+    stripeAccountId: string,
+    customerId: string,
+    customerEmail?: string,
+    customerName?: string,
+    dto?: any,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+
+    const amount = price.price_amount || 0;
+    const currency = price.price_currency || 'usd';
+
+    // Create metadata record
+    const checkoutMetadata = await this.metadataService.createMetadata({
+      organizationId,
+      customerId,
+      productId: product.id,
+      priceId: price.id,
+      customerEmail: customerEmail || '',
+      customerName: customerName || undefined,
+      productName: product.name,
+      priceAmount: amount,
+      currency,
+      billingInterval: price.recurring_interval as 'month' | 'year' | undefined,
+      billingIntervalCount: price.recurring_interval_count || 1,
+      trialPeriodDays: product.trial_days || undefined,
+      shouldGrantTrial: false,
+      featuresToGrant: [],
+      successUrl:
+        dto?.successUrl || `${process.env.APP_URL}/embed/checkout/complete`,
+      cancelUrl:
+        dto?.cancelUrl || `${process.env.APP_URL}/embed/checkout/cancel`,
+      metadata: {
+        externalUserId,
+        ...dto?.metadata,
+      },
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    // Create Stripe Checkout Session in embedded mode with adaptive pricing
+    const stripeSession = await this.stripeService
+      .getClient()
+      .checkout.sessions.create(
+        {
+          mode: 'subscription',
+          currency,
+          customer: stripeCustomerId,
+          line_items: [{ price: price.stripe_price_id, quantity: 1 }],
+          ui_mode: 'custom',
+          adaptive_pricing: { enabled: true },
+          subscription_data: {
+            application_fee_percent: 5,
+            ...(product.trial_days > 0 ? { trial_period_days: product.trial_days } : {}),
+            metadata: {
+              metadataId: checkoutMetadata.id,
+              organizationId,
+              externalUserId,
+              productId: product.id,
+              priceId: price.id,
+            },
+          },
+          metadata: {
+            metadataId: checkoutMetadata.id,
+            organizationId,
+            externalUserId,
+            productId: product.id,
+            priceId: price.id,
+          },
+          return_url: `${process.env.APP_URL}/embed/checkout/complete`,
+          expires_at: Math.floor(expiresAt.getTime() / 1000),
+        } as any,
+        { stripeAccount: stripeAccountId },
+      );
+
+    // Link metadata to this Stripe Checkout Session
+    await this.metadataService.linkToCheckoutSession(
+      checkoutMetadata.id,
+      stripeSession.id,
+    );
+
+    // Create checkout_sessions record (no payment_intent_id for adaptive)
+    const { data: checkoutSession, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .insert({
+        organization_id: organizationId,
+        session_token: externalUserId,
+        payment_intent_id: null,
+        customer_email: customerEmail,
+        customer_name: customerName,
+        customer_external_id: externalUserId,
+        expires_at: expiresAt.toISOString(),
+        metadata: {
+          checkoutMode: 'adaptive',
+          stripeCheckoutSessionId: stripeSession.id,
+          clientSecret: stripeSession.client_secret,
+          stripeAccountId,
+          productId: product.id,
+          priceId: price.id,
+          customerId,
+          priceAmount: amount,
+          priceCurrency: currency,
+          metadataId: checkoutMetadata.id,
+          existingSubscriptionId: dto?.existingSubscriptionId,
+          ...(dto?.metadata || {}),
+        },
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      this.logger.error(
+        'Failed to create adaptive checkout session:',
+        sessionError,
+      );
+      throw new BadRequestException('Failed to create checkout session');
+    }
+
+    // Fetch product features for display
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    return {
+      id: checkoutSession.id,
+      clientSecret: stripeSession.client_secret!,
+      paymentIntentId: '',
+      amount,
+      currency,
+      totalAmount: amount,
+      checkoutMode: 'adaptive',
+      product: {
+        name: product.name,
+        description: product.description,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: customerEmail,
+        name: customerName,
+      },
+      stripeAccountId,
+      trialDays: product.trial_days || 0,
+    };
+  }
+
+  /**
+   * Return status for a trial checkout session (uses SetupIntent, no payment)
+   */
+  private async getTrialCheckoutStatus(
+    session: any,
+    metadata: any,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+
+    const [{ data: product }, { data: price }] = await Promise.all([
+      supabase.from('products').select('*').eq('id', productId).single(),
+      supabase.from('product_prices').select('*').eq('id', priceId).single(),
+    ]);
+
+    if (!product || !price) {
+      throw new NotFoundException('Product or price not found for trial session');
+    }
+
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map((pf: any) => pf.features.title);
+
+    const isExpired =
+      new Date(session.expires_at) < new Date() && !session.completed_at;
+
+    let subscription: any = null;
+    if ((session as any).subscription_id) {
+      const { data: subscriptionData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', (session as any).subscription_id)
+        .single();
+      subscription = subscriptionData;
+    }
+
+    const status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired' =
+      isExpired ? 'expired' : session.completed_at ? 'completed' : 'pending';
+
+    return {
+      id: session.id,
+      clientSecret: metadata.clientSecret || '',
+      paymentIntentId: '',
+      amount: 0,
+      currency: metadata.priceCurrency || price.price_currency || 'usd',
+      totalAmount: 0,
+      status,
+      checkoutMode: 'trial',
+      expiresAt: session.expires_at,
+      product: {
+        name: product.name,
+        description: product.description || undefined,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: session.customer_email || undefined,
+        name: session.customer_name || undefined,
+      },
+      stripeAccountId: metadata.stripeAccountId || undefined,
+      trialDays: product.trial_days || 0,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            customerId: subscription.customer_id,
+            productId: subscription.product_id,
+            priceId: subscription.price_id || '',
+            status: subscription.status,
+            currentPeriodStart: subscription.current_period_start,
+            currentPeriodEnd: subscription.current_period_end,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Return status for an adaptive checkout session (no payment_intent record)
+   */
+  private async getAdaptiveCheckoutStatus(
+    session: any,
+    metadata: any,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+
+    // Fetch product and price details
+    const [{ data: product }, { data: price }] = await Promise.all([
+      supabase.from('products').select('*').eq('id', productId).single(),
+      supabase.from('product_prices').select('*').eq('id', priceId).single(),
+    ]);
+
+    if (!product || !price) {
+      throw new NotFoundException(
+        'Product or price not found for adaptive session',
+      );
+    }
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    const isExpired =
+      new Date(session.expires_at) < new Date() && !session.completed_at;
+
+    // Check if subscription has been created (via webhook)
+    let subscription: any = null;
+    if ((session as any).subscription_id) {
+      const { data: subscriptionData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', (session as any).subscription_id)
+        .single();
+      subscription = subscriptionData;
+    }
+
+    const status:
+      | 'pending'
+      | 'processing'
+      | 'completed'
+      | 'failed'
+      | 'expired' = isExpired
+      ? 'expired'
+      : session.completed_at
+        ? 'completed'
+        : 'pending';
+
+    return {
+      id: session.id,
+      clientSecret: metadata.clientSecret || '',
+      paymentIntentId: '',
+      amount: metadata.priceAmount || price.price_amount || 0,
+      currency: metadata.priceCurrency || price.price_currency || 'usd',
+      totalAmount: metadata.priceAmount || price.price_amount || 0,
+      status,
+      checkoutMode: 'adaptive',
+      expiresAt: session.expires_at,
+      product: {
+        name: product.name,
+        description: product.description || undefined,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: session.customer_email || undefined,
+        name: session.customer_name || undefined,
+      },
+      stripeAccountId: metadata.stripeAccountId || undefined,
+      trialDays: product.trial_days || 0,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            customerId: subscription.customer_id,
+            productId: subscription.product_id,
+            priceId: subscription.price_id || '',
+            status: subscription.status,
+            currentPeriodStart: subscription.current_period_start,
+            currentPeriodEnd: subscription.current_period_end,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+          }
+        : undefined,
+    };
   }
 
   /**
