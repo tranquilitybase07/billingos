@@ -16,6 +16,9 @@ interface ProductSummaryProps {
     credit: number
     charge: number
   }
+  /** Override currency for the total display (used in adaptive pricing when customer selects a currency) */
+  displayCurrency?: string
+  trialDays?: number
 }
 
 export function ProductSummary({
@@ -25,12 +28,14 @@ export function ProductSummary({
   discountAmount,
   taxAmount,
   totalAmount,
-  proration
+  proration,
+  displayCurrency,
+  trialDays,
 }: ProductSummaryProps) {
-  const formatAmount = (amt: number) => {
+  const formatAmount = (amt: number, overrideCurrency?: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency.toUpperCase()
+      currency: (overrideCurrency ?? currency).toUpperCase()
     }).format(amt / 100)
   }
 
@@ -62,7 +67,7 @@ export function ProductSummary({
       {/* Price summary box */}
       <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-extrabold text-gray-900">{formatAmount(totalAmount)}</span>
+          <span className="text-3xl font-extrabold text-gray-900">{formatAmount(totalAmount, displayCurrency)}</span>
           <span className="text-gray-400 text-xs">/{getIntervalShort(product.interval)}</span>
         </div>
 
@@ -104,10 +109,22 @@ export function ProductSummary({
 
           <div className="flex justify-between font-bold text-xs border-t border-gray-200 pt-2 mt-0.5">
             <span className="text-gray-900">Total</span>
-            <span className="text-gray-900">{formatAmount(totalAmount)}</span>
+            <span className="text-gray-900">{formatAmount(totalAmount, displayCurrency)}</span>
           </div>
         </div>
       </div>
+
+      {/* Trial period badge */}
+      {trialDays && trialDays > 0 && (
+        <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs font-medium text-blue-700">
+            {trialDays}-day free trial &middot; then {formatAmount(totalAmount, displayCurrency)}/{getIntervalShort(product.interval)}
+          </span>
+        </div>
+      )}
 
       {/* Auto-renews note */}
       <p className="text-xs text-gray-400">

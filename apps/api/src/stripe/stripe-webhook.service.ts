@@ -171,6 +171,20 @@ export class StripeWebhookService {
         await this.handleInvoicePaymentFailed(event.data.object);
         break;
 
+      // Checkout Session events (adaptive pricing)
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(
+          event.data.object as Stripe.Checkout.Session,
+        );
+        break;
+
+      // SetupIntent events (trial product checkouts)
+      case 'setup_intent.succeeded':
+        await this.handleSetupIntentSucceeded(
+          event.data.object as Stripe.SetupIntent,
+        );
+        break;
+
       // Payment Intent events
       case 'payment_intent.succeeded':
         await this.handlePaymentIntentSucceeded(event.data.object);
@@ -624,7 +638,9 @@ export class StripeWebhookService {
       if (subscriptionData?.product_id) {
         const cacheKey = `product-metrics:${subscriptionData.product_id}`;
         await this.cacheManager.del(cacheKey);
-        this.logger.debug(`Invalidated cache for product ${subscriptionData.product_id} after subscription update`);
+        this.logger.debug(
+          `Invalidated cache for product ${subscriptionData.product_id} after subscription update`,
+        );
       }
 
       // If period changed, create new usage records
@@ -656,6 +672,15 @@ export class StripeWebhookService {
     try {
       this.logger.log(`Subscription deleted: ${subscription.id}`);
 
+      // Skip incomplete subscriptions — these are being canceled and recreated
+      // during discount apply/remove in the checkout flow.
+      if (subscription.status === 'incomplete') {
+        this.logger.log(
+          `Skipping deletion of incomplete subscription ${subscription.id} (likely recreated for discount)`,
+        );
+        return;
+      }
+
       const supabase = this.supabaseService.getClient();
 
       // Get subscription ID and product_id
@@ -685,7 +710,9 @@ export class StripeWebhookService {
       if (existing.product_id) {
         const cacheKey = `product-metrics:${existing.product_id}`;
         await this.cacheManager.del(cacheKey);
-        this.logger.debug(`Invalidated cache for product ${existing.product_id} after subscription cancellation`);
+        this.logger.debug(
+          `Invalidated cache for product ${existing.product_id} after subscription cancellation`,
+        );
       }
 
       // Revoke all feature grants
@@ -720,7 +747,37 @@ export class StripeWebhookService {
 
       const supabase = this.supabaseService.getClient();
 
-      // Update subscription status to active
+      // Check current subscription status before overriding
+      const { data: existing } = await supabase
+        .from('subscriptions')
+        .select('status')
+        .eq('stripe_subscription_id', invoiceData.subscription)
+        .single();
+
+      if (!existing) {
+        this.logger.warn(
+          `Subscription ${invoiceData.subscription} not found in DB for invoice payment`,
+        );
+        return;
+      }
+
+      // Don't override trialing status — trial subscriptions use deferred billing
+      if (existing.status === 'trialing') {
+        this.logger.log(
+          `Subscription ${invoiceData.subscription} is trialing — not overriding to active`,
+        );
+        return;
+      }
+
+      // Don't override if already active (handled by payment_intent.succeeded)
+      if (existing.status === 'active') {
+        this.logger.log(
+          `Subscription ${invoiceData.subscription} already active — no update needed`,
+        );
+        return;
+      }
+
+      // Update to active for other statuses (past_due, incomplete, etc.)
       await supabase
         .from('subscriptions')
         .update({ status: 'active' })
@@ -1045,7 +1102,9 @@ export class StripeWebhookService {
    * Handle customer.created webhook
    * Sync new customer from Stripe to database (if not already exists)
    */
-  private async handleCustomerCreated(customer: Stripe.Customer): Promise<void> {
+  private async handleCustomerCreated(
+    customer: Stripe.Customer,
+  ): Promise<void> {
     try {
       this.logger.log(`Customer created in Stripe: ${customer.id}`);
 
@@ -1077,7 +1136,9 @@ export class StripeWebhookService {
    * Handle customer.updated webhook
    * Sync customer updates from Stripe to database
    */
-  private async handleCustomerUpdated(customer: Stripe.Customer): Promise<void> {
+  private async handleCustomerUpdated(
+    customer: Stripe.Customer,
+  ): Promise<void> {
     try {
       this.logger.log(`Customer updated in Stripe: ${customer.id}`);
 
@@ -1152,7 +1213,9 @@ export class StripeWebhookService {
    * Handle customer.deleted webhook
    * Soft delete customer in database
    */
-  private async handleCustomerDeleted(customer: Stripe.Customer): Promise<void> {
+  private async handleCustomerDeleted(
+    customer: Stripe.Customer,
+  ): Promise<void> {
     try {
       this.logger.log(`Customer deleted in Stripe: ${customer.id}`);
 
@@ -1215,8 +1278,13 @@ export class StripeWebhookService {
 
   /**
    * Handle payment_intent.succeeded webhook
-   * Create customer and subscription after successful payment
-   * Following the Flowglad/Autumn pattern: payment first, subscription after
+   *
+   * New flow (direct-subscription checkout):
+   *   Subscription was created during createCheckout() — just update its status,
+   *   handle upgrade/downgrade, and grant features.
+   *
+   * Legacy flow (pre-migration PIs without a subscription):
+   *   Falls back to creating a subscription in the webhook.
    */
   private async handlePaymentIntentSucceeded(
     paymentIntent: Stripe.PaymentIntent,
@@ -1254,13 +1322,12 @@ export class StripeWebhookService {
         .select()
         .single();
 
-      // Extract metadata
       const metadata = paymentIntent.metadata || {};
+      const checkoutMetadata = checkoutSession?.metadata as any;
       const organizationId = metadata.organizationId;
       const externalUserId = metadata.externalUserId;
       const productId = metadata.productId;
       const priceId = metadata.priceId;
-      const trialDays = parseInt(metadata.trialDays || '0', 10);
 
       if (!organizationId || !productId || !priceId) {
         this.logger.error(
@@ -1270,82 +1337,767 @@ export class StripeWebhookService {
         return;
       }
 
-      // Ensure customer exists with improved error handling
-      let customerId = paymentIntentRecord.customer_id;
-      const stripeCustomerId =
-        typeof paymentIntent.customer === 'string'
-          ? paymentIntent.customer
-          : paymentIntent.customer?.id;
+      // Determine if this is the new direct-subscription flow
+      const piMetadata = paymentIntentRecord.metadata as any;
+      const stripeSubscriptionId =
+        paymentIntentRecord.stripe_subscription_id ||
+        checkoutMetadata?.stripeSubscriptionId ||
+        piMetadata?.stripeSubscriptionId;
 
-      if (!stripeCustomerId) {
-        this.logger.error('No Stripe customer ID in payment intent');
+      const isDirectSubscriptionFlow =
+        !!stripeSubscriptionId || piMetadata?.subscriptionCreatedDuringCheckout;
+
+      if (isDirectSubscriptionFlow) {
+        await this.handleDirectSubscriptionPaymentSuccess(
+          paymentIntent,
+          paymentIntentRecord,
+          checkoutSession,
+          stripeSubscriptionId,
+        );
+      } else {
+        // Legacy flow: subscription was NOT created during checkout.
+        // Fall back to creating one now.
+        this.logger.log(
+          `Legacy flow: creating subscription in webhook for PI ${paymentIntent.id}`,
+        );
+        await this.handleLegacyPaymentIntentSuccess(
+          paymentIntent,
+          paymentIntentRecord,
+          checkoutSession,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Critical error in payment_intent.succeeded handler:',
+        error,
+      );
+      this.logger.error('Stack trace:', (error as any).stack);
+    }
+  }
+
+  /**
+   * New flow: subscription already exists (created during checkout).
+   * Update status to active, handle upgrade/downgrade, grant features.
+   */
+  private async handleDirectSubscriptionPaymentSuccess(
+    paymentIntent: Stripe.PaymentIntent,
+    paymentIntentRecord: any,
+    checkoutSession: any,
+    stripeSubscriptionId: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+    const metadata = paymentIntent.metadata || {};
+    const checkoutMetadata = checkoutSession?.metadata as any;
+    const organizationId = metadata.organizationId;
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+    const customerId = metadata.customerId || paymentIntentRecord.customer_id;
+
+    this.logger.log(
+      `Direct subscription flow: updating subscription ${stripeSubscriptionId} to active`,
+    );
+
+    // Get the Stripe account ID
+    const stripeAccountId = paymentIntentRecord.stripe_account_id ||
+      checkoutMetadata?.stripeAccountId;
+
+    // Fetch the updated subscription from Stripe to get current status and period data
+    let stripeSubscription: Stripe.Subscription | null = null;
+    if (stripeAccountId) {
+      try {
+        stripeSubscription = await this.stripeService
+          .getClient()
+          .subscriptions.retrieve(stripeSubscriptionId, {
+            stripeAccount: stripeAccountId,
+          });
+      } catch (e) {
+        this.logger.warn(
+          `Could not fetch subscription ${stripeSubscriptionId} from Stripe:`,
+          e,
+        );
+      }
+    }
+
+    // Find existing subscription record in our DB
+    const { data: existingSubscription } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('stripe_subscription_id', stripeSubscriptionId)
+      .single();
+
+    // Build update data from Stripe subscription (or use defaults)
+    const subData = stripeSubscription as any;
+    const newStatus = stripeSubscription?.status || 'active';
+    const updateData: any = {
+      status: newStatus,
+      payment_intent_id: paymentIntentRecord.id,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (subData?.current_period_start) {
+      updateData.current_period_start = new Date(
+        subData.current_period_start * 1000,
+      ).toISOString();
+    }
+    if (subData?.current_period_end) {
+      updateData.current_period_end = new Date(
+        subData.current_period_end * 1000,
+      ).toISOString();
+    }
+
+    // Apply discount info from checkout metadata
+    if (checkoutMetadata?.appliedDiscountId) {
+      updateData.discount_id = checkoutMetadata.appliedDiscountId;
+      updateData.discount_amount = checkoutMetadata.discountAmount
+        ? parseInt(String(checkoutMetadata.discountAmount), 10)
+        : null;
+      updateData.discount_code = checkoutMetadata.appliedDiscountCode || null;
+    }
+
+    // Update metadata
+    const existingMeta = (existingSubscription?.metadata as any) || {};
+    updateData.metadata = {
+      ...existingMeta,
+      payment_intent_id: paymentIntentRecord.id,
+      activated_from: 'direct_subscription_payment_succeeded',
+    };
+
+    let subscription: any;
+
+    if (existingSubscription) {
+      // Update existing subscription record
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(updateData)
+        .eq('id', existingSubscription.id)
+        .select()
+        .single();
+
+      if (error) {
+        this.logger.error('Failed to update subscription:', error);
         return;
       }
+      subscription = data;
+      this.logger.log(
+        `Subscription ${existingSubscription.id} updated to ${newStatus}`,
+      );
+    } else {
+      // Edge case: subscription not in DB (DB write failed during checkout).
+      // Create it now from Stripe data.
+      this.logger.warn(
+        `Subscription ${stripeSubscriptionId} not found in DB — creating from Stripe data`,
+      );
 
-      // Upsert customer using consistent pattern
-      if (!customerId) {
-        const customerData = {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert({
+          customer_id: customerId,
           organization_id: organizationId,
-          stripe_customer_id: stripeCustomerId,
-          external_id: externalUserId,
-          email: metadata.customerEmail?.toLowerCase(),
-          name: metadata.customerName,
-          updated_at: new Date().toISOString(),
-        };
+          product_id: productId,
+          price_id: priceId,
+          stripe_subscription_id: stripeSubscriptionId,
+          status: newStatus,
+          current_period_start:
+            updateData.current_period_start || new Date().toISOString(),
+          current_period_end:
+            updateData.current_period_end ||
+            new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          cancel_at_period_end: false,
+          amount: paymentIntentRecord.amount || 0,
+          currency: paymentIntentRecord.currency || 'usd',
+          payment_intent_id: paymentIntentRecord.id,
+          discount_id: updateData.discount_id || null,
+          discount_amount: updateData.discount_amount || null,
+          discount_code: updateData.discount_code || null,
+          metadata: {
+            payment_intent_id: paymentIntentRecord.id,
+            created_from: 'direct_subscription_payment_succeeded_fallback',
+          },
+        })
+        .select()
+        .single();
 
-        // Try upsert with retry logic
-        let retries = 3;
-        while (retries > 0) {
-          const { data: customer, error: customerError } = await supabase
-            .from('customers')
-            .upsert(customerData, {
-              onConflict: 'organization_id,stripe_customer_id',
-              ignoreDuplicates: false,
-            })
-            .select()
-            .single();
+      if (error) {
+        this.logger.error('Failed to create subscription in DB:', error);
+        return;
+      }
+      subscription = data;
+    }
 
-          if (!customerError) {
-            customerId = customer.id;
-            this.logger.log(`Customer ${customerId} upserted successfully`);
-            break;
-          }
+    // Handle upgrade/downgrade: cancel existing subscription
+    if (checkoutMetadata?.existingSubscriptionId) {
+      await this.handleUpgradeDowngrade(
+        supabase,
+        checkoutMetadata.existingSubscriptionId,
+        stripeAccountId,
+        checkoutSession?.id,
+      );
+    }
 
-          // Handle race condition with retry
-          if (customerError.code === '23505' && retries > 1) {
-            this.logger.warn(`Customer upsert conflict, retrying... (${retries - 1} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries))); // Exponential backoff
-            retries--;
+    // Invalidate product revenue metrics cache
+    const cacheKey = `product-metrics:${productId}`;
+    await this.cacheManager.del(cacheKey);
 
-            // Try to find existing customer
-            const { data: existingCustomer } = await supabase
-              .from('customers')
-              .select('id')
-              .eq('organization_id', organizationId)
-              .eq('stripe_customer_id', stripeCustomerId)
-              .single();
+    // Grant features
+    await this.grantProductFeatures(supabase, productId, customerId, subscription.id);
 
-            if (existingCustomer) {
-              customerId = existingCustomer.id;
-              this.logger.log(`Found existing customer ${customerId}`);
-              break;
-            }
-          } else {
-            this.logger.error('Failed to create/find customer after retries:', customerError);
-            return;
-          }
+    // Update checkout session with subscription info
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        subscription_id: subscription.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('payment_intent_id', paymentIntentRecord.id);
+
+    this.logger.log(
+      `Successfully completed direct-subscription flow for PI ${paymentIntent.id}`,
+    );
+  }
+
+  /**
+   * Legacy flow: subscription was NOT created during checkout.
+   * Create subscription in the webhook (old behavior, for backward compat).
+   */
+  private async handleLegacyPaymentIntentSuccess(
+    paymentIntent: Stripe.PaymentIntent,
+    paymentIntentRecord: any,
+    checkoutSession: any,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+    const metadata = paymentIntent.metadata || {};
+    const checkoutMetadata = checkoutSession?.metadata as any;
+    const organizationId = metadata.organizationId;
+    const externalUserId = metadata.externalUserId;
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+    const trialDays = parseInt(metadata.trialDays || '0', 10);
+
+    // Ensure customer exists
+    let customerId = paymentIntentRecord.customer_id;
+    const stripeCustomerId =
+      typeof paymentIntent.customer === 'string'
+        ? paymentIntent.customer
+        : paymentIntent.customer?.id;
+
+    if (!stripeCustomerId) {
+      this.logger.error('No Stripe customer ID in payment intent');
+      return;
+    }
+
+    if (!customerId) {
+      const customerData = {
+        organization_id: organizationId,
+        stripe_customer_id: stripeCustomerId,
+        external_id: externalUserId,
+        email: metadata.customerEmail?.toLowerCase(),
+        name: metadata.customerName,
+        updated_at: new Date().toISOString(),
+      };
+
+      let retries = 3;
+      while (retries > 0) {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .upsert(customerData, {
+            onConflict: 'organization_id,stripe_customer_id',
+            ignoreDuplicates: false,
+          })
+          .select()
+          .single();
+
+        if (!customerError) {
+          customerId = customer.id;
+          break;
         }
 
-        // Update payment intent with customer ID
-        await supabase
-          .from('payment_intents')
-          .update({ customer_id: customerId })
-          .eq('id', paymentIntentRecord.id);
+        if (customerError.code === '23505' && retries > 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 100 * (4 - retries)),
+          );
+          retries--;
+
+          const { data: existingCustomer } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('stripe_customer_id', stripeCustomerId)
+            .single();
+
+          if (existingCustomer) {
+            customerId = existingCustomer.id;
+            break;
+          }
+        } else {
+          this.logger.error('Failed to create/find customer:', customerError);
+          return;
+        }
       }
 
-      if (!customerId) {
-        this.logger.error('Failed to ensure customer exists');
+      await supabase
+        .from('payment_intents')
+        .update({ customer_id: customerId })
+        .eq('id', paymentIntentRecord.id);
+    }
+
+    if (!customerId) {
+      this.logger.error('Failed to ensure customer exists');
+      return;
+    }
+
+    // Get organization's Stripe account
+    const { data: organization } = await supabase
+      .from('organizations')
+      .select('accounts!inner(stripe_id)')
+      .eq('id', organizationId)
+      .single();
+
+    if (!organization?.accounts) {
+      this.logger.error(`Organization ${organizationId} Stripe account not found`);
+      return;
+    }
+
+    const stripeAccountId = (organization.accounts as any).stripe_id;
+
+    // Check for existing subscriptions
+    const { data: allSubscriptions } = await supabase
+      .from('subscriptions')
+      .select('id, stripe_subscription_id, status, created_at, price_id')
+      .eq('customer_id', customerId)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+
+    let reactivatedSubscriptionId: string | null = null;
+
+    if (allSubscriptions && allSubscriptions.length > 0) {
+      const activeSubscription = allSubscriptions.find(
+        (sub) =>
+          ['active', 'trialing', 'past_due'].includes(sub.status) &&
+          sub.stripe_subscription_id?.startsWith('sub_'),
+      );
+
+      if (activeSubscription) {
+        this.logger.log(
+          `Subscription already exists for customer ${customerId}: ${activeSubscription.id}`,
+        );
         return;
+      }
+
+      const canceledSubscription = allSubscriptions.find((sub) =>
+        ['canceled', 'ended'].includes(sub.status),
+      );
+      if (canceledSubscription) {
+        reactivatedSubscriptionId = canceledSubscription.id;
+      }
+
+      // Clean up invalid subscriptions
+      const invalidSubs = allSubscriptions.filter(
+        (sub) =>
+          sub.status === 'incomplete' &&
+          (!sub.stripe_subscription_id ||
+            !sub.stripe_subscription_id.startsWith('sub_')),
+      );
+      for (const invalidSub of invalidSubs) {
+        await supabase.from('subscriptions').delete().eq('id', invalidSub.id);
+      }
+    }
+
+    // Get price details
+    const { data: price } = await supabase
+      .from('product_prices')
+      .select('stripe_price_id, price_amount, price_currency, recurring_interval, recurring_interval_count')
+      .eq('id', priceId)
+      .single();
+
+    if (!price?.stripe_price_id) {
+      this.logger.error(`Stripe price not found for ${priceId}`);
+      return;
+    }
+
+    // Attach payment method
+    if (paymentIntent.payment_method) {
+      try {
+        const paymentMethodId =
+          typeof paymentIntent.payment_method === 'string'
+            ? paymentIntent.payment_method
+            : paymentIntent.payment_method.id;
+
+        await this.stripeService.attachPaymentMethodToCustomer(
+          paymentMethodId, stripeCustomerId, stripeAccountId,
+        );
+        await this.stripeService.updateCustomer(
+          stripeCustomerId,
+          { invoice_settings: { default_payment_method: paymentMethodId } },
+          stripeAccountId,
+        );
+      } catch (pmError) {
+        this.logger.error('Failed to attach payment method:', pmError);
+      }
+    }
+
+    // Create subscription with trial_end deferral (legacy double-charge prevention)
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
+      customer: stripeCustomerId,
+      items: [{ price: price.stripe_price_id }],
+      payment_behavior: 'allow_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      metadata: { organizationId, customerId, productId, priceId, externalUserId },
+      expand: ['latest_invoice.payment_intent'],
+    };
+
+    const now = Math.floor(Date.now() / 1000);
+    const billingInterval = metadata.billingInterval || price.recurring_interval || 'month';
+    const billingIntervalCount = parseInt(metadata.billingIntervalCount || '1', 10) || 1;
+    const deferSeconds =
+      billingInterval === 'year'
+        ? billingIntervalCount * 365 * 24 * 60 * 60
+        : billingIntervalCount * 30 * 24 * 60 * 60;
+
+    let shouldGrantTrial = false;
+    if (trialDays > 0) {
+      const { data: trialEligible } = await supabase.rpc('check_trial_eligibility', {
+        p_customer_id: customerId, p_product_id: productId,
+      });
+      if (trialEligible) {
+        subscriptionParams.trial_end = now + deferSeconds + trialDays * 24 * 60 * 60;
+        shouldGrantTrial = true;
+      } else {
+        subscriptionParams.trial_end = now + deferSeconds;
+      }
+    } else {
+      subscriptionParams.trial_end = now + deferSeconds;
+    }
+
+    if (paymentIntent.payment_method) {
+      const pmId = typeof paymentIntent.payment_method === 'string'
+        ? paymentIntent.payment_method
+        : paymentIntent.payment_method.id;
+      subscriptionParams.default_payment_method = pmId;
+    }
+
+    if (checkoutMetadata?.stripeCouponId) {
+      const discountDuration = checkoutMetadata.discountDuration || 'once';
+      if (discountDuration !== 'once') {
+        subscriptionParams.discounts = [{ coupon: checkoutMetadata.stripeCouponId }];
+      }
+    }
+
+    // Handle upgrade/downgrade
+    if (checkoutMetadata?.existingSubscriptionId) {
+      await this.handleUpgradeDowngrade(
+        supabase,
+        checkoutMetadata.existingSubscriptionId,
+        stripeAccountId,
+        checkoutSession?.id,
+      );
+    }
+
+    // Create Stripe subscription
+    let stripeSubscription;
+    try {
+      stripeSubscription = await this.stripeService.createSubscription(
+        subscriptionParams, stripeAccountId,
+      );
+    } catch (subError) {
+      this.logger.error('Failed to create Stripe subscription:', subError);
+      return;
+    }
+
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (!customer) {
+      this.logger.error(`Customer ${customerId} not found`);
+      return;
+    }
+
+    const subData = stripeSubscription as any;
+    const subscriptionData = {
+      customer_id: customerId,
+      organization_id: customer.organization_id,
+      product_id: productId,
+      price_id: priceId,
+      stripe_subscription_id: stripeSubscription.id,
+      status: stripeSubscription.status,
+      current_period_start: subData.current_period_start
+        ? new Date(subData.current_period_start * 1000).toISOString()
+        : new Date().toISOString(),
+      current_period_end: subData.current_period_end
+        ? new Date(subData.current_period_end * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_end: subData.trial_end
+        ? new Date(subData.trial_end * 1000).toISOString()
+        : null,
+      trial_start: subData.trial_start
+        ? new Date(subData.trial_start * 1000).toISOString()
+        : null,
+      cancel_at_period_end: false,
+      amount: price.price_amount || 0,
+      currency: price.price_currency || 'usd',
+      discount_id: checkoutMetadata?.appliedDiscountId || null,
+      discount_amount: checkoutMetadata?.discountAmount
+        ? parseInt(String(checkoutMetadata.discountAmount), 10)
+        : null,
+      discount_code: checkoutMetadata?.appliedDiscountCode || null,
+      payment_intent_id: paymentIntentRecord.id,
+      metadata: {
+        payment_intent_id: paymentIntentRecord.id,
+        created_from: 'legacy_payment_intent_succeeded',
+        hasRealTrial: shouldGrantTrial,
+        trialDays: shouldGrantTrial ? trialDays : 0,
+      },
+    };
+
+    let subscription: any;
+    let subError: any;
+
+    if (reactivatedSubscriptionId) {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update({
+          ...subscriptionData,
+          canceled_at: null,
+          ended_at: null,
+          metadata: {
+            ...subscriptionData.metadata,
+            reactivatedAt: new Date().toISOString(),
+          },
+        })
+        .eq('id', reactivatedSubscriptionId)
+        .select()
+        .single();
+      subscription = data;
+      subError = error;
+    } else {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert(subscriptionData)
+        .select()
+        .single();
+      subscription = data;
+      subError = error;
+    }
+
+    if (subError) {
+      this.logger.error('Failed to save subscription:', subError);
+      await this.refundService.refundPaymentOnFailure({
+        paymentIntentId: paymentIntent.id,
+        stripeAccountId,
+        reason: `subscription_creation_failed: ${subError.message}`,
+      });
+      try {
+        await this.stripeService.cancelSubscription(stripeSubscription.id, stripeAccountId);
+      } catch (cancelError) {
+        this.logger.error('Failed to cancel subscription after DB error:', cancelError);
+      }
+      return;
+    }
+
+    // Invalidate cache
+    await this.cacheManager.del(`product-metrics:${productId}`);
+
+    // Grant features
+    await this.grantProductFeatures(supabase, productId, customerId, subscription.id);
+
+    // Update checkout session
+    await supabase
+      .from('checkout_sessions')
+      .update({ subscription_id: subscription.id, updated_at: new Date().toISOString() })
+      .eq('payment_intent_id', paymentIntentRecord.id);
+
+    this.logger.log(
+      `Legacy flow completed for PI ${paymentIntent.id}`,
+    );
+  }
+
+  /**
+   * Handle upgrade/downgrade by canceling the existing subscription
+   */
+  private async handleUpgradeDowngrade(
+    supabase: any,
+    existingSubscriptionId: string,
+    stripeAccountId: string,
+    checkoutSessionId?: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Upgrade/downgrade: canceling subscription ${existingSubscriptionId}`,
+    );
+
+    try {
+      const { data: existingSubscription } = await supabase
+        .from('subscriptions')
+        .select('id, stripe_subscription_id, status, metadata')
+        .eq('id', existingSubscriptionId)
+        .single();
+
+      if (!existingSubscription) {
+        this.logger.warn(`Existing subscription ${existingSubscriptionId} not found`);
+        return;
+      }
+
+      if (existingSubscription.stripe_subscription_id?.startsWith('sub_')) {
+        try {
+          await this.stripeService.cancelSubscription(
+            existingSubscription.stripe_subscription_id,
+            stripeAccountId,
+            false,
+          );
+        } catch (stripeError) {
+          this.logger.warn('Failed to cancel Stripe subscription:', stripeError);
+        }
+      }
+
+      await supabase
+        .from('subscriptions')
+        .update({
+          status: 'canceled',
+          canceled_at: new Date().toISOString(),
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...((existingSubscription.metadata as any) || {}),
+            canceledReason: 'upgraded_or_downgraded',
+            newSubscriptionCheckoutSessionId: checkoutSessionId,
+          },
+        })
+        .eq('id', existingSubscription.id);
+
+      this.logger.log(`Subscription ${existingSubscription.id} canceled for upgrade/downgrade`);
+    } catch (error) {
+      this.logger.error('Error canceling existing subscription:', error);
+    }
+  }
+
+  /**
+   * Grant product features to a customer for a subscription (with dedup)
+   */
+  private async grantProductFeatures(
+    supabase: any,
+    productId: string,
+    customerId: string,
+    subscriptionId: string,
+  ): Promise<void> {
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('feature_id, config')
+      .eq('product_id', productId);
+
+    if (!productFeatures || productFeatures.length === 0) return;
+
+    const { data: existingGrants } = await supabase
+      .from('feature_grants')
+      .select('feature_id')
+      .eq('customer_id', customerId)
+      .eq('subscription_id', subscriptionId);
+
+    const existingFeatureIds = new Set(
+      existingGrants?.map((g: any) => g.feature_id) || [],
+    );
+
+    const newFeatureGrants = productFeatures
+      .filter((pf: any) => !existingFeatureIds.has(pf.feature_id))
+      .map((pf: any) => ({
+        customer_id: customerId,
+        subscription_id: subscriptionId,
+        feature_id: pf.feature_id,
+        properties: pf.config || {},
+        granted_at: new Date().toISOString(),
+      }));
+
+    if (newFeatureGrants.length > 0) {
+      const { error: grantError } = await supabase
+        .from('feature_grants')
+        .insert(newFeatureGrants);
+
+      if (grantError) {
+        this.logger.error('Failed to grant features:', grantError);
+      } else {
+        this.logger.log(
+          `Granted ${newFeatureGrants.length} features to customer ${customerId}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle setup_intent.succeeded webhook
+   * Creates subscription with trial_period_days for trial product checkouts.
+   * The customer is NOT charged — card is saved for future billing after trial ends.
+   */
+  private async handleSetupIntentSucceeded(
+    setupIntent: Stripe.SetupIntent,
+  ): Promise<void> {
+    try {
+      this.logger.log(`Setup intent succeeded: ${setupIntent.id}`);
+
+      const metadata = setupIntent.metadata || {};
+      if (metadata.isTrialCheckout !== 'true') {
+        this.logger.log(
+          `Setup intent ${setupIntent.id} is not a trial checkout — skipping`,
+        );
+        return;
+      }
+
+      const supabase = this.supabaseService.getClient();
+
+      const organizationId = metadata.organizationId;
+      const externalUserId = metadata.externalUserId;
+      const productId = metadata.productId;
+      const priceId = metadata.priceId;
+      const trialDays = parseInt(metadata.trialDays || '0', 10);
+
+      if (!organizationId || !productId || !priceId) {
+        this.logger.error('Missing required metadata in setup intent:', metadata);
+        return;
+      }
+
+      // Find our checkout session
+      const { data: checkoutSession } = await supabase
+        .from('checkout_sessions')
+        .select('id, metadata')
+        .filter('metadata->>stripeSetupIntentId', 'eq', setupIntent.id)
+        .maybeSingle();
+
+      const checkoutMeta = (checkoutSession?.metadata as any) || {};
+
+      // Resolve customer
+      const stripeCustomerId =
+        typeof setupIntent.customer === 'string'
+          ? setupIntent.customer
+          : (setupIntent.customer as any)?.id;
+
+      if (!stripeCustomerId) {
+        this.logger.error('No Stripe customer ID in setup intent');
+        return;
+      }
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, organization_id')
+        .eq('stripe_customer_id', stripeCustomerId)
+        .maybeSingle();
+
+      if (!customer) {
+        // Try by external_id
+        const { data: customerByExtId } = await supabase
+          .from('customers')
+          .select('id, organization_id')
+          .eq('organization_id', organizationId)
+          .eq('external_id', externalUserId)
+          .maybeSingle();
+
+        if (!customerByExtId) {
+          this.logger.error(`Customer not found for setup intent ${setupIntent.id}`);
+          return;
+        }
+        var customerId = customerByExtId.id;
+        var customerOrgId = customerByExtId.organization_id;
+      } else {
+        var customerId = customer.id;
+        var customerOrgId = customer.organization_id;
       }
 
       // Get organization's Stripe account
@@ -1355,80 +2107,34 @@ export class StripeWebhookService {
         .eq('id', organizationId)
         .single();
 
-      if (!organization || !organization.accounts) {
-        this.logger.error(
-          `Organization ${organizationId} or its Stripe account not found`,
-        );
+      if (!organization?.accounts) {
+        this.logger.error(`Organization ${organizationId} Stripe account not found`);
         return;
       }
 
       const stripeAccountId = (organization.accounts as any).stripe_id;
 
-      // Check for ANY existing subscription (including canceled/ended) for reactivation
-      const { data: allSubscriptions } = await supabase
+      // Check for existing active subscription
+      const { data: existingSubs } = await supabase
         .from('subscriptions')
-        .select('id, stripe_subscription_id, status, created_at, price_id')
+        .select('id, status, stripe_subscription_id')
         .eq('customer_id', customerId)
         .eq('product_id', productId)
-        .order('created_at', { ascending: false });
+        .in('status', ['active', 'trialing', 'incomplete', 'past_due']);
 
-      let shouldCreateNewSubscription = true;
-      let reactivatedSubscriptionId: string | null = null;
-
-      if (allSubscriptions && allSubscriptions.length > 0) {
-        // Check for active/trialing subscriptions first
-        const activeSubscription = allSubscriptions.find(
-          sub => ['active', 'trialing', 'incomplete', 'past_due'].includes(sub.status) &&
-                 sub.stripe_subscription_id?.startsWith('sub_')
+      if (existingSubs && existingSubs.length > 0) {
+        this.logger.log(
+          `Active subscription already exists for customer ${customerId} / product ${productId}`,
         );
-
-        if (activeSubscription) {
-          this.logger.log(
-            `Subscription already exists for customer ${customerId} and product ${productId}: ${activeSubscription.id}`,
-          );
-          return; // Already has active subscription
-        }
-
-        // Check for canceled/ended subscriptions to reactivate
-        const canceledSubscription = allSubscriptions.find(
-          sub => ['canceled', 'ended'].includes(sub.status)
-        );
-
-        if (canceledSubscription) {
-          this.logger.log(`Reactivating canceled subscription: ${canceledSubscription.id}`);
-
-          // We need to create a NEW Stripe subscription (can't reuse canceled one)
-          // But we'll update the existing database record
-          shouldCreateNewSubscription = true;
-          reactivatedSubscriptionId = canceledSubscription.id;
-        }
-
-        // Clean up any invalid subscription records
-        const invalidSubs = allSubscriptions.filter(
-          sub => sub.status === 'incomplete' &&
-                 (!sub.stripe_subscription_id || !sub.stripe_subscription_id.startsWith('sub_'))
-        );
-
-        if (invalidSubs.length > 0) {
-          this.logger.warn(
-            `Found ${invalidSubs.length} invalid subscription(s). Will clean up.`,
-          );
-
-          for (const invalidSub of invalidSubs) {
-            await supabase
-              .from('subscriptions')
-              .delete()
-              .eq('id', invalidSub.id);
-
-            this.logger.log(`Cleaned up invalid subscription ${invalidSub.id}`);
-          }
-        }
+        return;
       }
 
       // Get price details
       const { data: price } = await supabase
         .from('product_prices')
-        .select('stripe_price_id, price_amount, price_currency, recurring_interval, recurring_interval_count')
+        .select(
+          'stripe_price_id, price_amount, price_currency, recurring_interval, recurring_interval_count',
+        )
         .eq('id', priceId)
         .single();
 
@@ -1437,47 +2143,42 @@ export class StripeWebhookService {
         return;
       }
 
-      // CRITICAL: Attach payment method to customer before creating subscription
-      if (paymentIntent.payment_method) {
-        try {
-          const paymentMethodId =
-            typeof paymentIntent.payment_method === 'string'
-              ? paymentIntent.payment_method
-              : paymentIntent.payment_method.id;
+      // Attach payment method and set as default
+      const paymentMethodId =
+        typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : (setupIntent.payment_method as any)?.id;
 
-          // Attach payment method to customer
+      if (paymentMethodId) {
+        try {
           await this.stripeService.attachPaymentMethodToCustomer(
             paymentMethodId,
             stripeCustomerId,
             stripeAccountId,
           );
-
-          // Set as default payment method
           await this.stripeService.updateCustomer(
             stripeCustomerId,
-            {
-              invoice_settings: {
-                default_payment_method: paymentMethodId,
-              },
-            },
+            { invoice_settings: { default_payment_method: paymentMethodId } },
             stripeAccountId,
           );
-
-          this.logger.log(`Payment method ${paymentMethodId} attached to customer ${stripeCustomerId}`);
+          this.logger.log(
+            `Payment method ${paymentMethodId} attached to customer ${stripeCustomerId}`,
+          );
         } catch (pmError) {
           this.logger.error('Failed to attach payment method:', pmError);
-          // Continue anyway - subscription might still work
         }
       }
 
-      // Create subscription with proper configuration
+      // Build subscription params
+      const applicationFeePercent = 5;
       const subscriptionParams: Stripe.SubscriptionCreateParams = {
         customer: stripeCustomerId,
         items: [{ price: price.stripe_price_id }],
-        payment_behavior: 'allow_incomplete', // Allow incomplete since payment already succeeded
+        payment_behavior: 'allow_incomplete', // Trial has no upfront payment — don't require client confirmation
         payment_settings: {
           save_default_payment_method: 'on_subscription',
         },
+        application_fee_percent: applicationFeePercent,
         metadata: {
           organizationId,
           customerId,
@@ -1488,95 +2189,36 @@ export class StripeWebhookService {
         expand: ['latest_invoice.payment_intent'],
       };
 
-      // Check trial eligibility before granting trial (simple approach from Autum)
-      let shouldGrantTrial = false;
-      if (trialDays > 0) {
-        // Check if customer has ever had a trial or subscription for this product
-        const { data: trialEligible } = await supabase.rpc('check_trial_eligibility', {
-          p_customer_id: customerId,
-          p_product_id: productId,
-        });
-
-        if (trialEligible) {
-          subscriptionParams.trial_period_days = trialDays;
-          shouldGrantTrial = true;
-          this.logger.log(`Granting ${trialDays}-day trial for customer ${customerId} on product ${productId}`);
-        } else {
-          this.logger.warn(`Trial not granted for customer ${customerId} - already had trial or subscription for product ${productId}`);
-        }
-      }
-
-      // Set default payment method if available
-      if (paymentIntent.payment_method) {
-        const paymentMethodId =
-          typeof paymentIntent.payment_method === 'string'
-            ? paymentIntent.payment_method
-            : paymentIntent.payment_method.id;
+      // Set default payment method
+      if (paymentMethodId) {
         subscriptionParams.default_payment_method = paymentMethodId;
       }
 
-      // Cancel existing subscription if this is an upgrade/downgrade
-      const checkoutMetadata = checkoutSession?.metadata as any;
-      if (checkoutMetadata?.existingSubscriptionId) {
-        this.logger.log(
-          `This is an upgrade/downgrade. Canceling existing subscription: ${checkoutMetadata.existingSubscriptionId}`,
+      // Grant trial
+      if (trialDays > 0) {
+        const { data: trialEligible } = await supabase.rpc(
+          'check_trial_eligibility',
+          { p_customer_id: customerId, p_product_id: productId },
         );
 
-        try {
-          // Get the existing subscription
-          const { data: existingSubscription } = await supabase
-            .from('subscriptions')
-            .select('id, stripe_subscription_id, status, metadata')
-            .eq('id', checkoutMetadata.existingSubscriptionId)
-            .single();
-
-          if (existingSubscription) {
-            // Cancel in Stripe if it has a Stripe subscription ID
-            if (existingSubscription.stripe_subscription_id?.startsWith('sub_')) {
-              try {
-                await this.stripeService.cancelSubscription(
-                  existingSubscription.stripe_subscription_id,
-                  stripeAccountId,
-                  false, // Cancel immediately, not at period end
-                );
-                this.logger.log(
-                  `Canceled Stripe subscription immediately: ${existingSubscription.stripe_subscription_id}`,
-                );
-              } catch (stripeError) {
-                this.logger.warn(
-                  `Failed to cancel Stripe subscription ${existingSubscription.stripe_subscription_id}:`,
-                  stripeError,
-                );
-                // Continue anyway - we'll mark it canceled in our database
-              }
-            }
-
-            // Mark as canceled in our database
-            await supabase
-              .from('subscriptions')
-              .update({
-                status: 'canceled',
-                canceled_at: new Date().toISOString(),
-                cancel_at_period_end: false,
-                updated_at: new Date().toISOString(),
-                metadata: {
-                  ...(existingSubscription.metadata as any || {}),
-                  canceledReason: 'upgraded_or_downgraded',
-                  newSubscriptionCheckoutSessionId: checkoutSession?.id,
-                },
-              })
-              .eq('id', existingSubscription.id);
-
-            this.logger.log(`Marked subscription ${existingSubscription.id} as canceled in database`);
-          } else {
-            this.logger.warn(
-              `Existing subscription ${checkoutMetadata.existingSubscriptionId} not found`,
-            );
-          }
-        } catch (error) {
-          this.logger.error('Error canceling existing subscription:', error);
-          // Continue anyway - we still want to create the new subscription
+        if (trialEligible) {
+          subscriptionParams.trial_period_days = trialDays;
+          this.logger.log(
+            `Granting ${trialDays}-day trial for customer ${customerId} on product ${productId}`,
+          );
+        } else {
+          this.logger.warn(
+            `Trial not eligible for customer ${customerId} — creating subscription without trial`,
+          );
         }
+      }
+
+      // Apply discount coupon if one was used
+      if (checkoutMeta?.stripeCouponId) {
+        subscriptionParams.discounts = [{ coupon: checkoutMeta.stripeCouponId }];
+        this.logger.log(
+          `Attaching coupon ${checkoutMeta.stripeCouponId} to trial subscription`,
+        );
       }
 
       // Create Stripe subscription
@@ -1586,29 +2228,17 @@ export class StripeWebhookService {
           subscriptionParams,
           stripeAccountId,
         );
-        this.logger.log(`Stripe subscription ${stripeSubscription.id} created`);
+        this.logger.log(`Stripe subscription ${stripeSubscription.id} created (trial)`);
       } catch (subError) {
-        this.logger.error('Failed to create Stripe subscription:', subError);
+        this.logger.error('Failed to create Stripe subscription (trial):', subError);
         return;
       }
 
-      // Get customer's organization (already validated above)
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('organization_id')
-        .eq('id', customerId)
-        .single();
-
-      if (!customer) {
-        this.logger.error(`Customer ${customerId} not found in database after creation`);
-        return;
-      }
-
-      // Prepare subscription data
+      // Save subscription to database
       const subData = stripeSubscription as any;
       const subscriptionData = {
         customer_id: customerId,
-        organization_id: customer.organization_id,
+        organization_id: customerOrgId,
         product_id: productId,
         price_id: priceId,
         stripe_subscription_id: stripeSubscription.id,
@@ -1628,145 +2258,86 @@ export class StripeWebhookService {
         cancel_at_period_end: false,
         amount: price.price_amount || 0,
         currency: price.price_currency || 'usd',
+        discount_id: checkoutMeta?.appliedDiscountId || null,
+        discount_amount: checkoutMeta?.discountAmount
+          ? parseInt(String(checkoutMeta.discountAmount), 10)
+          : null,
+        discount_code: checkoutMeta?.appliedDiscountCode || null,
         metadata: {
-          payment_intent_id: paymentIntentRecord.id,
-          created_from: 'payment_intent_succeeded',
+          setup_intent_id: setupIntent.id,
+          created_from: 'setup_intent_succeeded',
+          hasRealTrial: true,
+          trialDays,
         },
       };
 
-      // Either update existing (reactivation) or create new subscription
-      let subscription: any;
-      let subError: any;
-
-      if (reactivatedSubscriptionId) {
-        // Reactivate existing subscription
-        this.logger.log(`Updating subscription ${reactivatedSubscriptionId} with new Stripe subscription`);
-
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .update({
-            ...subscriptionData,
-            canceled_at: null,
-            ended_at: null,
-            metadata: {
-              ...subscriptionData.metadata,
-              reactivatedAt: new Date().toISOString(),
-              previousCancellation: 'reactivated',
-            },
-          })
-          .eq('id', reactivatedSubscriptionId)
-          .select()
-          .single();
-
-        subscription = data;
-        subError = error;
-
-        if (!error) {
-          this.logger.log(`Subscription ${reactivatedSubscriptionId} reactivated successfully`);
-        }
-      } else {
-        // Create new subscription record
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .insert(subscriptionData)
-          .select()
-          .single();
-
-        subscription = data;
-        subError = error;
-      }
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .insert(subscriptionData)
+        .select()
+        .single();
 
       if (subError) {
-        this.logger.error('Failed to save subscription to database:', subError);
-
-        // CRITICAL: Refund the payment since we can't provide service
-        await this.refundService.refundPaymentOnFailure({
-          paymentIntentId: paymentIntent.id,
-          stripeAccountId,
-          reason: `subscription_creation_failed: ${subError.message}`,
-        });
-
-        // Cancel Stripe subscription if database save fails
+        this.logger.error('Failed to save trial subscription:', subError);
+        // Cancel the Stripe subscription since we can't track it
         try {
           await this.stripeService.cancelSubscription(
             stripeSubscription.id,
             stripeAccountId,
           );
-          this.logger.warn(`Cancelled Stripe subscription ${stripeSubscription.id} due to database error`);
         } catch (cancelError) {
-          this.logger.error('Failed to cancel subscription after database error:', cancelError);
+          this.logger.error('Failed to cancel subscription after DB error:', cancelError);
         }
         return;
       }
 
-      this.logger.log(
-        `Subscription ${subscription.id} created successfully for customer ${customerId}`,
-      );
+      // Update checkout session
+      if (checkoutSession) {
+        await supabase
+          .from('checkout_sessions')
+          .update({
+            completed_at: new Date().toISOString(),
+            subscription_id: subscription.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', checkoutSession.id);
+      }
 
-      // Invalidate product revenue metrics cache
+      // Invalidate cache
       const cacheKey = `product-metrics:${productId}`;
       await this.cacheManager.del(cacheKey);
-      this.logger.debug(`Invalidated cache for product ${productId} after subscription creation`);
 
-      // Grant features with deduplication check
+      // Grant features
       const { data: productFeatures } = await supabase
         .from('product_features')
         .select('feature_id, config')
         .eq('product_id', productId);
 
       if (productFeatures && productFeatures.length > 0) {
-        // Check for existing grants to avoid duplicates
-        const { data: existingGrants } = await supabase
+        const featureGrants = productFeatures.map((pf) => ({
+          customer_id: customerId,
+          subscription_id: subscription.id,
+          feature_id: pf.feature_id,
+          properties: pf.config || {},
+          granted_at: new Date().toISOString(),
+        }));
+
+        const { error: grantError } = await supabase
           .from('feature_grants')
-          .select('feature_id')
-          .eq('customer_id', customerId)
-          .eq('subscription_id', subscription.id);
+          .insert(featureGrants);
 
-        const existingFeatureIds = new Set(existingGrants?.map(g => g.feature_id) || []);
-
-        const newFeatureGrants = productFeatures
-          .filter(pf => !existingFeatureIds.has(pf.feature_id))
-          .map((pf) => ({
-            customer_id: customerId,
-            subscription_id: subscription.id,
-            feature_id: pf.feature_id,
-            properties: pf.config || {},
-            granted_at: new Date().toISOString(),
-          }));
-
-        if (newFeatureGrants.length > 0) {
-          const { error: grantError } = await supabase
-            .from('feature_grants')
-            .insert(newFeatureGrants);
-
-          if (grantError) {
-            this.logger.error('Failed to grant features:', grantError);
-            // Don't fail the whole process - subscription is already created
-          } else {
-            this.logger.log(
-              `Granted ${newFeatureGrants.length} features to customer ${customerId}`,
-            );
-          }
+        if (grantError) {
+          this.logger.error('Failed to grant features for trial subscription:', grantError);
         } else {
-          this.logger.log('All features already granted or no features to grant');
+          this.logger.log(`Granted ${featureGrants.length} features for trial subscription`);
         }
       }
 
-      // Update checkout session with subscription info
-      await supabase
-        .from('checkout_sessions')
-        .update({
-          subscription_id: subscription.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('payment_intent_id', paymentIntentRecord.id);
-
       this.logger.log(
-        `Successfully completed subscription flow for payment intent ${paymentIntent.id}`,
+        `Trial subscription flow completed for setup intent ${setupIntent.id}`,
       );
     } catch (error) {
-      this.logger.error('Critical error in payment_intent.succeeded handler:', error);
-      this.logger.error('Stack trace:', error.stack);
+      this.logger.error('Error handling setup_intent.succeeded:', error);
     }
   }
 
@@ -1802,11 +2373,231 @@ export class StripeWebhookService {
       // TODO: Send failure notification to customer
       // This could be an email, in-app notification, etc.
 
-      this.logger.log(
-        `Payment intent ${paymentIntent.id} marked as failed`,
-      );
+      this.logger.log(`Payment intent ${paymentIntent.id} marked as failed`);
     } catch (error) {
       this.logger.error('Error handling payment_intent.payment_failed:', error);
+    }
+  }
+
+  /**
+   * Handle checkout.session.completed webhook
+   * Fired when an adaptive pricing Checkout Session completes.
+   * Stripe has already created the subscription — we sync it to our DB.
+   */
+  private async handleCheckoutSessionCompleted(
+    session: Stripe.Checkout.Session,
+  ): Promise<void> {
+    try {
+      this.logger.log(`Checkout session completed: ${session.id}`);
+
+      // Only handle our adaptive mode sessions; ignore others (e.g. Stripe-hosted)
+      const metadata = (session.metadata || {}) as Record<string, string>;
+      const metadataId = metadata.metadataId;
+      const organizationId = metadata.organizationId;
+      const externalUserId = metadata.externalUserId;
+      const productId = metadata.productId;
+      const priceId = metadata.priceId;
+
+      if (!organizationId || !productId || !priceId) {
+        this.logger.log(
+          `Checkout session ${session.id} missing BillingOS metadata — skipping`,
+        );
+        return;
+      }
+
+      const supabase = this.supabaseService.getClient();
+
+      // Find our checkout_sessions record by Stripe session ID (stored in metadata)
+      const { data: checkoutSession } = await supabase
+        .from('checkout_sessions')
+        .select('id, subscription_id, completed_at, organization_id, metadata')
+        .filter('metadata->>stripeCheckoutSessionId', 'eq', session.id)
+        .maybeSingle();
+
+      if (checkoutSession?.completed_at) {
+        this.logger.log(
+          `Checkout session ${session.id} already completed — skipping`,
+        );
+        return;
+      }
+
+      // Get the Stripe subscription ID created by Stripe for this checkout
+      const stripeSubscriptionId =
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : (session.subscription as any)?.id;
+
+      if (!stripeSubscriptionId) {
+        this.logger.warn(
+          `No subscription in completed checkout session ${session.id}`,
+        );
+        return;
+      }
+
+      // Resolve customer
+      const stripeCustomerId =
+        typeof session.customer === 'string'
+          ? session.customer
+          : (session.customer as any)?.id;
+
+      const { data: customer, error: customerFetchError } = await supabase
+        .from('customers')
+        .select('id, organization_id')
+        .eq('stripe_customer_id', stripeCustomerId)
+        .single();
+
+      if (customerFetchError || !customer) {
+        this.logger.error(
+          `Customer not found for stripe_customer_id ${stripeCustomerId}`,
+        );
+        return;
+      }
+
+      const customerId = customer.id;
+
+      // Get price details
+      const { data: price } = await supabase
+        .from('product_prices')
+        .select(
+          'stripe_price_id, price_amount, price_currency, recurring_interval, recurring_interval_count',
+        )
+        .eq('id', priceId)
+        .single();
+
+      if (!price) {
+        this.logger.error(`Price not found for priceId ${priceId}`);
+        return;
+      }
+
+      // Get the connected Stripe account ID from our checkout session metadata
+      const checkoutSessionMeta = (checkoutSession?.metadata as any) || {};
+      const stripeAccountId = checkoutSessionMeta.stripeAccountId as
+        | string
+        | undefined;
+
+      let stripeSub: any;
+      try {
+        stripeSub = await this.stripeService
+          .getClient()
+          .subscriptions.retrieve(stripeSubscriptionId, {
+            stripeAccount: stripeAccountId,
+          });
+      } catch (err) {
+        this.logger.error(
+          `Failed to retrieve Stripe subscription ${stripeSubscriptionId}:`,
+          err,
+        );
+        return;
+      }
+
+      // Check for existing active subscription
+      const { data: existingSub } = await supabase
+        .from('subscriptions')
+        .select('id, status')
+        .eq('stripe_subscription_id', stripeSubscriptionId)
+        .maybeSingle();
+
+      if (existingSub) {
+        this.logger.log(
+          `Subscription ${stripeSubscriptionId} already in database`,
+        );
+      } else {
+        // Create subscription record
+        const subscriptionData = {
+          customer_id: customerId,
+          organization_id: customer.organization_id,
+          product_id: productId,
+          price_id: priceId,
+          stripe_subscription_id: stripeSubscriptionId,
+          status: stripeSub.status,
+          current_period_start: stripeSub.current_period_start
+            ? new Date(stripeSub.current_period_start * 1000).toISOString()
+            : new Date().toISOString(),
+          current_period_end: stripeSub.current_period_end
+            ? new Date(stripeSub.current_period_end * 1000).toISOString()
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          trial_end: stripeSub.trial_end
+            ? new Date(stripeSub.trial_end * 1000).toISOString()
+            : null,
+          trial_start: stripeSub.trial_start
+            ? new Date(stripeSub.trial_start * 1000).toISOString()
+            : null,
+          cancel_at_period_end: false,
+          amount: price.price_amount || 0,
+          currency: price.price_currency || 'usd',
+          metadata: {
+            created_from: 'checkout_session_completed',
+            stripeCheckoutSessionId: session.id,
+            metadataId,
+          },
+        };
+
+        const { data: subscription, error: subError } = await supabase
+          .from('subscriptions')
+          .insert(subscriptionData)
+          .select()
+          .single();
+
+        if (subError) {
+          this.logger.error(
+            'Failed to save subscription from checkout session:',
+            subError,
+          );
+          return;
+        }
+
+        this.logger.log(
+          `Subscription ${subscription.id} created from checkout session ${session.id}`,
+        );
+
+        // Invalidate product revenue metrics cache
+        const cacheKey = `product-metrics:${productId}`;
+        await this.cacheManager.del(cacheKey);
+
+        // Grant features
+        const { data: productFeatures } = await supabase
+          .from('product_features')
+          .select('feature_id, config')
+          .eq('product_id', productId);
+
+        if (productFeatures && productFeatures.length > 0) {
+          const featureGrants = productFeatures.map((pf) => ({
+            customer_id: customerId,
+            subscription_id: subscription.id,
+            feature_id: pf.feature_id,
+            properties: pf.config || {},
+            granted_at: new Date().toISOString(),
+          }));
+
+          const { error: grantError } = await supabase
+            .from('feature_grants')
+            .insert(featureGrants);
+
+          if (grantError) {
+            this.logger.error('Failed to grant features:', grantError);
+          } else {
+            this.logger.log(
+              `Granted ${featureGrants.length} features from checkout session`,
+            );
+          }
+        }
+
+        // Update checkout session record
+        if (checkoutSession) {
+          await supabase
+            .from('checkout_sessions')
+            .update({
+              completed_at: new Date().toISOString(),
+              subscription_id: subscription.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', checkoutSession.id);
+        }
+      }
+
+      this.logger.log(`Checkout session ${session.id} processed successfully`);
+    } catch (error) {
+      this.logger.error('Error handling checkout.session.completed:', error);
     }
   }
 }

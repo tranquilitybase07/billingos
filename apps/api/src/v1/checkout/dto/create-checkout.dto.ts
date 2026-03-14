@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsObject, IsNotEmpty, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsObject,
+  IsNotEmpty,
+  IsIn,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateCheckoutDto {
   @IsString()
@@ -45,4 +52,8 @@ export class CreateCheckoutDto {
     name?: string;
     taxId?: string;
   };
+
+  @IsBoolean()
+  @IsOptional()
+  adaptivePricing?: boolean;
 }
