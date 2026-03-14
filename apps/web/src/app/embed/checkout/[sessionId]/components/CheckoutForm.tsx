@@ -399,6 +399,10 @@ function CheckoutFormAdaptive({
   const checkout = checkoutResult.type === 'success' ? checkoutResult.checkout : null
   const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [name, setName] = useState(session.customer?.name || '')
+  const [email, setEmail] = useState(session.customer?.email || '')
+  const namePrefilled = !!session.customer?.name
+  const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLDivElement>(null)
 
   // Propagate total changes (e.g. when customer selects a different currency)
@@ -480,6 +484,39 @@ function CheckoutFormAdaptive({
 
   return (
     <form ref={formRef as any} onSubmit={handleSubmit} className="space-y-3">
+      {/* Name */}
+      <div>
+        <label htmlFor="adaptive-name" className="block text-xs font-medium text-gray-600 mb-1">
+          Name
+        </label>
+        <input
+          type="text"
+          id="adaptive-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Full name"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isProcessing || namePrefilled}
+        />
+      </div>
+
+      {/* Email */}
+      <div>
+        <label htmlFor="adaptive-email" className="block text-xs font-medium text-gray-600 mb-1">
+          Email
+        </label>
+        <input
+          type="email"
+          id="adaptive-email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          required
+          disabled={isProcessing || emailPrefilled}
+        />
+      </div>
+
       {/* Currency selector — required for adaptive pricing */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -562,12 +599,18 @@ function CheckoutFormTrial({
   const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [name, setName] = useState(session.customer?.name || '')
   const [email, setEmail] = useState(session.customer?.email || '')
+  const namePrefilled = !!session.customer?.name
+  const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     if (session?.customer?.email) {
       setEmail(session.customer.email)
+    }
+    if (session?.customer?.name) {
+      setName(session.customer.name)
     }
   }, [session?.customer])
 
@@ -648,19 +691,36 @@ function CheckoutFormTrial({
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+      {/* Name */}
       <div>
-        <label htmlFor="email" className="block text-xs font-medium text-gray-600 mb-1">
+        <label htmlFor="trial-name" className="block text-xs font-medium text-gray-600 mb-1">
+          Name
+        </label>
+        <input
+          type="text"
+          id="trial-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Full name"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isProcessing || namePrefilled}
+        />
+      </div>
+
+      {/* Email */}
+      <div>
+        <label htmlFor="trial-email" className="block text-xs font-medium text-gray-600 mb-1">
           Email
         </label>
         <input
           type="email"
-          id="email"
+          id="trial-email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
           required
-          disabled={isProcessing}
+          disabled={isProcessing || emailPrefilled}
         />
       </div>
 
@@ -724,13 +784,19 @@ function CheckoutFormInner({
   const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [name, setName] = useState(session.customer?.name || '')
   const [email, setEmail] = useState(session.customer?.email || '')
+  const namePrefilled = !!session.customer?.name
+  const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLFormElement>(null)
 
   // Update state when session customer data changes
   useEffect(() => {
     if (session?.customer?.email) {
       setEmail(session.customer.email)
+    }
+    if (session?.customer?.name) {
+      setName(session.customer.name)
     }
   }, [session?.customer])
 
@@ -842,6 +908,22 @@ function CheckoutFormInner({
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+      {/* Name */}
+      <div>
+        <label htmlFor="name" className="block text-xs font-medium text-gray-600 mb-1">
+          Name
+        </label>
+        <input
+          type="text"
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Full name"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isProcessing || namePrefilled}
+        />
+      </div>
+
       {/* Email */}
       <div>
         <label htmlFor="email" className="block text-xs font-medium text-gray-600 mb-1">
@@ -853,9 +935,9 @@ function CheckoutFormInner({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
           required
-          disabled={isProcessing}
+          disabled={isProcessing || emailPrefilled}
         />
       </div>
 

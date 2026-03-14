@@ -170,7 +170,8 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
         </div>
 
         {/* Right — scrollable */}
-        <div className="overflow-y-auto py-1 pb-6 pr-1">
+        <div className="scrollbar-thin-hover-group min-h-0">
+        <div className="overflow-y-auto h-full py-1 pb-6 pr-1 scrollbar-thin">
           <CheckoutForm
             key={clientSecretOverride ?? session.clientSecret}
             session={clientSecretOverride ? { ...session, clientSecret: clientSecretOverride } : session}
@@ -200,6 +201,7 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
               setDisplayCurrency(currency)
             }}
           />
+        </div>
         </div>
       </div>
     </div>

@@ -566,6 +566,38 @@
   box-shadow: 0 0 0 2px var(--background), 0 0 0 3px oklch(0.546 0.245 262.881 / 0.25);
 }
 
+/* Thin, hover-only scrollbar — Linear-style clean design */
+.scrollbar-thin {
+  scrollbar-width: none; /* Firefox: hide completely by default */
+  -ms-overflow-style: none; /* IE/Edge: hide completely */
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+/* Wrapper approach: show thin scrollbar on hover via a parent .scrollbar-thin-hover-group */
+.scrollbar-thin-hover-group:hover .scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+}
+.dark .scrollbar-thin-hover-group:hover .scrollbar-thin {
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+.scrollbar-thin-hover-group:hover .scrollbar-thin::-webkit-scrollbar {
+  width: 3px;
+}
+.scrollbar-thin-hover-group:hover .scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin-hover-group:hover .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 9999px;
+}
+.dark .scrollbar-thin-hover-group:hover .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

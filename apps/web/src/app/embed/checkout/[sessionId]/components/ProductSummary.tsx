@@ -60,7 +60,9 @@ export function ProductSummary({
         </div>
         <span className="font-semibold text-sm text-gray-900">{getIntervalLabel(product.interval)}</span>
         <span className="text-gray-400 text-sm ml-0.5">
-          {formatAmount(amount)}/{getIntervalShort(product.interval)}
+          {displayCurrency
+            ? `${formatAmount(totalAmount, displayCurrency)}/${getIntervalShort(product.interval)}`
+            : `${formatAmount(amount)}/${getIntervalShort(product.interval)}`}
         </span>
       </div>
 
@@ -72,12 +74,14 @@ export function ProductSummary({
         </div>
 
         <div className="space-y-1.5 pt-0.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Subtotal</span>
-            <span className="text-gray-900">{formatAmount(amount)}</span>
-          </div>
+          {!displayCurrency && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="text-gray-900">{formatAmount(amount)}</span>
+            </div>
+          )}
 
-          {discountAmount !== undefined && discountAmount > 0 && (
+          {!displayCurrency && discountAmount !== undefined && discountAmount > 0 && (
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Discount</span>
               <span className="text-green-600">-{formatAmount(discountAmount)}</span>
@@ -115,7 +119,7 @@ export function ProductSummary({
       </div>
 
       {/* Trial period badge */}
-      {trialDays && trialDays > 0 && (
+      {trialDays !== undefined && trialDays > 0 && (
         <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
           <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
