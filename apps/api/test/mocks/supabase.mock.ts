@@ -1,5 +1,3 @@
-import { jest } from '@jest/globals';
-
 /**
  * SupabaseMockBuilder - A flexible mock builder for Supabase client
  *

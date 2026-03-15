@@ -1,4 +1,11 @@
-import { IsString, IsNumber, IsUUID, IsOptional, IsBoolean, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsUUID,
+  IsOptional,
+  IsBoolean,
+  IsEnum,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreatePriceDto } from './create-price.dto';
 import { LinkFeatureDto } from './link-feature.dto';

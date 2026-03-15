@@ -47,10 +47,14 @@ export class RefundService {
         refundParams.amount = params.amount;
       }
 
-      const refund = await this.stripeService.getClient().refunds.create(
-        refundParams,
-        params.stripeAccountId ? { stripeAccount: params.stripeAccountId } : {},
-      );
+      const refund = await this.stripeService
+        .getClient()
+        .refunds.create(
+          refundParams,
+          params.stripeAccountId
+            ? { stripeAccount: params.stripeAccountId }
+            : {},
+        );
 
       // Log refund in database
       await this.logRefund({
@@ -155,7 +159,7 @@ export class RefundService {
   /**
    * Log refund in database for audit trail
    */
-  private async logRefund(params: {
+  async logRefund(params: {
     paymentIntentId: string;
     stripeRefundId: string;
     amount: number;
@@ -195,7 +199,7 @@ export class RefundService {
   /**
    * Add item to reconciliation queue for manual review
    */
-  private async addToReconciliationQueue(params: {
+  async addToReconciliationQueue(params: {
     type: string;
     referenceId: string;
     status: string;
@@ -227,10 +231,12 @@ export class RefundService {
     refundId: string,
     stripeAccountId?: string,
   ): Promise<Stripe.Refund> {
-    return await this.stripeService.getClient().refunds.retrieve(
-      refundId,
-      stripeAccountId ? { stripeAccount: stripeAccountId } : {},
-    );
+    return await this.stripeService
+      .getClient()
+      .refunds.retrieve(
+        refundId,
+        stripeAccountId ? { stripeAccount: stripeAccountId } : {},
+      );
   }
 
   /**

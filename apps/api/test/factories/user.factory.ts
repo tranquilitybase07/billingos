@@ -21,16 +21,16 @@ export const userFactory = Factory.define<UserFactoryParams>(
     return {
       id: params?.id || `user_${sequence}`,
       email: params?.email || mockData.email(),
-      full_name: params?.full_name !== undefined
-        ? params.full_name
-        : mockData.name(),
-      avatar_url: params?.avatar_url !== undefined
-        ? params.avatar_url
-        : mockData.url('/avatar.jpg'),
+      full_name:
+        params?.full_name !== undefined ? params.full_name : mockData.name(),
+      avatar_url:
+        params?.avatar_url !== undefined
+          ? params.avatar_url
+          : mockData.url('/avatar.jpg'),
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };
-  }
+  },
 );
 
 /**
@@ -62,20 +62,25 @@ export interface UserOrganizationFactoryParams {
   updated_at: string;
 }
 
-export const userOrganizationFactory = Factory.define<UserOrganizationFactoryParams>(
-  ({ sequence, params, associations }) => {
-    const now = new Date().toISOString();
+export const userOrganizationFactory =
+  Factory.define<UserOrganizationFactoryParams>(
+    ({ sequence, params, associations }) => {
+      const now = new Date().toISOString();
 
-    return {
-      user_id: params?.user_id || associations?.user?.id || `user_${sequence}`,
-      organization_id: params?.organization_id || associations?.organization?.id || `org_${sequence}`,
-      role: params?.role || 'member',
-      deleted_at: params?.deleted_at || null,
-      created_at: params?.created_at || mockData.date.past(),
-      updated_at: params?.updated_at || now,
-    };
-  }
-);
+      return {
+        user_id:
+          params?.user_id || associations?.user?.id || `user_${sequence}`,
+        organization_id:
+          params?.organization_id ||
+          associations?.organization?.id ||
+          `org_${sequence}`,
+        role: params?.role || 'member',
+        deleted_at: params?.deleted_at || null,
+        created_at: params?.created_at || mockData.date.past(),
+        updated_at: params?.updated_at || now,
+      };
+    },
+  );
 
 // Admin membership
 export const adminMembership = userOrganizationFactory.params({

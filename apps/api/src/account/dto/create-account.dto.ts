@@ -1,18 +1,25 @@
-import { IsString, IsNotEmpty, IsEmail, IsOptional, IsIn, Length } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsOptional,
+  IsIn,
+  Length,
+} from 'class-validator';
 
 export class CreateAccountDto {
   @IsString()
   @IsNotEmpty()
-  organization_id: string;
+  organization_id!: string;
 
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  email!: string;
 
   @IsString()
   @IsNotEmpty()
   @Length(2, 2)
-  country: string; // ISO 2-letter country code
+  country!: string; // ISO 2-letter country code
 
   @IsString()
   @IsOptional()

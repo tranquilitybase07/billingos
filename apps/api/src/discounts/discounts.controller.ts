@@ -63,7 +63,11 @@ export class DiscountsController {
     @Param('productId') productId: string,
     @Query('organization_id') organizationId: string,
   ) {
-    return this.discountsService.findByProduct(productId, organizationId, user.id);
+    return this.discountsService.findByProduct(
+      productId,
+      organizationId,
+      user.id,
+    );
   }
 
   /**

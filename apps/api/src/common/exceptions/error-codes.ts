@@ -208,7 +208,8 @@ export const ErrorMetadata: Partial<
   [ErrorCode.PAY_CARD_DECLINED]: {
     message: 'Card declined',
     statusCode: 400,
-    userMessage: 'Your card was declined. Please try a different payment method.',
+    userMessage:
+      'Your card was declined. Please try a different payment method.',
     helpUrl: 'https://docs.billingos.com/payments/declined',
   },
   [ErrorCode.PAY_INSUFFICIENT_FUNDS]: {
@@ -318,7 +319,8 @@ export const ErrorMetadata: Partial<
   [ErrorCode.SYS_SERVICE_UNAVAILABLE]: {
     message: 'Service unavailable',
     statusCode: 503,
-    userMessage: 'The service is temporarily unavailable. Please try again later.',
+    userMessage:
+      'The service is temporarily unavailable. Please try again later.',
   },
   [ErrorCode.SYS_INTERNAL_ERROR]: {
     message: 'Internal server error',

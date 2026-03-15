@@ -19,7 +19,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
 @ApiTags('Features')
-
 @Controller('features')
 export class FeaturesController {
   constructor(private readonly featuresService: FeaturesService) {}

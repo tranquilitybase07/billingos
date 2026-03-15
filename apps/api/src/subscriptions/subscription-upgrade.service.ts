@@ -87,8 +87,12 @@ export class SubscriptionUpgradeService {
     // 2. Verify access (different logic for web app vs SDK)
     if (authContext.isSDK) {
       // SDK request: verify subscription belongs to the organization
-      if (subscription.customer.organization_id !== authContext.organizationId) {
-        throw new ForbiddenException('You do not have access to this subscription');
+      if (
+        subscription.customer.organization_id !== authContext.organizationId
+      ) {
+        throw new ForbiddenException(
+          'You do not have access to this subscription',
+        );
       }
     } else {
       // Web app request: verify user is admin of the organization
@@ -101,19 +105,25 @@ export class SubscriptionUpgradeService {
         .single();
 
       if (!membership) {
-        throw new ForbiddenException('You do not have access to this subscription');
+        throw new ForbiddenException(
+          'You do not have access to this subscription',
+        );
       }
 
       // Only admins can change subscription plans
       if ((membership as any).role !== 'admin') {
-        throw new ForbiddenException('Only organization admins can change subscription plans');
+        throw new ForbiddenException(
+          'Only organization admins can change subscription plans',
+        );
       }
     }
 
     // 3. Get current price details
     const { data: currentPrice } = await supabase
       .from('product_prices')
-      .select('*, product:products(id, name, recurring_interval, recurring_interval_count)')
+      .select(
+        '*, product:products(id, name, recurring_interval, recurring_interval_count)',
+      )
       .eq('product_id', subscription.product_id)
       .single();
 
@@ -124,7 +134,9 @@ export class SubscriptionUpgradeService {
     // 4. Get new price details
     const { data: newPrice, error: priceError } = await supabase
       .from('product_prices')
-      .select('*, product:products(id, name, recurring_interval, recurring_interval_count, trial_days)')
+      .select(
+        '*, product:products(id, name, recurring_interval, recurring_interval_count, trial_days)',
+      )
       .eq('id', previewDto.new_price_id)
       .single();
 
@@ -139,7 +151,9 @@ export class SubscriptionUpgradeService {
 
     // 4b. Validate currency matches
     if (currentPrice.price_currency !== newPrice.price_currency) {
-      throw new BadRequestException('Cannot change between different currencies');
+      throw new BadRequestException(
+        'Cannot change between different currencies',
+      );
     }
 
     // 5. Validate price belongs to organization
@@ -150,13 +164,17 @@ export class SubscriptionUpgradeService {
       .single();
 
     if (newProduct?.organization_id !== subscription.customer.organization_id) {
-      throw new BadRequestException('Cannot change to a product from a different organization');
+      throw new BadRequestException(
+        'Cannot change to a product from a different organization',
+      );
     }
 
     // 6. Validate same billing interval (Phase 1 constraint)
     if (
-      newPrice.product.recurring_interval !== currentPrice.product.recurring_interval ||
-      newPrice.product.recurring_interval_count !== currentPrice.product.recurring_interval_count
+      newPrice.product.recurring_interval !==
+        currentPrice.product.recurring_interval ||
+      newPrice.product.recurring_interval_count !==
+        currentPrice.product.recurring_interval_count
     ) {
       throw new BadRequestException(
         'Cannot change between different billing intervals (monthly/yearly). Please contact support.',
@@ -179,7 +197,11 @@ export class SubscriptionUpgradeService {
     // 8. Calculate proration or get from Stripe
     let proration: ProrationResult;
 
-    if (subscription.stripe_subscription_id && newPrice.stripe_price_id && account?.stripe_id) {
+    if (
+      subscription.stripe_subscription_id &&
+      newPrice.stripe_price_id &&
+      account?.stripe_id
+    ) {
       // Use Stripe API for accurate preview
       proration = await this.getStripeProrationPreview(
         subscription,
@@ -226,7 +248,10 @@ export class SubscriptionUpgradeService {
       change_type: changeType,
       effective_date: proration.effectiveDate.toISOString(),
       next_billing_date: proration.nextBillingDate.toISOString(),
-      notes: this.getChangeNotes(changeType, previewDto.effective_date || ChangeEffectiveTiming.IMMEDIATE),
+      notes: this.getChangeNotes(
+        changeType,
+        previewDto.effective_date || ChangeEffectiveTiming.IMMEDIATE,
+      ),
     };
   }
 
@@ -307,11 +332,15 @@ export class SubscriptionUpgradeService {
     }
 
     const changeType = preview.change_type;
-    const effectiveDate = changePlanDto.effective_date || ChangeEffectiveTiming.IMMEDIATE;
+    const effectiveDate =
+      changePlanDto.effective_date || ChangeEffectiveTiming.IMMEDIATE;
 
     try {
       // 6. Handle based on upgrade vs downgrade
-      if (changeType === 'upgrade' || effectiveDate === ChangeEffectiveTiming.IMMEDIATE) {
+      if (
+        changeType === 'upgrade' ||
+        effectiveDate === ChangeEffectiveTiming.IMMEDIATE
+      ) {
         // Execute immediate change
         return await this.executeImmediateChange(
           subscription,
@@ -371,8 +400,12 @@ export class SubscriptionUpgradeService {
     // 2. Verify access (different logic for web app vs SDK)
     if (authContext.isSDK) {
       // SDK request: verify subscription belongs to the organization
-      if (subscription.customer.organization_id !== authContext.organizationId) {
-        throw new ForbiddenException('You do not have access to this subscription');
+      if (
+        subscription.customer.organization_id !== authContext.organizationId
+      ) {
+        throw new ForbiddenException(
+          'You do not have access to this subscription',
+        );
       }
     } else {
       // Web app request: verify user is admin of the organization
@@ -385,12 +418,16 @@ export class SubscriptionUpgradeService {
         .single();
 
       if (!membership) {
-        throw new ForbiddenException('You do not have access to this subscription');
+        throw new ForbiddenException(
+          'You do not have access to this subscription',
+        );
       }
 
       // Only admins can change subscription plans
       if ((membership as any).role !== 'admin') {
-        throw new ForbiddenException('Only organization admins can change subscription plans');
+        throw new ForbiddenException(
+          'Only organization admins can change subscription plans',
+        );
       }
     }
 
@@ -423,7 +460,10 @@ export class SubscriptionUpgradeService {
       .eq('organization_id', subscription.customer.organization_id)
       .eq('is_archived', false)
       .eq('recurring_interval', subscription.product.recurring_interval)
-      .eq('recurring_interval_count', subscription.product.recurring_interval_count);
+      .eq(
+        'recurring_interval_count',
+        subscription.product.recurring_interval_count,
+      );
 
     if (!products) {
       return {
@@ -537,16 +577,21 @@ export class SubscriptionUpgradeService {
           // In Stripe, proration items can be identified by their descriptions
           // Credits for unused time typically have negative amounts in the invoice
           // But line items are always positive - the direction is in the invoice level
-          if (lineItem.description?.toLowerCase().includes('unused time') ||
-              lineItem.description?.toLowerCase().includes('remaining time') ||
-              lineItem.type === 'invoiceitem' && line.amount < 0) {
+          if (
+            lineItem.description?.toLowerCase().includes('unused time') ||
+            lineItem.description?.toLowerCase().includes('remaining time') ||
+            (lineItem.type === 'invoiceitem' && line.amount < 0)
+          ) {
             // This is a credit for unused time
             prorationCredit += Math.abs(line.amount);
           } else {
             // This is a charge for the new plan's remaining period
             newPlanCharge += line.amount;
           }
-        } else if (lineItem.price?.id === newPrice.stripe_price_id && !lineItem.proration) {
+        } else if (
+          lineItem.price?.id === newPrice.stripe_price_id &&
+          !lineItem.proration
+        ) {
           // Regular subscription item (not proration)
           // Only count if we don't have proration items
           if (!hasProrationItems) {
@@ -625,14 +670,18 @@ export class SubscriptionUpgradeService {
     const newAmount = newPrice?.price_amount || 0;
 
     // Calculate prorated amounts
-    const unusedCredit = Math.round((currentAmount * remainingDays) / totalDays);
+    const unusedCredit = Math.round(
+      (currentAmount * remainingDays) / totalDays,
+    );
     const newPlanCharge = Math.round((newAmount * remainingDays) / totalDays);
     const immediatePayment = Math.max(0, newPlanCharge - unusedCredit);
 
     this.logger.log(
       `Local proration: ${totalDays} days total, ${usedDays} used, ${remainingDays} remaining`,
     );
-    this.logger.log(`Credit: $${unusedCredit / 100}, Charge: $${newPlanCharge / 100}, Net: $${immediatePayment / 100}`);
+    this.logger.log(
+      `Credit: $${unusedCredit / 100}, Charge: $${newPlanCharge / 100}, Net: $${immediatePayment / 100}`,
+    );
 
     return Promise.resolve({
       unusedCredit,
@@ -646,7 +695,10 @@ export class SubscriptionUpgradeService {
   /**
    * Determine if change is upgrade or downgrade
    */
-  private determineChangeType(currentAmount: number, newAmount: number): 'upgrade' | 'downgrade' {
+  private determineChangeType(
+    currentAmount: number,
+    newAmount: number,
+  ): 'upgrade' | 'downgrade' {
     return newAmount > currentAmount ? 'upgrade' : 'downgrade';
   }
 
@@ -665,7 +717,9 @@ export class SubscriptionUpgradeService {
         notes.push('You will be charged the prorated difference today');
         notes.push('Your trial period (if any) will be preserved');
       } else {
-        notes.push('Your plan will be upgraded at the end of your current billing period');
+        notes.push(
+          'Your plan will be upgraded at the end of your current billing period',
+        );
         notes.push('No charge will be made today');
       }
     } else {
@@ -673,7 +727,9 @@ export class SubscriptionUpgradeService {
         notes.push('Your plan will be downgraded immediately');
         notes.push('Unused credit will be applied to your account');
       } else {
-        notes.push('Your plan will be downgraded at the end of your current billing period');
+        notes.push(
+          'Your plan will be downgraded at the end of your current billing period',
+        );
         notes.push('You will keep access to your current plan until then');
         notes.push('No refund will be issued');
       }
@@ -696,14 +752,21 @@ export class SubscriptionUpgradeService {
     let stripeInvoiceId: string | null = null;
 
     // Check if this is a free-to-paid upgrade (no Stripe subscription exists)
-    const isFreeUpgrade = !subscription.stripe_subscription_id && newPrice.stripe_price_id;
+    const isFreeUpgrade =
+      !subscription.stripe_subscription_id && newPrice.stripe_price_id;
 
     // Use transaction for atomic operations
     try {
       // Begin by handling the Stripe operations first
-      if (isFreeUpgrade && stripeAccountId && subscription.customer?.stripe_customer_id) {
+      if (
+        isFreeUpgrade &&
+        stripeAccountId &&
+        subscription.customer?.stripe_customer_id
+      ) {
         // Free-to-paid upgrade: Create new Stripe subscription
-        this.logger.log('Processing free-to-paid upgrade, creating new Stripe subscription');
+        this.logger.log(
+          'Processing free-to-paid upgrade, creating new Stripe subscription',
+        );
 
         // Get product for trial information
         const { data: product } = await supabase
@@ -713,37 +776,46 @@ export class SubscriptionUpgradeService {
           .single();
 
         try {
-          const newStripeSubscription = await this.stripeService.createSubscription(
-            {
-              customer: subscription.customer.stripe_customer_id,
-              items: [{ price: newPrice.stripe_price_id }],
-              trial_period_days: product?.trial_days || undefined,
-              metadata: {
-                subscription_id: subscription.id,
-                organization_id: subscription.customer.organization_id,
+          const upgradeIdempotencyKey = `upgrade:${subscription.id}:${newPrice.product_id}:${Date.now()}`;
+          const newStripeSubscription =
+            await this.stripeService.createSubscription(
+              {
+                customer: subscription.customer.stripe_customer_id,
+                items: [{ price: newPrice.stripe_price_id }],
+                trial_period_days: product?.trial_days || undefined,
+                metadata: {
+                  subscription_id: subscription.id,
+                  organization_id: subscription.customer.organization_id,
+                },
               },
-            },
-            stripeAccountId,
-          );
+              stripeAccountId,
+              upgradeIdempotencyKey,
+            );
 
           // Update subscription with new Stripe ID and status
-          const { data: updatedSubscription, error: updateError } = await supabase
-            .from('subscriptions')
-            .update({
-              product_id: newPrice.product_id,
-              amount: newPrice.price_amount || 0,
-              currency: newPrice.price_currency || 'usd',
-              stripe_subscription_id: newStripeSubscription.id,
-              status: newStripeSubscription.status === 'trialing' ? 'trialing' : 'active',
-              // Type cast period dates as Stripe types might not match our DB
-              trial_end: newStripeSubscription.trial_end
-                ? new Date(newStripeSubscription.trial_end * 1000).toISOString()
-                : null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', subscription.id)
-            .select()
-            .single();
+          const { data: updatedSubscription, error: updateError } =
+            await supabase
+              .from('subscriptions')
+              .update({
+                product_id: newPrice.product_id,
+                amount: newPrice.price_amount || 0,
+                currency: newPrice.price_currency || 'usd',
+                stripe_subscription_id: newStripeSubscription.id,
+                status:
+                  newStripeSubscription.status === 'trialing'
+                    ? 'trialing'
+                    : 'active',
+                // Type cast period dates as Stripe types might not match our DB
+                trial_end: newStripeSubscription.trial_end
+                  ? new Date(
+                      newStripeSubscription.trial_end * 1000,
+                    ).toISOString()
+                  : null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', subscription.id)
+              .select()
+              .single();
 
           if (updateError) {
             // Attempt to cancel the Stripe subscription if DB update fails
@@ -752,43 +824,64 @@ export class SubscriptionUpgradeService {
               stripeAccountId,
               false, // immediate cancellation
             );
-            throw new BadRequestException('Failed to update subscription after Stripe creation');
+            throw new BadRequestException(
+              'Failed to update subscription after Stripe creation',
+            );
           }
 
           // Cancel any other active free subscriptions for this customer
-          await this.cancelOtherSubscriptions(subscription.customer_id, subscription.id);
+          await this.cancelOtherSubscriptions(
+            subscription.customer_id,
+            subscription.id,
+          );
 
-          stripeInvoiceId = typeof newStripeSubscription.latest_invoice === 'string'
-            ? newStripeSubscription.latest_invoice
-            : newStripeSubscription.latest_invoice?.id || null;
+          stripeInvoiceId =
+            typeof newStripeSubscription.latest_invoice === 'string'
+              ? newStripeSubscription.latest_invoice
+              : newStripeSubscription.latest_invoice?.id || null;
 
-          this.logger.log(`Created new Stripe subscription for free-to-paid upgrade: ${newStripeSubscription.id}`);
-
+          this.logger.log(
+            `Created new Stripe subscription for free-to-paid upgrade: ${newStripeSubscription.id}`,
+          );
         } catch (stripeError) {
-          this.logger.error('Failed to create Stripe subscription for free-to-paid upgrade:', stripeError);
-          throw new BadRequestException('Failed to create subscription in Stripe');
+          this.logger.error(
+            'Failed to create Stripe subscription for free-to-paid upgrade:',
+            stripeError,
+          );
+          throw new BadRequestException(
+            'Failed to create subscription in Stripe',
+          );
         }
-
-      } else if (subscription.stripe_subscription_id && newPrice.stripe_price_id && stripeAccountId) {
+      } else if (
+        subscription.stripe_subscription_id &&
+        newPrice.stripe_price_id &&
+        stripeAccountId
+      ) {
         // Paid-to-paid upgrade: Update existing Stripe subscription
         try {
-          const updatedSubscription = await this.stripeService.updateSubscriptionPrice(
-            subscription.stripe_subscription_id,
-            newPrice.stripe_price_id,
-            stripeAccountId,
-          );
+          const updatedSubscription =
+            await this.stripeService.updateSubscriptionPrice(
+              subscription.stripe_subscription_id,
+              newPrice.stripe_price_id,
+              stripeAccountId,
+            );
 
           // Get the latest invoice ID
           if (updatedSubscription.latest_invoice) {
-            stripeInvoiceId = typeof updatedSubscription.latest_invoice === 'string'
-              ? updatedSubscription.latest_invoice
-              : updatedSubscription.latest_invoice.id;
+            stripeInvoiceId =
+              typeof updatedSubscription.latest_invoice === 'string'
+                ? updatedSubscription.latest_invoice
+                : updatedSubscription.latest_invoice.id;
           }
 
-          this.logger.log(`Stripe subscription updated: ${subscription.stripe_subscription_id}`);
+          this.logger.log(
+            `Stripe subscription updated: ${subscription.stripe_subscription_id}`,
+          );
         } catch (error) {
           this.logger.error('Failed to update Stripe subscription:', error);
-          throw new BadRequestException('Failed to update subscription in Stripe');
+          throw new BadRequestException(
+            'Failed to update subscription in Stripe',
+          );
         }
 
         // Update subscription in database
@@ -827,7 +920,10 @@ export class SubscriptionUpgradeService {
 
         // Cancel any other active free subscriptions for this customer
         if (!subscription.stripe_subscription_id) {
-          await this.cancelOtherSubscriptions(subscription.customer_id, subscription.id);
+          await this.cancelOtherSubscriptions(
+            subscription.customer_id,
+            subscription.id,
+          );
         }
       }
 
@@ -863,7 +959,9 @@ export class SubscriptionUpgradeService {
         .eq('id', subscription.id)
         .single();
 
-      this.logger.log(`Subscription ${subscription.id} changed immediately from price ${currentPrice.id} to ${newPrice.id}`);
+      this.logger.log(
+        `Subscription ${subscription.id} changed immediately from price ${currentPrice.id} to ${newPrice.id}`,
+      );
 
       return {
         subscription: finalSubscription,
@@ -880,7 +978,10 @@ export class SubscriptionUpgradeService {
    * Cancel other subscriptions for the same customer
    * Used when upgrading from free to paid to ensure only one active subscription
    */
-  private async cancelOtherSubscriptions(customerId: string, keepSubscriptionId: string) {
+  private async cancelOtherSubscriptions(
+    customerId: string,
+    keepSubscriptionId: string,
+  ) {
     const supabase = this.supabaseService.getClient();
 
     try {
@@ -897,7 +998,9 @@ export class SubscriptionUpgradeService {
         return; // No other subscriptions to cancel
       }
 
-      this.logger.log(`Found ${otherSubscriptions.length} other subscriptions to cancel for customer ${customerId}`);
+      this.logger.log(
+        `Found ${otherSubscriptions.length} other subscriptions to cancel for customer ${customerId}`,
+      );
 
       // Cancel each subscription
       for (const sub of otherSubscriptions) {
@@ -919,7 +1022,9 @@ export class SubscriptionUpgradeService {
           .eq('subscription_id', sub.id)
           .is('revoked_at', null);
 
-        this.logger.log(`Cancelled duplicate subscription ${sub.id} for customer ${customerId}`);
+        this.logger.log(
+          `Cancelled duplicate subscription ${sub.id} for customer ${customerId}`,
+        );
       }
     } catch (error) {
       this.logger.error('Error cancelling other subscriptions:', error);
@@ -962,7 +1067,9 @@ export class SubscriptionUpgradeService {
       throw new BadRequestException('Failed to schedule downgrade');
     }
 
-    this.logger.log(`Downgrade scheduled for subscription ${subscription.id} at period end`);
+    this.logger.log(
+      `Downgrade scheduled for subscription ${subscription.id} at period end`,
+    );
 
     // TODO: Send notification email to customer
 

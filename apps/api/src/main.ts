@@ -78,7 +78,8 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      exceptionFactory: (errors) => ValidationException.fromClassValidator(errors),
+      exceptionFactory: (errors) =>
+        ValidationException.fromClassValidator(errors),
     }),
   );
 
@@ -120,7 +121,8 @@ async function bootstrap() {
         type: 'apiKey',
         name: 'Authorization',
         in: 'header',
-        description: 'Enter API key as: Bearer sk_test_xxx or Bearer sk_live_xxx',
+        description:
+          'Enter API key as: Bearer sk_test_xxx or Bearer sk_live_xxx',
       },
       'ApiKey',
     )

@@ -10,7 +10,10 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { FeaturesService } from '../../features/features.service';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
-import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
+import {
+  CurrentCustomer,
+  CustomerContext,
+} from '../../auth/decorators/current-customer.decorator';
 import { CustomersService } from '../../customers/customers.service';
 
 /**
@@ -26,7 +29,6 @@ import { CustomersService } from '../../customers/customers.service';
  * - GET /v1/features/usage-metrics - Get usage metrics for features
  */
 @ApiTags('SDK - Features')
-
 @Controller('v1/features')
 @UseGuards(SessionTokenAuthGuard)
 export class V1FeaturesController {
@@ -77,11 +79,13 @@ export class V1FeaturesController {
       reason: access.reason,
       limit: access.feature?.properties?.limit ?? null,
       usage: access.feature?.properties?.consumed ?? null,
-      metadata: access.feature ? {
-        remaining: access.feature.properties?.remaining,
-        resets_at: access.feature.properties?.resets_at,
-        type: access.feature.type,
-      } : null,
+      metadata: access.feature
+        ? {
+            remaining: access.feature.properties?.remaining,
+            resets_at: access.feature.properties?.resets_at,
+            type: access.feature.type,
+          }
+        : null,
     };
   }
 
@@ -96,7 +100,8 @@ export class V1FeaturesController {
   @Post('track-usage')
   async trackUsage(
     @CurrentCustomer() customer: CustomerContext,
-    @Body() body: {
+    @Body()
+    body: {
       feature_key: string;
       quantity: number;
       timestamp?: string;
@@ -142,9 +147,7 @@ export class V1FeaturesController {
    * Headers: Authorization: Bearer bos_session_xxx
    */
   @Get('entitlements')
-  async getEntitlements(
-    @CurrentCustomer() customer: CustomerContext,
-  ) {
+  async getEntitlements(@CurrentCustomer() customer: CustomerContext) {
     // Get customer record
     const customerRecord = await this.customersService.findOneByExternalId(
       customer.externalUserId,

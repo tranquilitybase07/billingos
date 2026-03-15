@@ -50,7 +50,9 @@ export class DatabaseService {
         // we would wrap this in BEGIN/COMMIT/ROLLBACK
         const result = await callback(client);
 
-        this.logger.debug(`Transaction completed successfully on attempt ${attempt}`);
+        this.logger.debug(
+          `Transaction completed successfully on attempt ${attempt}`,
+        );
         return result;
       } catch (error) {
         lastError = error as Error;
@@ -176,7 +178,9 @@ export class DatabaseService {
       if (options?.onConflict) {
         // Note: Supabase doesn't support ON CONFLICT directly in JS client
         // This would need to be handled via RPC function
-        this.logger.warn('ON CONFLICT not directly supported in Supabase JS client');
+        this.logger.warn(
+          'ON CONFLICT not directly supported in Supabase JS client',
+        );
       }
 
       const { error } = await query;

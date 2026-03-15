@@ -1,5 +1,3 @@
-import { jest } from '@jest/globals';
-
 /**
  * Enhanced Chainable Supabase Mock
  *
@@ -27,7 +25,7 @@ export class ChainableQueryBuilder {
 
   constructor(
     table: string,
-    responseGetter: (state: ChainState) => Promise<any>
+    responseGetter: (state: ChainState) => Promise<any>,
   ) {
     this.state = {
       table,
@@ -37,7 +35,10 @@ export class ChainableQueryBuilder {
   }
 
   // Selection methods
-  select(columns?: string, options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
+  select(
+    columns?: string,
+    options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean },
+  ) {
     this.state.operation = 'select';
     this.state.selectColumns = columns;
     if (options?.count) {
@@ -151,7 +152,7 @@ export class EnhancedSupabaseMockBuilder {
    */
   withTableResponse(
     table: string,
-    response: { data: any; error?: any } | { data?: any; error: any }
+    response: { data: any; error?: any } | { data?: any; error: any },
   ) {
     this.responses.set(table, {
       data: response.data || null,
@@ -186,7 +187,8 @@ export class EnhancedSupabaseMockBuilder {
    */
   build() {
     const getResponse = (state: ChainState) => {
-      const baseResponse = this.responses.get(state.table) || this.defaultResponse;
+      const baseResponse =
+        this.responses.get(state.table) || this.defaultResponse;
 
       // Log the query for debugging (optional)
       // console.log('Mock query:', state);
@@ -203,9 +205,13 @@ export class EnhancedSupabaseMockBuilder {
 
           for (const filter of state.filters) {
             if (filter.type === 'eq' && filter.column) {
-              filteredData = filteredData.filter(item => item[filter.column] === filter.value);
+              filteredData = filteredData.filter(
+                (item) => item[filter.column] === filter.value,
+              );
             } else if (filter.type === 'in' && filter.column) {
-              filteredData = filteredData.filter(item => filter.value.includes(item[filter.column]));
+              filteredData = filteredData.filter((item) =>
+                filter.value.includes(item[filter.column]),
+              );
             }
           }
 
@@ -220,7 +226,10 @@ export class EnhancedSupabaseMockBuilder {
       }
 
       // Handle single() queries
-      if (state.filters.some(f => f.type === 'single') && Array.isArray(baseResponse.data)) {
+      if (
+        state.filters.some((f) => f.type === 'single') &&
+        Array.isArray(baseResponse.data)
+      ) {
         return Promise.resolve({
           data: baseResponse.data[0],
           error: baseResponse.error,
@@ -236,45 +245,69 @@ export class EnhancedSupabaseMockBuilder {
 
       // Create jest mocks for all methods
       const methods = [
-        'select', 'eq', 'neq', 'is', 'in', 'gt', 'gte', 'lt', 'lte',
-        'match', 'order', 'limit', 'single', 'insert', 'update', 'delete', 'upsert'
+        'select',
+        'eq',
+        'neq',
+        'is',
+        'in',
+        'gt',
+        'gte',
+        'lt',
+        'lte',
+        'match',
+        'order',
+        'limit',
+        'single',
+        'insert',
+        'update',
+        'delete',
+        'upsert',
       ];
 
-      methods.forEach(method => {
+      methods.forEach((method) => {
         const originalMethod = (builder as any)[method];
-        (builder as any)[method] = jest.fn().mockImplementation(
-          originalMethod.bind(builder)
-        );
+        (builder as any)[method] = jest
+          .fn()
+          .mockImplementation(originalMethod.bind(builder));
       });
 
       return builder;
     };
 
     // RPC mock
-    const rpc = jest.fn().mockImplementation((functionName: string, params?: any) => {
-      const response = this.responses.get(`rpc.${functionName}`) || this.defaultResponse;
-      return Promise.resolve(response);
-    });
+    const rpc = jest
+      .fn()
+      .mockImplementation((functionName: string, params?: any) => {
+        const response =
+          this.responses.get(`rpc.${functionName}`) || this.defaultResponse;
+        return Promise.resolve(response);
+      });
 
     // Main mock client
     return {
-      from: jest.fn().mockImplementation((table: string) => createMockedChain(table)),
+      from: jest
+        .fn()
+        .mockImplementation((table: string) => createMockedChain(table)),
       rpc,
       auth: {
         getUser: jest.fn().mockResolvedValue({
           data: { user: { id: 'test-user-id' } },
-          error: null
+          error: null,
         }),
         signInWithPassword: jest.fn().mockResolvedValue({
           data: { session: {} },
-          error: null
+          error: null,
         }),
         signOut: jest.fn().mockResolvedValue({ error: null }),
       },
       storage: {
         from: jest.fn().mockImplementation((bucket: string) => ({
-          upload: jest.fn().mockResolvedValue({ data: { path: 'test-path' }, error: null }),
-          download: jest.fn().mockResolvedValue({ data: new Blob(), error: null }),
+          upload: jest
+            .fn()
+            .mockResolvedValue({ data: { path: 'test-path' }, error: null }),
+          download: jest
+            .fn()
+            .mockResolvedValue({ data: new Blob(), error: null }),
           remove: jest.fn().mockResolvedValue({ data: [], error: null }),
         })),
       },
@@ -297,8 +330,12 @@ export class EnhancedSupabaseMockBuilder {
     return new EnhancedSupabaseMockBuilder()
       .withTableResponses({
         users: { data: { id: 'user_1', email: 'test@example.com' } },
-        organizations: { data: { id: 'org_1', name: 'Test Org', account_id: 'acc_1' } },
-        user_organizations: { data: { user_id: 'user_1', organization_id: 'org_1' } },
+        organizations: {
+          data: { id: 'org_1', name: 'Test Org', account_id: 'acc_1' },
+        },
+        user_organizations: {
+          data: { user_id: 'user_1', organization_id: 'org_1' },
+        },
         products: { data: [] },
         prices: { data: [] },
         subscriptions: { data: [] },
@@ -314,7 +351,8 @@ export class EnhancedMockSupabaseService {
   private mockClient: any;
 
   constructor(mockClient?: any) {
-    this.mockClient = mockClient || EnhancedSupabaseMockBuilder.createWithDefaults();
+    this.mockClient =
+      mockClient || EnhancedSupabaseMockBuilder.createWithDefaults();
   }
 
   getClient() {

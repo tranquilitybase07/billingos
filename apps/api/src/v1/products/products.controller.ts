@@ -2,10 +2,12 @@ import { Controller, Get, Query, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { V1ProductsService } from './products.service';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
-import { CurrentCustomer, CustomerContext } from '../../auth/decorators/current-customer.decorator';
+import {
+  CurrentCustomer,
+  CustomerContext,
+} from '../../auth/decorators/current-customer.decorator';
 
 @ApiTags('SDK - Products')
-
 @Controller('v1/products')
 @UseGuards(SessionTokenAuthGuard)
 export class V1ProductsController {

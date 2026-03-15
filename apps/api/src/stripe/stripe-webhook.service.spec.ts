@@ -69,7 +69,8 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
     stripeService = module.get<StripeService>(StripeService);
     supabaseService = module.get<SupabaseService>(SupabaseService);
     customersService = module.get<CustomersService>(CustomersService);
-    subscriptionsService = module.get<SubscriptionsService>(SubscriptionsService);
+    subscriptionsService =
+      module.get<SubscriptionsService>(SubscriptionsService);
 
     // Reset all mocks
     jest.clearAllMocks();
@@ -276,17 +277,19 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         id: 'cus_test123',
       });
 
-      mockStripeService.createSubscription.mockResolvedValue(mockStripeSubscription);
+      mockStripeService.createSubscription.mockResolvedValue(
+        mockStripeSubscription,
+      );
 
       // Execute the handler
-      await service['handlePaymentIntentSucceeded'](paymentIntent as Stripe.PaymentIntent);
+      await service['handlePaymentIntentSucceeded'](
+        paymentIntent as Stripe.PaymentIntent,
+      );
 
       // Verify critical operations occurred
-      expect(mockStripeService.attachPaymentMethodToCustomer).toHaveBeenCalledWith(
-        'pm_test123',
-        'cus_test123',
-        'acct_test123',
-      );
+      expect(
+        mockStripeService.attachPaymentMethodToCustomer,
+      ).toHaveBeenCalledWith('pm_test123', 'cus_test123', 'acct_test123');
 
       expect(mockStripeService.updateCustomer).toHaveBeenCalledWith(
         'cus_test123',
@@ -363,7 +366,10 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
                 select: jest.fn().mockReturnValue({
                   single: jest.fn().mockResolvedValue({
                     data: null,
-                    error: { code: '23505', message: 'Unique constraint violation' },
+                    error: {
+                      code: '23505',
+                      message: 'Unique constraint violation',
+                    },
                   }),
                 }),
               }),
@@ -404,7 +410,9 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
       });
 
       // Execute - should handle race condition gracefully
-      await service['handlePaymentIntentSucceeded'](paymentIntent as Stripe.PaymentIntent);
+      await service['handlePaymentIntentSucceeded'](
+        paymentIntent as Stripe.PaymentIntent,
+      );
 
       // Verify customer was eventually created/found
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('customers');
@@ -453,7 +461,9 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         };
       });
 
-      await service['handlePaymentIntentSucceeded'](paymentIntent as Stripe.PaymentIntent);
+      await service['handlePaymentIntentSucceeded'](
+        paymentIntent as Stripe.PaymentIntent,
+      );
 
       // Should not create a new subscription
       expect(mockStripeService.createSubscription).not.toHaveBeenCalled();
@@ -494,7 +504,9 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         };
       });
 
-      await service['handlePaymentIntentSucceeded'](paymentIntent as Stripe.PaymentIntent);
+      await service['handlePaymentIntentSucceeded'](
+        paymentIntent as Stripe.PaymentIntent,
+      );
 
       // Should exit early without creating subscription
       expect(mockStripeService.createSubscription).not.toHaveBeenCalled();
@@ -553,7 +565,7 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
                   accounts: { stripe_id: 'acct_test' },
                   stripe_price_id: 'price_test',
                 },
-                error: null
+                error: null,
               }),
             }),
           }),
@@ -568,9 +580,13 @@ describe('StripeWebhookService - Subscription Creation Flow', () => {
         };
       });
 
-      mockStripeService.createSubscription.mockResolvedValue(mockStripeSubscription);
+      mockStripeService.createSubscription.mockResolvedValue(
+        mockStripeSubscription,
+      );
 
-      await service['handlePaymentIntentSucceeded'](paymentIntent as Stripe.PaymentIntent);
+      await service['handlePaymentIntentSucceeded'](
+        paymentIntent as Stripe.PaymentIntent,
+      );
 
       // Should attempt to cancel the Stripe subscription
       expect(mockStripeService.cancelSubscription).toHaveBeenCalledWith(

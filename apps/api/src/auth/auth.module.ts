@@ -28,6 +28,12 @@ import { SessionTokensModule } from '../session-tokens/session-tokens.module';
   ],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, JwtOrSessionAuthGuard],
   controllers: [AuthController],
-  exports: [AuthService, JwtAuthGuard, JwtOrSessionAuthGuard, SessionTokensModule, JwtModule],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    JwtOrSessionAuthGuard,
+    SessionTokensModule,
+    JwtModule,
+  ],
 })
 export class AuthModule {}

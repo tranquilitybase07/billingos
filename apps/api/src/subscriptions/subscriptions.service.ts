@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Injectable,
   Logger,
@@ -194,9 +193,14 @@ export class SubscriptionsService {
               stripeSubscription.id,
               account.stripe_id,
             );
-            this.logger.warn(`Cancelled Stripe subscription ${stripeSubscription.id} due to database error`);
+            this.logger.warn(
+              `Cancelled Stripe subscription ${stripeSubscription.id} due to database error`,
+            );
           } catch (cancelError) {
-            this.logger.error('Failed to cancel Stripe subscription after database error:', cancelError);
+            this.logger.error(
+              'Failed to cancel Stripe subscription after database error:',
+              cancelError,
+            );
           }
         }
 
@@ -256,10 +260,40 @@ export class SubscriptionsService {
   }
 
   /**
+   * Revoke all active feature grants for a subscription
+   */
+  async revokeSubscriptionFeatures(subscriptionId: string): Promise<number> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data, error } = await supabase
+      .from('feature_grants')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('subscription_id', subscriptionId)
+      .is('revoked_at', null)
+      .select('id');
+
+    if (error) {
+      this.logger.error(
+        `Failed to revoke features for subscription ${subscriptionId}:`,
+        error,
+      );
+      return 0;
+    }
+
+    const count = data?.length ?? 0;
+    if (count > 0) {
+      this.logger.log(
+        `Revoked ${count} feature grants for subscription ${subscriptionId}`,
+      );
+    }
+    return count;
+  }
+
+  /**
    * Grant all features from a product to a customer
    * Also initialize usage records for quota features
    */
-  private async grantProductFeatures(
+  async grantProductFeatures(
     customerId: string,
     subscriptionId: string,
     productId: string,
@@ -372,7 +406,8 @@ export class SubscriptionsService {
 
     const { data: subscription, error } = await supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         *,
         customer:customers (
           id,
@@ -390,7 +425,8 @@ export class SubscriptionsService {
           recurring_interval,
           recurring_interval_count
         )
-      `)
+      `,
+      )
       .eq('id', id)
       .single();
 
@@ -461,7 +497,8 @@ export class SubscriptionsService {
 
     let query = supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         *,
         customer:customers (
           id,
@@ -479,7 +516,8 @@ export class SubscriptionsService {
           recurring_interval,
           recurring_interval_count
         )
-      `)
+      `,
+      )
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 

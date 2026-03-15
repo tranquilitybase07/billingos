@@ -57,7 +57,6 @@ export class FeaturesService {
       return null;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
     return org.accounts?.stripe_id || null;
   }
 
@@ -264,14 +263,16 @@ export class FeaturesService {
 
     const { data: features, error } = await supabase
       .from('features')
-      .select(`
+      .select(
+        `
         *,
         product_features (
           product_id,
           display_order,
           config
         )
-      `)
+      `,
+      )
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 
@@ -283,7 +284,7 @@ export class FeaturesService {
     if (features && features.length > 0) {
       // Get all unique product IDs
       const productIds = new Set<string>();
-      features.forEach(feature => {
+      features.forEach((feature) => {
         if (feature.product_features) {
           feature.product_features.forEach((pf: any) => {
             productIds.add(pf.product_id);
@@ -301,18 +302,20 @@ export class FeaturesService {
         // Create a map for quick lookup
         const productMap = new Map();
         if (products) {
-          products.forEach(product => {
+          products.forEach((product) => {
             productMap.set(product.id, product);
           });
         }
 
         // Enrich product_features with product data
-        features.forEach(feature => {
+        features.forEach((feature) => {
           if (feature.product_features) {
-            feature.product_features = feature.product_features.map((pf: any) => ({
-              ...pf,
-              products: productMap.get(pf.product_id) || null
-            }));
+            feature.product_features = feature.product_features.map(
+              (pf: any) => ({
+                ...pf,
+                products: productMap.get(pf.product_id) || null,
+              }),
+            );
           }
         });
       }
@@ -329,14 +332,16 @@ export class FeaturesService {
 
     const { data: feature, error } = await supabase
       .from('features')
-      .select(`
+      .select(
+        `
         *,
         product_features (
           product_id,
           display_order,
           config
         )
-      `)
+      `,
+      )
       .eq('id', id)
       .single();
 
@@ -359,7 +364,9 @@ export class FeaturesService {
 
     // Enrich with product data if we have product_features
     if (feature.product_features && feature.product_features.length > 0) {
-      const productIds = feature.product_features.map((pf: any) => pf.product_id);
+      const productIds = feature.product_features.map(
+        (pf: any) => pf.product_id,
+      );
 
       const { data: products } = await supabase
         .from('products')
@@ -369,7 +376,7 @@ export class FeaturesService {
       // Create a map for quick lookup
       const productMap = new Map();
       if (products) {
-        products.forEach(product => {
+        products.forEach((product) => {
           productMap.set(product.id, product);
         });
       }
@@ -377,7 +384,7 @@ export class FeaturesService {
       // Enrich product_features with product data
       feature.product_features = feature.product_features.map((pf: any) => ({
         ...pf,
-        products: productMap.get(pf.product_id) || null
+        products: productMap.get(pf.product_id) || null,
       }));
     }
 
@@ -670,6 +677,15 @@ export class FeaturesService {
           result.has_access = false;
           result.reason = 'quota_exceeded';
         }
+      } else {
+        // No usage record yet — return 0 consumed (matches auto-creation in trackUsage)
+        const featureLimit = (feature.properties as any)?.limit ?? 0;
+        result.feature.properties = {
+          ...result.feature.properties,
+          limit: featureLimit,
+          consumed: 0,
+          remaining: featureLimit,
+        };
       }
     }
 
@@ -734,6 +750,17 @@ export class FeaturesService {
       throw new NotFoundException('No active subscription with this feature');
     }
 
+    // Block usage on canceled/expired subscriptions
+    const subStatus = (grant as any).subscriptions?.status;
+    if (subStatus && !['active', 'trialing', 'past_due'].includes(subStatus)) {
+      throw new BadRequestException('subscription_inactive', {
+        cause: {
+          error: 'subscription_inactive',
+          message: `Subscription is ${subStatus} — usage tracking is not allowed`,
+        },
+      });
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
     if (grant.features.type !== FeatureType.USAGE_QUOTA) {
       throw new BadRequestException('Feature is not a usage quota type');
@@ -759,8 +786,11 @@ export class FeaturesService {
 
     if (!usageRecord) {
       // Auto-create usage record for the current billing period
-      const periodStart = grant.subscriptions?.current_period_start || new Date().toISOString();
-      const periodEnd = grant.subscriptions?.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const periodStart =
+        grant.subscriptions?.current_period_start || new Date().toISOString();
+      const periodEnd =
+        grant.subscriptions?.current_period_end ||
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const featureProperties = grant.features.properties as any;
       const limitUnits = featureProperties?.limit ?? 0;
 
@@ -784,7 +814,9 @@ export class FeaturesService {
       }
 
       usageRecord = newRecord;
-      this.logger.log(`Auto-created usage record for customer ${trackDto.customer_id}, feature ${trackDto.feature_name}`);
+      this.logger.log(
+        `Auto-created usage record for customer ${trackDto.customer_id}, feature ${trackDto.feature_name}`,
+      );
     }
 
     // Check if adding units would exceed limit
@@ -846,14 +878,15 @@ export class FeaturesService {
 
     // Store idempotency key result
     if (trackDto.idempotency_key) {
-      await (supabase as any)
-        .from('idempotency_keys')
-        .upsert({
+      await (supabase as any).from('idempotency_keys').upsert(
+        {
           customer_id: trackDto.customer_id,
           idempotency_key: trackDto.idempotency_key,
           response: result,
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        }, { onConflict: 'customer_id,idempotency_key' });
+        },
+        { onConflict: 'customer_id,idempotency_key' },
+      );
     }
 
     this.logger.log(
@@ -991,14 +1024,21 @@ export class FeaturesService {
       product_name: record.subscriptions?.products?.name,
       consumed: record.consumed_units || 0,
       limit: record.limit_units || 0,
-      remaining: Math.max(0, (record.limit_units || 0) - (record.consumed_units || 0)),
-      percentage_used: record.limit_units > 0
-        ? Math.round(((record.consumed_units || 0) / record.limit_units) * 100)
-        : 0,
+      remaining: Math.max(
+        0,
+        (record.limit_units || 0) - (record.consumed_units || 0),
+      ),
+      percentage_used:
+        record.limit_units > 0
+          ? Math.round(
+              ((record.consumed_units || 0) / record.limit_units) * 100,
+            )
+          : 0,
       period_start: record.period_start,
       period_end: record.period_end,
       resets_in_days: Math.ceil(
-        (new Date(record.period_end).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+        (new Date(record.period_end).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24),
       ),
     }));
 
@@ -1011,12 +1051,15 @@ export class FeaturesService {
   async getCustomerFeatures(customerId: string, organizationId?: string) {
     const supabase = this.supabaseService.getClient();
 
-    this.logger.log(`Getting features for customer ${customerId}, org: ${organizationId}`);
+    this.logger.log(
+      `Getting features for customer ${customerId}, org: ${organizationId}`,
+    );
 
     // Build the query
     const { data: grants, error } = await supabase
       .from('feature_grants')
-      .select(`
+      .select(
+        `
         *,
         features (
           id,
@@ -1026,7 +1069,8 @@ export class FeaturesService {
           type,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('customer_id', customerId)
       .is('revoked_at', null);
 
@@ -1039,7 +1083,7 @@ export class FeaturesService {
     let filteredGrants = grants || [];
     if (organizationId) {
       filteredGrants = filteredGrants.filter(
-        (grant: any) => grant.features?.organization_id === organizationId
+        (grant: any) => grant.features?.organization_id === organizationId,
       );
     }
 
@@ -1049,7 +1093,8 @@ export class FeaturesService {
         id: grant.id,
         feature_id: grant.feature_id,
         feature_key: grant.features?.name || 'unknown',
-        feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
+        feature_name:
+          grant.features?.title || grant.features?.name || 'Unknown Feature',
         feature_description: grant.features?.description || null,
         feature_type: grant.features?.type || null,
         granted_at: grant.granted_at,

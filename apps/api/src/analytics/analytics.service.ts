@@ -350,10 +350,7 @@ export class AnalyticsService {
     }
 
     // Group by date
-    const growth: Record<
-      string,
-      { new: number; canceled: number }
-    > = {};
+    const growth: Record<string, { new: number; canceled: number }> = {};
 
     if (newSubs && newSubs.length > 0) {
       newSubs.forEach((sub) => {
@@ -367,10 +364,7 @@ export class AnalyticsService {
     if (canceledSubs && canceledSubs.length > 0) {
       canceledSubs.forEach((sub) => {
         if (!sub.canceled_at) return; // Skip if no canceled_at
-        const date = this.formatDateByGranularity(
-          sub.canceled_at,
-          granularity,
-        );
+        const date = this.formatDateByGranularity(sub.canceled_at, granularity);
         if (!growth[date]) growth[date] = { new: 0, canceled: 0 };
         growth[date].canceled += 1;
       });
@@ -429,12 +423,13 @@ export class AnalyticsService {
       case Granularity.DAY:
         return date.toISOString().split('T')[0]; // YYYY-MM-DD
 
-      case Granularity.WEEK:
+      case Granularity.WEEK: {
         // Get Monday of the week
         const day = date.getDay();
         const diff = date.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(date.setDate(diff));
         return monday.toISOString().split('T')[0];
+      }
 
       case Granularity.MONTH:
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -457,8 +452,7 @@ export class AnalyticsService {
     const cacheKey = `analytics:${organizationId}:churn-rate:${startDate}:${endDate}:${granularity}`;
 
     // Try cache first
-    const cached =
-      await this.cacheManager.get<ChurnRateResponseDto>(cacheKey);
+    const cached = await this.cacheManager.get<ChurnRateResponseDto>(cacheKey);
     if (cached) {
       this.logger.log(
         `Churn rate cache HIT for organization ${organizationId}`,
@@ -466,9 +460,7 @@ export class AnalyticsService {
       return cached;
     }
 
-    this.logger.log(
-      `Churn rate cache MISS for organization ${organizationId}`,
-    );
+    this.logger.log(`Churn rate cache MISS for organization ${organizationId}`);
 
     const supabase = this.supabaseService.getClient();
 
@@ -477,7 +469,9 @@ export class AnalyticsService {
       .from('subscriptions')
       .select('id, created_at, canceled_at, status')
       .eq('organization_id', organizationId)
-      .or(`created_at.lte.${endDate},and(canceled_at.gte.${startDate},canceled_at.lte.${endDate})`);
+      .or(
+        `created_at.lte.${endDate},and(canceled_at.gte.${startDate},canceled_at.lte.${endDate})`,
+      );
 
     if (allError) {
       this.logger.error(
@@ -500,7 +494,7 @@ export class AnalyticsService {
     // Initialize periods
     const start = new Date(startDate);
     const end = new Date(endDate);
-    let current = new Date(start);
+    const current = new Date(start);
 
     while (current <= end) {
       const periodKey = this.formatDateByGranularity(
@@ -536,9 +530,7 @@ export class AnalyticsService {
 
         allSubs.forEach((sub) => {
           const createdAt = sub.created_at ? new Date(sub.created_at) : null;
-          const canceledAt = sub.canceled_at
-            ? new Date(sub.canceled_at)
-            : null;
+          const canceledAt = sub.canceled_at ? new Date(sub.canceled_at) : null;
 
           // Was active at start of period?
           if (createdAt && createdAt < periodStart) {
@@ -785,7 +777,10 @@ export class AnalyticsService {
       .eq('cancel_at_period_end', false);
 
     if (mrrError) {
-      this.logger.error(`Failed to calculate ARPU: ${mrrError.message}`, mrrError);
+      this.logger.error(
+        `Failed to calculate ARPU: ${mrrError.message}`,
+        mrrError,
+      );
       throw new BadRequestException('Failed to calculate ARPU');
     }
 
@@ -857,10 +852,13 @@ export class AnalyticsService {
    * Get usage overview for an organization
    * Aggregates total consumption, active metered customers, at-limit count, features tracked
    */
-  async getUsageOverview(organizationId: string): Promise<UsageOverviewResponseDto> {
+  async getUsageOverview(
+    organizationId: string,
+  ): Promise<UsageOverviewResponseDto> {
     const cacheKey = `analytics:${organizationId}:usage-overview`;
 
-    const cached = await this.cacheManager.get<UsageOverviewResponseDto>(cacheKey);
+    const cached =
+      await this.cacheManager.get<UsageOverviewResponseDto>(cacheKey);
     if (cached) return cached;
 
     const supabase = this.supabaseService.getClient();
@@ -868,7 +866,8 @@ export class AnalyticsService {
     // Get current period usage records for this org's features
     const { data: records, error } = await supabase
       .from('usage_records')
-      .select(`
+      .select(
+        `
         consumed_units,
         limit_units,
         customer_id,
@@ -877,7 +876,8 @@ export class AnalyticsService {
           id,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('features.organization_id', organizationId)
       .gte('period_end', new Date().toISOString());
 
@@ -886,12 +886,18 @@ export class AnalyticsService {
       throw new BadRequestException('Failed to fetch usage overview');
     }
 
-    const totalConsumption = (records || []).reduce((sum, r) => sum + (r.consumed_units || 0), 0);
-    const uniqueCustomers = new Set((records || []).map(r => r.customer_id));
+    const totalConsumption = (records || []).reduce(
+      (sum, r) => sum + (r.consumed_units || 0),
+      0,
+    );
+    const uniqueCustomers = new Set((records || []).map((r) => r.customer_id));
     const atLimitCount = (records || []).filter(
-      r => r.limit_units && r.limit_units > 0 && (r.consumed_units || 0) >= r.limit_units,
+      (r) =>
+        r.limit_units &&
+        r.limit_units > 0 &&
+        (r.consumed_units || 0) >= r.limit_units,
     ).length;
-    const uniqueFeatures = new Set((records || []).map(r => r.feature_id));
+    const uniqueFeatures = new Set((records || []).map((r) => r.feature_id));
 
     const response: UsageOverviewResponseDto = {
       total_consumption: totalConsumption,
@@ -908,17 +914,21 @@ export class AnalyticsService {
   /**
    * Get usage breakdown by feature for an organization
    */
-  async getUsageByFeature(organizationId: string): Promise<UsageByFeatureResponseDto> {
+  async getUsageByFeature(
+    organizationId: string,
+  ): Promise<UsageByFeatureResponseDto> {
     const cacheKey = `analytics:${organizationId}:usage-by-feature`;
 
-    const cached = await this.cacheManager.get<UsageByFeatureResponseDto>(cacheKey);
+    const cached =
+      await this.cacheManager.get<UsageByFeatureResponseDto>(cacheKey);
     if (cached) return cached;
 
     const supabase = this.supabaseService.getClient();
 
     const { data: records, error } = await supabase
       .from('usage_records')
-      .select(`
+      .select(
+        `
         consumed_units,
         limit_units,
         customer_id,
@@ -928,7 +938,8 @@ export class AnalyticsService {
           title,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('features.organization_id', organizationId)
       .gte('period_end', new Date().toISOString());
 
@@ -938,13 +949,16 @@ export class AnalyticsService {
     }
 
     // Group by feature
-    const featureMap = new Map<string, {
-      feature_key: string;
-      feature_title: string;
-      total_consumed: number;
-      customers: Set<string>;
-      at_limit: number;
-    }>();
+    const featureMap = new Map<
+      string,
+      {
+        feature_key: string;
+        feature_title: string;
+        total_consumed: number;
+        customers: Set<string>;
+        at_limit: number;
+      }
+    >();
 
     (records || []).forEach((r: any) => {
       const featureId = r.features?.id;
@@ -960,18 +974,25 @@ export class AnalyticsService {
 
       existing.total_consumed += r.consumed_units || 0;
       existing.customers.add(r.customer_id);
-      if (r.limit_units && r.limit_units > 0 && (r.consumed_units || 0) >= r.limit_units) {
+      if (
+        r.limit_units &&
+        r.limit_units > 0 &&
+        (r.consumed_units || 0) >= r.limit_units
+      ) {
         existing.at_limit += 1;
       }
 
       featureMap.set(featureId, existing);
     });
 
-    const data = Array.from(featureMap.values()).map(f => ({
+    const data = Array.from(featureMap.values()).map((f) => ({
       feature_key: f.feature_key,
       feature_title: f.feature_title,
       total_consumed: f.total_consumed,
-      avg_per_customer: f.customers.size > 0 ? Math.round(f.total_consumed / f.customers.size) : 0,
+      avg_per_customer:
+        f.customers.size > 0
+          ? Math.round(f.total_consumed / f.customers.size)
+          : 0,
       customer_count: f.customers.size,
       at_limit_count: f.at_limit,
     }));
@@ -995,7 +1016,8 @@ export class AnalyticsService {
   ): Promise<AtRiskCustomersResponseDto> {
     const cacheKey = `analytics:v3:${organizationId}:at-risk:${threshold}`;
 
-    const cached = await this.cacheManager.get<AtRiskCustomersResponseDto>(cacheKey);
+    const cached =
+      await this.cacheManager.get<AtRiskCustomersResponseDto>(cacheKey);
     if (cached) return cached;
 
     const supabase = this.supabaseService.getClient();
@@ -1003,7 +1025,8 @@ export class AnalyticsService {
     // Step 1: Get usage records with features for this org
     const { data: records, error } = await supabase
       .from('usage_records')
-      .select(`
+      .select(
+        `
         consumed_units,
         limit_units,
         period_end,
@@ -1019,13 +1042,16 @@ export class AnalyticsService {
           name,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('features.organization_id', organizationId)
       .gte('period_end', new Date().toISOString())
       .gt('limit_units', 0);
 
     if (error) {
-      this.logger.error(`Failed to fetch at-risk usage records: ${error.message}`);
+      this.logger.error(
+        `Failed to fetch at-risk usage records: ${error.message}`,
+      );
       throw new BadRequestException('Failed to fetch at-risk customers');
     }
 
@@ -1035,7 +1061,9 @@ export class AnalyticsService {
         return pct >= threshold;
       })
       .map((r: any) => {
-        const customer = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+        const customer = Array.isArray(r.customers)
+          ? r.customers[0]
+          : r.customers;
         return {
           customer_id: r.customer_id,
           name:
@@ -1047,7 +1075,9 @@ export class AnalyticsService {
           feature_key: r.features?.name || '',
           consumed: r.consumed_units || 0,
           limit: r.limit_units,
-          percentage_used: Math.round(((r.consumed_units || 0) / r.limit_units) * 100),
+          percentage_used: Math.round(
+            ((r.consumed_units || 0) / r.limit_units) * 100,
+          ),
           resets_at: r.period_end,
         };
       })
@@ -1074,16 +1104,20 @@ export class AnalyticsService {
   ): Promise<UsageTrendsResponseDto> {
     const cacheKey = `analytics:${organizationId}:usage-trends:${featureName}:${periodDays}`;
 
-    const cached = await this.cacheManager.get<UsageTrendsResponseDto>(cacheKey);
+    const cached =
+      await this.cacheManager.get<UsageTrendsResponseDto>(cacheKey);
     if (cached) return cached;
 
     const supabase = this.supabaseService.getClient();
 
-    const startDate = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+    const startDate = new Date(
+      Date.now() - periodDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     const { data: records, error } = await supabase
       .from('usage_records')
-      .select(`
+      .select(
+        `
         consumed_units,
         period_start,
         customer_id,
@@ -1091,7 +1125,8 @@ export class AnalyticsService {
           name,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('features.organization_id', organizationId)
       .eq('features.name', featureName)
       .gte('period_start', startDate)
@@ -1103,13 +1138,21 @@ export class AnalyticsService {
     }
 
     // Group by period_start date
-    const dateMap = new Map<string, { consumed: number; customers: Set<string> }>();
+    const dateMap = new Map<
+      string,
+      { consumed: number; customers: Set<string> }
+    >();
 
     (records || []).forEach((r: any) => {
-      const date = r.period_start ? new Date(r.period_start).toISOString().split('T')[0] : null;
+      const date = r.period_start
+        ? new Date(r.period_start).toISOString().split('T')[0]
+        : null;
       if (!date) return;
 
-      const existing = dateMap.get(date) || { consumed: 0, customers: new Set<string>() };
+      const existing = dateMap.get(date) || {
+        consumed: 0,
+        customers: new Set<string>(),
+      };
       existing.consumed += r.consumed_units || 0;
       existing.customers.add(r.customer_id);
       dateMap.set(date, existing);
@@ -1279,6 +1322,3 @@ export class AnalyticsService {
     return response;
   }
 }
-
-
-

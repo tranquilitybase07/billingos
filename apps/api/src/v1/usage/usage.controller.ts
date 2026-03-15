@@ -39,12 +39,16 @@ export class V1UsageController {
    */
   private async validateApiKey(authHeader: string): Promise<string> {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const apiKey = authHeader.replace('Bearer ', '');
     if (!apiKey.startsWith('sk_')) {
-      throw new UnauthorizedException('Invalid API key format. Use a secret key (sk_live_* or sk_test_*)');
+      throw new UnauthorizedException(
+        'Invalid API key format. Use a secret key (sk_live_* or sk_test_*)',
+      );
     }
 
     const keyRecord = await this.apiKeysService.validate(apiKey);
@@ -79,7 +83,8 @@ export class V1UsageController {
   @Post('track')
   async trackUsage(
     @Headers('authorization') authHeader: string,
-    @Body() body: {
+    @Body()
+    body: {
       customer_id: string;
       feature_key: string;
       quantity: number;
@@ -90,10 +95,15 @@ export class V1UsageController {
     const organizationId = await this.validateApiKey(authHeader);
 
     if (!body.customer_id || !body.feature_key || !body.quantity) {
-      throw new BadRequestException('customer_id, feature_key, and quantity are required');
+      throw new BadRequestException(
+        'customer_id, feature_key, and quantity are required',
+      );
     }
 
-    const customer = await this.resolveCustomer(body.customer_id, organizationId);
+    const customer = await this.resolveCustomer(
+      body.customer_id,
+      organizationId,
+    );
 
     const result = await this.featuresService.trackUsage({
       customer_id: customer.id,
@@ -143,11 +153,13 @@ export class V1UsageController {
       reason: access.reason,
       limit: access.feature?.properties?.limit ?? null,
       usage: access.feature?.properties?.consumed ?? null,
-      metadata: access.feature ? {
-        remaining: access.feature.properties?.remaining,
-        resets_at: access.feature.properties?.resets_at,
-        type: access.feature.type,
-      } : null,
+      metadata: access.feature
+        ? {
+            remaining: access.feature.properties?.remaining,
+            resets_at: access.feature.properties?.resets_at,
+            type: access.feature.type,
+          }
+        : null,
     };
   }
 

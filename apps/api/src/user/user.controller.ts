@@ -7,7 +7,6 @@ import { UpdateUserDto } from './dto/user.dto';
 import { User } from './entities/user.entity';
 
 @ApiTags('Users')
-
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UserController {

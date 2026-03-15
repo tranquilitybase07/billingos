@@ -9,14 +9,10 @@ export class StripeErrorMapper {
    * Map Stripe errors to BillingOS exceptions
    * Based on comprehensive Stripe error handling
    */
-  static mapStripeError(
-    error: Stripe.errors.StripeError,
-  ): BillingOSException {
+  static mapStripeError(error: Stripe.errors.StripeError): BillingOSException {
     switch (error.type) {
       case 'StripeCardError':
-        return this.handleCardError(
-          error as Stripe.errors.StripeCardError,
-        );
+        return this.handleCardError(error as Stripe.errors.StripeCardError);
       case 'StripeRateLimitError':
         return this.handleRateLimitError(error);
       case 'StripeInvalidRequestError':
@@ -148,11 +144,9 @@ export class StripeErrorMapper {
     call_issuer: 'The card issuer needs to be contacted',
     card_not_supported: 'The card does not support this type of purchase',
     card_velocity_exceeded: 'Too many transactions in a short time',
-    currency_not_supported:
-      'The card does not support the specified currency',
+    currency_not_supported: 'The card does not support the specified currency',
     do_not_honor: 'The card issuer declined for an unknown reason',
-    do_not_try_again:
-      'The card issuer has declined and requested not to retry',
+    do_not_try_again: 'The card issuer has declined and requested not to retry',
     duplicate_transaction: 'A similar transaction was recently submitted',
     expired_card: 'The card has expired',
     fraudulent: 'The payment was declined as fraudulent',

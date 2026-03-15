@@ -202,7 +202,9 @@ describe('CheckoutService - Critical Path Tests', () => {
       });
 
       mockCustomersService.upsertCustomer.mockResolvedValue(mockCustomer);
-      mockStripeClient.paymentIntents.create.mockResolvedValue(mockPaymentIntent);
+      mockStripeClient.paymentIntents.create.mockResolvedValue(
+        mockPaymentIntent,
+      );
 
       // Execute
       const result = await service.createCheckout(createCheckoutDto);
@@ -356,7 +358,9 @@ describe('CheckoutService - Critical Path Tests', () => {
         stripe_customer_id: 'cus_test123',
       });
 
-      mockStripeClient.paymentIntents.create.mockResolvedValue(mockPaymentIntent);
+      mockStripeClient.paymentIntents.create.mockResolvedValue(
+        mockPaymentIntent,
+      );
       mockStripeClient.paymentIntents.cancel.mockResolvedValue({});
 
       await expect(service.createCheckout(createCheckoutDto)).rejects.toThrow(
@@ -364,7 +368,9 @@ describe('CheckoutService - Critical Path Tests', () => {
       );
 
       // Verify payment intent was cancelled
-      expect(mockStripeClient.paymentIntents.cancel).toHaveBeenCalledWith('pi_test123');
+      expect(mockStripeClient.paymentIntents.cancel).toHaveBeenCalledWith(
+        'pi_test123',
+      );
     });
   });
 
@@ -454,7 +460,9 @@ describe('CheckoutService - Critical Path Tests', () => {
         };
       });
 
-      mockStripeClient.paymentIntents.confirm.mockResolvedValue(mockConfirmedPaymentIntent);
+      mockStripeClient.paymentIntents.confirm.mockResolvedValue(
+        mockConfirmedPaymentIntent,
+      );
 
       // Execute
       const result = await service.confirmCheckout(clientSecret, confirmDto);
@@ -518,7 +526,9 @@ describe('CheckoutService - Critical Path Tests', () => {
         };
       });
 
-      mockStripeClient.paymentIntents.confirm.mockResolvedValue(mockPaymentIntentWith3DS);
+      mockStripeClient.paymentIntents.confirm.mockResolvedValue(
+        mockPaymentIntentWith3DS,
+      );
 
       // Execute
       const result = await service.confirmCheckout(clientSecret, confirmDto);
@@ -566,9 +576,9 @@ describe('CheckoutService - Critical Path Tests', () => {
       mockStripeClient.paymentIntents.confirm.mockRejectedValue(stripeError);
 
       // Execute and verify
-      await expect(service.confirmCheckout(clientSecret, confirmDto)).rejects.toThrow(
-        'Card error: Card declined',
-      );
+      await expect(
+        service.confirmCheckout(clientSecret, confirmDto),
+      ).rejects.toThrow('Card error: Card declined');
     });
   });
 });

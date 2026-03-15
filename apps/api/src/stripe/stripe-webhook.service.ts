@@ -205,6 +205,24 @@ export class StripeWebhookService {
         await this.handleCustomerDeleted(event.data.object);
         break;
 
+      // Refund events
+      case 'charge.refunded':
+        await this.handleChargeRefunded(event);
+        break;
+
+      case 'charge.refund.updated':
+        await this.handleRefundUpdated(event);
+        break;
+
+      // Dispute events
+      case 'charge.dispute.created':
+        await this.handleDisputeCreated(event);
+        break;
+
+      case 'charge.dispute.closed':
+        await this.handleDisputeClosed(event);
+        break;
+
       // Entitlements events (cast to string to bypass TypeScript type checking)
       case 'entitlements.active_entitlement.created' as Stripe.Event.Type:
         await this.handleActiveEntitlementCreated(
@@ -579,8 +597,62 @@ export class StripeWebhookService {
         return;
       }
 
+      // Handle incomplete_expired — terminal state, revoke features and mark ended
+      if (subscription.status === 'incomplete_expired') {
+        this.logger.log(
+          `Subscription ${subscription.id} reached incomplete_expired — revoking features`,
+        );
+
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'incomplete_expired',
+            ended_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+
+        await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
+
+        // Invalidate cache
+        const { data: subForCache } = await supabase
+          .from('subscriptions')
+          .select('product_id')
+          .eq('id', existing.id)
+          .single();
+
+        if (subForCache?.product_id) {
+          await this.cacheManager.del(
+            `product-metrics:${subForCache.product_id}`,
+          );
+        }
+
+        return;
+      }
+
+      // Fetch fresh subscription state from Stripe to prevent race conditions
+      // Another webhook may have already processed a newer state
+      let authoritativeSubscription = subscription;
+      try {
+        const stripeAccountId = (subscription as any).account || null;
+        const freshSub = await this.stripeService
+          .getClient()
+          .subscriptions.retrieve(
+            subscription.id,
+            stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+          );
+        authoritativeSubscription = freshSub;
+        this.logger.debug(
+          `Fresh Stripe status for ${subscription.id}: ${freshSub.status} (webhook had: ${subscription.status})`,
+        );
+      } catch (stripeError) {
+        this.logger.warn(
+          `Could not fetch fresh subscription ${subscription.id} from Stripe — using webhook status`,
+          stripeError,
+        );
+      }
+
       // Check if billing period changed (renewal)
-      const subData = subscription as any;
+      const subData = authoritativeSubscription as any;
       const newPeriodStart = subData.current_period_start
         ? new Date(subData.current_period_start * 1000)
         : null;
@@ -596,10 +668,10 @@ export class StripeWebhookService {
         existingPeriodStart &&
         newPeriodStart.getTime() !== existingPeriodStart.getTime();
 
-      // Update subscription in database
+      // Update subscription in database using authoritative status
       const updateData: any = {
-        status: subscription.status,
-        cancel_at_period_end: subscription.cancel_at_period_end,
+        status: authoritativeSubscription.status,
+        cancel_at_period_end: authoritativeSubscription.cancel_at_period_end,
       };
 
       if (newPeriodStart) {
@@ -610,9 +682,9 @@ export class StripeWebhookService {
         updateData.current_period_end = newPeriodEnd.toISOString();
       }
 
-      if (subscription.canceled_at) {
+      if (authoritativeSubscription.canceled_at) {
         updateData.canceled_at = new Date(
-          subscription.canceled_at * 1000,
+          authoritativeSubscription.canceled_at * 1000,
         ).toISOString();
       }
 
@@ -674,13 +746,24 @@ export class StripeWebhookService {
     try {
       this.logger.log(`Subscription deleted: ${subscription.id}`);
 
-      // Skip incomplete subscriptions — these are being canceled and recreated
-      // during discount apply/remove in the checkout flow.
+      // Skip recently-created incomplete subscriptions — these are being canceled
+      // and recreated during discount apply/remove in the checkout flow.
+      // Older incomplete subscriptions (>5 min) should be processed normally.
       if (subscription.status === 'incomplete') {
+        const createdAt = subscription.created
+          ? new Date(subscription.created * 1000)
+          : null;
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+        if (createdAt && createdAt > fiveMinutesAgo) {
+          this.logger.log(
+            `Skipping deletion of recent incomplete subscription ${subscription.id} (likely recreated for discount)`,
+          );
+          return;
+        }
         this.logger.log(
-          `Skipping deletion of incomplete subscription ${subscription.id} (likely recreated for discount)`,
+          `Processing deletion of stale incomplete subscription ${subscription.id}`,
         );
-        return;
       }
 
       const supabase = this.supabaseService.getClient();
@@ -718,11 +801,7 @@ export class StripeWebhookService {
       }
 
       // Revoke all feature grants
-      await supabase
-        .from('feature_grants')
-        .update({ revoked_at: new Date().toISOString() })
-        .eq('subscription_id', existing.id)
-        .is('revoked_at', null);
+      await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
 
       this.logger.log(
         `Subscription ${subscription.id} canceled and features revoked`,
@@ -779,6 +858,30 @@ export class StripeWebhookService {
         return;
       }
 
+      // Re-grant features if recovering from past_due (features were revoked on failure)
+      if (existing.status === 'past_due') {
+        const { data: fullSub } = await supabase
+          .from('subscriptions')
+          .select(
+            'id, customer_id, product_id, current_period_start, current_period_end',
+          )
+          .eq('stripe_subscription_id', invoiceData.subscription)
+          .single();
+
+        if (fullSub) {
+          await this.subscriptionsService.grantProductFeatures(
+            fullSub.customer_id,
+            fullSub.id,
+            fullSub.product_id,
+            new Date(fullSub.current_period_start),
+            new Date(fullSub.current_period_end),
+          );
+          this.logger.log(
+            `Re-granted features for subscription ${invoiceData.subscription} after payment recovery`,
+          );
+        }
+      }
+
       // Update to active for other statuses (past_due, incomplete, etc.)
       await supabase
         .from('subscriptions')
@@ -811,16 +914,36 @@ export class StripeWebhookService {
       const supabase = this.supabaseService.getClient();
 
       // Update subscription status to past_due
-      await supabase
+      const { data: pastDueSub } = await supabase
         .from('subscriptions')
         .update({ status: 'past_due' })
-        .eq('stripe_subscription_id', invoiceData.subscription);
+        .eq('stripe_subscription_id', invoiceData.subscription)
+        .select('id, customer_id, organization_id')
+        .single();
 
       this.logger.log(
         `Subscription ${invoiceData.subscription} marked as past_due`,
       );
 
-      // TODO: Notify customer about failed payment
+      // Revoke features on payment failure
+      if (pastDueSub) {
+        await this.subscriptionsService.revokeSubscriptionFeatures(
+          pastDueSub.id,
+        );
+
+        // Insert payment failure notification into reconciliation queue
+        await supabase.from('reconciliation_queue').insert({
+          type: 'payment_failed_notification',
+          subscription_id: pastDueSub.id,
+          customer_id: pastDueSub.customer_id,
+          organization_id: pastDueSub.organization_id,
+          metadata: {
+            invoice_id: invoice.id,
+            attempt_count: invoiceData.attempt_count || 1,
+          },
+          status: 'pending',
+        } as any);
+      }
     } catch (error) {
       this.logger.error('Error handling invoice.payment_failed:', error);
     }
@@ -1363,16 +1486,60 @@ export class StripeWebhookService {
           stripeSubscriptionId,
         );
       } else {
-        // Legacy flow: subscription was NOT created during checkout.
-        // Fall back to creating one now.
-        this.logger.log(
-          `Legacy flow: creating subscription in webhook for PI ${paymentIntent.id}`,
-        );
-        await this.handleLegacyPaymentIntentSuccess(
-          paymentIntent,
-          paymentIntentRecord,
-          checkoutSession,
-        );
+        // Check if this PaymentIntent actually belongs to an existing
+        // Stripe subscription (webhook arrived before our DB commit).
+        // Expand the invoice to find the subscription.
+        let resolvedStripeSubId: string | null = null;
+        try {
+          const piInvoice = (paymentIntent as any).invoice;
+          if (piInvoice) {
+            const invoiceId =
+              typeof piInvoice === 'string' ? piInvoice : piInvoice?.id;
+            if (invoiceId) {
+              const inv = await this.stripeService
+                .getClient()
+                .invoices.retrieve(invoiceId, {
+                  stripeAccount:
+                    paymentIntentRecord.stripe_account_id || undefined,
+                });
+              const invSubscription = (inv as any).subscription;
+              if (invSubscription) {
+                resolvedStripeSubId =
+                  typeof invSubscription === 'string'
+                    ? invSubscription
+                    : invSubscription.id;
+              }
+            }
+          }
+        } catch (resolveError) {
+          this.logger.warn(
+            'Could not resolve invoice subscription for race check:',
+            resolveError,
+          );
+        }
+
+        if (resolvedStripeSubId) {
+          this.logger.log(
+            `Resolved subscription ${resolvedStripeSubId} from invoice — routing to direct flow instead of legacy`,
+          );
+          await this.handleDirectSubscriptionPaymentSuccess(
+            paymentIntent,
+            paymentIntentRecord,
+            checkoutSession,
+            resolvedStripeSubId,
+          );
+        } else {
+          // Legacy flow: subscription was NOT created during checkout.
+          // Fall back to creating one now.
+          this.logger.log(
+            `Legacy flow: creating subscription in webhook for PI ${paymentIntent.id}`,
+          );
+          await this.handleLegacyPaymentIntentSuccess(
+            paymentIntent,
+            paymentIntentRecord,
+            checkoutSession,
+          );
+        }
       }
     } catch (error) {
       this.logger.error(
@@ -1786,6 +1953,20 @@ export class StripeWebhookService {
 
     let shouldGrantTrial = false;
     if (trialDays > 0) {
+      // Acquire trial lock to prevent concurrent trial grants
+      const trialLockKey = `trial-lock:${customerId}:${productId}`;
+      const acquiredTrialLock = await this.redisService.setIdempotencyKey(
+        trialLockKey,
+        Date.now().toString(),
+        30000, // 30s TTL
+      );
+
+      if (!acquiredTrialLock) {
+        this.logger.warn(
+          `Trial lock not acquired for ${customerId}:${productId} — proceeding without trial`,
+        );
+      }
+
       const { data: trialEligible } = await supabase.rpc(
         'check_trial_eligibility',
         {
@@ -1793,7 +1974,7 @@ export class StripeWebhookService {
           p_product_id: productId,
         },
       );
-      if (trialEligible) {
+      if (trialEligible && acquiredTrialLock) {
         subscriptionParams.trial_end =
           now + deferSeconds + trialDays * 24 * 60 * 60;
         shouldGrantTrial = true;
@@ -1835,9 +2016,11 @@ export class StripeWebhookService {
     // Create Stripe subscription
     let stripeSubscription;
     try {
+      const idempotencyKey = `legacy-sub:${customerId}:${productId}:${Date.now()}`;
       stripeSubscription = await this.stripeService.createSubscription(
         subscriptionParams,
         stripeAccountId,
+        idempotencyKey,
       );
     } catch (subError) {
       this.logger.error('Failed to create Stripe subscription:', subError);
@@ -1966,6 +2149,451 @@ export class StripeWebhookService {
   }
 
   /**
+   * Handle charge.refunded webhook
+   * Full refund → cancel subscription + revoke features; partial → log only
+   */
+  private async handleChargeRefunded(event: Stripe.Event): Promise<void> {
+    try {
+      const charge = event.data.object as any;
+      this.logger.log(
+        `Charge refunded: ${charge.id} (refunded: ${charge.amount_refunded}/${charge.amount})`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+      const isFullRefund = charge.amount_refunded === charge.amount;
+
+      // Find subscription via charge → invoice → subscription
+      let stripeSubscriptionId: string | null = null;
+      if (charge.invoice) {
+        const invoiceId =
+          typeof charge.invoice === 'string'
+            ? charge.invoice
+            : charge.invoice.id;
+
+        // Look up the invoice to get the subscription
+        const stripeAccountId = event.account || undefined;
+        try {
+          const invoice = (await this.stripeService
+            .getClient()
+            .invoices.retrieve(
+              invoiceId,
+              stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+            )) as any;
+          stripeSubscriptionId =
+            typeof invoice.subscription === 'string'
+              ? invoice.subscription
+              : invoice.subscription?.id || null;
+        } catch (invoiceError) {
+          this.logger.warn(
+            `Could not retrieve invoice ${invoiceId} for refund:`,
+            invoiceError,
+          );
+        }
+      }
+
+      // Look up our DB subscription
+      let subscriptionRecord: { id: string; product_id: string } | null = null;
+      if (stripeSubscriptionId) {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('id, product_id')
+          .eq('stripe_subscription_id', stripeSubscriptionId)
+          .single();
+        subscriptionRecord = data;
+      }
+
+      if (isFullRefund && subscriptionRecord) {
+        // Full refund: cancel subscription and revoke features
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'canceled',
+            canceled_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionRecord.id);
+
+        await this.subscriptionsService.revokeSubscriptionFeatures(
+          subscriptionRecord.id,
+        );
+
+        // Invalidate cache
+        if (subscriptionRecord.product_id) {
+          await this.cacheManager.del(
+            `product-metrics:${subscriptionRecord.product_id}`,
+          );
+        }
+
+        this.logger.log(
+          `Full refund on charge ${charge.id} — subscription ${subscriptionRecord.id} canceled and features revoked`,
+        );
+      } else if (!isFullRefund) {
+        this.logger.log(
+          `Partial refund on charge ${charge.id} — logged only, no feature changes`,
+        );
+      }
+
+      // Log refund via RefundService
+      const latestRefund = charge.refunds?.data?.[0];
+      if (latestRefund) {
+        await this.refundService.logRefund({
+          paymentIntentId:
+            typeof charge.payment_intent === 'string'
+              ? charge.payment_intent
+              : charge.payment_intent?.id || charge.id,
+          stripeRefundId: latestRefund.id,
+          amount: latestRefund.amount,
+          currency: latestRefund.currency,
+          reason: isFullRefund ? 'full_refund' : 'partial_refund',
+          status: latestRefund.status || 'succeeded',
+          stripeAccountId: event.account || undefined,
+          metadata: {
+            chargeId: charge.id,
+            subscriptionId: subscriptionRecord?.id,
+            isFullRefund,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger.error('Error handling charge.refunded:', error);
+    }
+  }
+
+  /**
+   * Handle charge.refund.updated webhook
+   * Update refund status in our database
+   */
+  private async handleRefundUpdated(event: Stripe.Event): Promise<void> {
+    try {
+      const refund = event.data.object as Stripe.Refund;
+      this.logger.log(
+        `Refund updated: ${refund.id} — status: ${refund.status}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Update the refund record matching stripe_refund_id
+      const { error } = await supabase
+        .from('refunds')
+        .update({
+          status: refund.status || 'unknown',
+          metadata: {
+            updatedAt: new Date().toISOString(),
+            failureReason: refund.failure_reason,
+          },
+        })
+        .eq('stripe_refund_id', refund.id);
+
+      if (error) {
+        this.logger.warn(
+          `Could not update refund ${refund.id} in database:`,
+          error,
+        );
+      } else {
+        this.logger.log(
+          `Refund ${refund.id} status updated to ${refund.status}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Error handling charge.refund.updated:', error);
+    }
+  }
+
+  /**
+   * Handle charge.dispute.created webhook
+   * Immediately revoke features and queue for review
+   */
+  private async handleDisputeCreated(event: Stripe.Event): Promise<void> {
+    try {
+      const dispute = event.data.object as Stripe.Dispute;
+      this.logger.warn(
+        `Dispute created: ${dispute.id} — reason: ${dispute.reason}, amount: ${dispute.amount}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Get the charge ID from the dispute
+      const chargeId =
+        typeof dispute.charge === 'string'
+          ? dispute.charge
+          : dispute.charge?.id;
+
+      if (!chargeId) {
+        this.logger.error(`Dispute ${dispute.id} has no charge ID`);
+        return;
+      }
+
+      // Look up invoice from charge to find subscription
+      let stripeSubscriptionId: string | null = null;
+      const stripeAccountId = event.account || undefined;
+
+      try {
+        const charge = (await this.stripeService
+          .getClient()
+          .charges.retrieve(
+            chargeId,
+            stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+          )) as any;
+
+        if (charge.invoice) {
+          const invoiceId =
+            typeof charge.invoice === 'string'
+              ? charge.invoice
+              : charge.invoice.id;
+
+          const invoice = (await this.stripeService
+            .getClient()
+            .invoices.retrieve(
+              invoiceId,
+              stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+            )) as any;
+
+          stripeSubscriptionId =
+            typeof invoice.subscription === 'string'
+              ? invoice.subscription
+              : invoice.subscription?.id || null;
+        }
+      } catch (lookupError) {
+        this.logger.warn(
+          `Could not look up charge/invoice for dispute ${dispute.id}:`,
+          lookupError,
+        );
+      }
+
+      // Find our DB subscription
+      let subscriptionRecord: {
+        id: string;
+        product_id: string;
+        customer_id: string;
+        organization_id: string;
+      } | null = null;
+
+      if (stripeSubscriptionId) {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('id, product_id, customer_id, organization_id')
+          .eq('stripe_subscription_id', stripeSubscriptionId)
+          .single();
+        subscriptionRecord = data;
+      }
+
+      if (subscriptionRecord) {
+        // Immediately revoke features — safe default during dispute
+        await this.subscriptionsService.revokeSubscriptionFeatures(
+          subscriptionRecord.id,
+        );
+
+        // Update subscription status to past_due (not canceled — dispute may be won)
+        await supabase
+          .from('subscriptions')
+          .update({ status: 'past_due' })
+          .eq('id', subscriptionRecord.id);
+
+        // Invalidate cache
+        if (subscriptionRecord.product_id) {
+          await this.cacheManager.del(
+            `product-metrics:${subscriptionRecord.product_id}`,
+          );
+        }
+
+        // Insert into reconciliation queue
+        await this.refundService.addToReconciliationQueue({
+          type: 'dispute_opened',
+          referenceId: subscriptionRecord.id,
+          status: 'pending_manual_review',
+          priority: 1,
+          details: {
+            disputeId: dispute.id,
+            reason: dispute.reason,
+            amount: dispute.amount,
+            chargeId,
+            customerId: subscriptionRecord.customer_id,
+            organizationId: subscriptionRecord.organization_id,
+          },
+        });
+
+        this.logger.warn(
+          `Dispute ${dispute.id}: features revoked for subscription ${subscriptionRecord.id}, queued for review`,
+        );
+      } else {
+        this.logger.warn(
+          `Dispute ${dispute.id}: could not find matching subscription — logging only`,
+        );
+
+        // Still queue for manual review even without a matching subscription
+        await this.refundService.addToReconciliationQueue({
+          type: 'dispute_opened',
+          referenceId: chargeId,
+          status: 'pending_manual_review',
+          priority: 1,
+          details: {
+            disputeId: dispute.id,
+            reason: dispute.reason,
+            amount: dispute.amount,
+            chargeId,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger.error('Error handling charge.dispute.created:', error);
+    }
+  }
+
+  /**
+   * Handle charge.dispute.closed webhook
+   * Won → restore features; Lost → ensure canceled
+   */
+  private async handleDisputeClosed(event: Stripe.Event): Promise<void> {
+    try {
+      const dispute = event.data.object as Stripe.Dispute;
+      this.logger.log(
+        `Dispute closed: ${dispute.id} — status: ${dispute.status}`,
+      );
+
+      const supabase = this.supabaseService.getClient();
+
+      // Get the charge ID
+      const chargeId =
+        typeof dispute.charge === 'string'
+          ? dispute.charge
+          : dispute.charge?.id;
+
+      if (!chargeId) {
+        this.logger.error(`Dispute ${dispute.id} has no charge ID`);
+        return;
+      }
+
+      // Find subscription via charge → invoice → subscription
+      let stripeSubscriptionId: string | null = null;
+      const stripeAccountId = event.account || undefined;
+
+      try {
+        const charge = (await this.stripeService
+          .getClient()
+          .charges.retrieve(
+            chargeId,
+            stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+          )) as any;
+
+        if (charge.invoice) {
+          const invoiceId =
+            typeof charge.invoice === 'string'
+              ? charge.invoice
+              : charge.invoice.id;
+
+          const invoice = (await this.stripeService
+            .getClient()
+            .invoices.retrieve(
+              invoiceId,
+              stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+            )) as any;
+
+          stripeSubscriptionId =
+            typeof invoice.subscription === 'string'
+              ? invoice.subscription
+              : invoice.subscription?.id || null;
+        }
+      } catch (lookupError) {
+        this.logger.warn(
+          `Could not look up charge/invoice for dispute ${dispute.id}:`,
+          lookupError,
+        );
+      }
+
+      let subscriptionRecord: {
+        id: string;
+        product_id: string;
+        customer_id: string;
+      } | null = null;
+
+      if (stripeSubscriptionId) {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('id, product_id, customer_id')
+          .eq('stripe_subscription_id', stripeSubscriptionId)
+          .single();
+        subscriptionRecord = data;
+      }
+
+      if (!subscriptionRecord) {
+        this.logger.warn(
+          `Dispute ${dispute.id} closed but no matching subscription found`,
+        );
+        return;
+      }
+
+      if (dispute.status === 'won') {
+        // Merchant won the dispute — restore features
+        const { data: sub } = await supabase
+          .from('subscriptions')
+          .select(
+            'id, customer_id, product_id, current_period_start, current_period_end',
+          )
+          .eq('id', subscriptionRecord.id)
+          .single();
+
+        if (sub) {
+          await this.subscriptionsService.grantProductFeatures(
+            sub.customer_id,
+            sub.id,
+            sub.product_id,
+            new Date(sub.current_period_start),
+            new Date(sub.current_period_end),
+          );
+
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'active' })
+            .eq('id', subscriptionRecord.id);
+
+          this.logger.log(
+            `Dispute ${dispute.id} won — features restored for subscription ${subscriptionRecord.id}`,
+          );
+        }
+      } else if (dispute.status === 'lost') {
+        // Merchant lost — ensure subscription is canceled and features revoked
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'canceled',
+            canceled_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionRecord.id);
+
+        await this.subscriptionsService.revokeSubscriptionFeatures(
+          subscriptionRecord.id,
+        );
+
+        // Invalidate cache
+        if (subscriptionRecord.product_id) {
+          await this.cacheManager.del(
+            `product-metrics:${subscriptionRecord.product_id}`,
+          );
+        }
+
+        this.logger.warn(
+          `Dispute ${dispute.id} lost — subscription ${subscriptionRecord.id} canceled`,
+        );
+      }
+
+      // Update reconciliation queue item
+      await supabase
+        .from('reconciliation_queue')
+        .update({
+          status: 'completed',
+          details: {
+            disputeOutcome: dispute.status,
+            closedAt: new Date().toISOString(),
+          } as any,
+        })
+        .eq('type', 'dispute_opened')
+        .eq('reference_id', subscriptionRecord.id)
+        .eq('status', 'pending_manual_review');
+    } catch (error) {
+      this.logger.error('Error handling charge.dispute.closed:', error);
+    }
+  }
+
+  /**
    * Handle upgrade/downgrade by canceling the existing subscription
    */
   private async handleUpgradeDowngrade(
@@ -2025,8 +2653,14 @@ export class StripeWebhookService {
         })
         .eq('id', existingSubscription.id);
 
+      // Revoke features from old subscription immediately
+      // (don't wait for subscription.deleted webhook which may be delayed)
+      await this.subscriptionsService.revokeSubscriptionFeatures(
+        existingSubscription.id,
+      );
+
       this.logger.log(
-        `Subscription ${existingSubscription.id} canceled for upgrade/downgrade`,
+        `Subscription ${existingSubscription.id} canceled and features revoked for upgrade/downgrade`,
       );
     } catch (error) {
       this.logger.error('Error canceling existing subscription:', error);
@@ -2266,8 +2900,22 @@ export class StripeWebhookService {
         subscriptionParams.default_payment_method = paymentMethodId;
       }
 
-      // Grant trial
+      // Grant trial (with Redis lock to prevent race conditions)
       if (trialDays > 0) {
+        const trialLockKey = `trial-lock:${customerId}:${productId}`;
+        const acquiredLock = await this.redisService.setIdempotencyKey(
+          trialLockKey,
+          Date.now().toString(),
+          30000, // 30s TTL
+        );
+
+        if (!acquiredLock) {
+          this.logger.warn(
+            `Trial lock not acquired for ${customerId}:${productId} — another request is processing`,
+          );
+          return;
+        }
+
         const { data: trialEligible } = await supabase.rpc(
           'check_trial_eligibility',
           { p_customer_id: customerId, p_product_id: productId },
@@ -2298,9 +2946,11 @@ export class StripeWebhookService {
       // Create Stripe subscription
       let stripeSubscription;
       try {
+        const idempotencyKey = `trial-sub:${customerId}:${productId}:${Date.now()}`;
         stripeSubscription = await this.stripeService.createSubscription(
           subscriptionParams,
           stripeAccountId,
+          idempotencyKey,
         );
         this.logger.log(
           `Stripe subscription ${stripeSubscription.id} created (trial)`,

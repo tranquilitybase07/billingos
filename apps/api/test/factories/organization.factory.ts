@@ -22,27 +22,33 @@ export const organizationFactory = Factory.define<OrganizationFactoryParams>(
   ({ sequence, params }) => {
     const now = new Date().toISOString();
     const name = params?.name || mockData.company();
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const slug = name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
 
     return {
       id: params?.id || `org_${sequence}`,
       name: name,
       slug: params?.slug !== undefined ? params.slug : slug,
-      account_id: params?.account_id !== undefined
-        ? params.account_id
-        : `acc_${sequence}`,
-      payment_setup_complete: params?.payment_setup_complete !== undefined
-        ? params.payment_setup_complete
-        : true,
-      payment_required: params?.payment_required !== undefined
-        ? params.payment_required
-        : false,
+      account_id:
+        params?.account_id !== undefined
+          ? params.account_id
+          : `acc_${sequence}`,
+      payment_setup_complete:
+        params?.payment_setup_complete !== undefined
+          ? params.payment_setup_complete
+          : true,
+      payment_required:
+        params?.payment_required !== undefined
+          ? params.payment_required
+          : false,
       trial_ends_at: params?.trial_ends_at || null,
       deleted_at: params?.deleted_at || null,
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };
-  }
+  },
 );
 
 /**

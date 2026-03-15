@@ -36,9 +36,6 @@ import { V1FeaturesController } from './features/features.controller';
     PortalModule,
     V1UsageModule,
   ],
-  controllers: [
-    CustomerController,
-    V1FeaturesController,
-  ],
+  controllers: [CustomerController, V1FeaturesController],
 })
 export class V1Module {}

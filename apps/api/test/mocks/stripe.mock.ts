@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals';
 import Stripe from 'stripe';
 
 /**
@@ -79,7 +78,10 @@ export class MockStripeService {
     // Price defaults
     this.createPrice.mockResolvedValue(this.createStripePrice());
     this.updatePrice.mockResolvedValue(this.createStripePrice());
-    this.archivePrice.mockResolvedValue({ ...this.createStripePrice(), active: false });
+    this.archivePrice.mockResolvedValue({
+      ...this.createStripePrice(),
+      active: false,
+    });
     this.retrievePrice.mockResolvedValue(this.createStripePrice());
     this.listPrices.mockResolvedValue({ data: [this.createStripePrice()] });
 
@@ -87,7 +89,7 @@ export class MockStripeService {
     this.attachFeatureToProduct.mockResolvedValue({
       id: 'prodft_test',
       object: 'product_feature',
-      entitlement_feature: { id: 'feat_test' }
+      entitlement_feature: { id: 'feat_test' },
     });
     this.detachFeatureFromProduct.mockResolvedValue({ deleted: true });
 
@@ -96,12 +98,16 @@ export class MockStripeService {
     this.updateSubscription.mockResolvedValue(this.createStripeSubscription());
     this.cancelSubscription.mockResolvedValue({
       ...this.createStripeSubscription(),
-      status: 'canceled'
+      status: 'canceled',
     });
-    this.retrieveSubscription.mockResolvedValue(this.createStripeSubscription());
-    this.listSubscriptions.mockResolvedValue({ data: [this.createStripeSubscription()] });
+    this.retrieveSubscription.mockResolvedValue(
+      this.createStripeSubscription(),
+    );
+    this.listSubscriptions.mockResolvedValue({
+      data: [this.createStripeSubscription()],
+    });
     this.listCustomerSubscriptions.mockResolvedValue({
-      data: [this.createStripeSubscription()]
+      data: [this.createStripeSubscription()],
     });
 
     // Customer defaults
@@ -111,16 +117,24 @@ export class MockStripeService {
     this.retrieveCustomer.mockResolvedValue(this.createStripeCustomer());
 
     // Payment Intent defaults
-    this.createPaymentIntent.mockResolvedValue(this.createStripePaymentIntent());
-    this.retrievePaymentIntent.mockResolvedValue(this.createStripePaymentIntent());
+    this.createPaymentIntent.mockResolvedValue(
+      this.createStripePaymentIntent(),
+    );
+    this.retrievePaymentIntent.mockResolvedValue(
+      this.createStripePaymentIntent(),
+    );
     this.confirmPaymentIntent.mockResolvedValue({
       ...this.createStripePaymentIntent(),
-      status: 'succeeded'
+      status: 'succeeded',
     });
 
     // Checkout Session defaults
-    this.createCheckoutSession.mockResolvedValue(this.createStripeCheckoutSession());
-    this.retrieveCheckoutSession.mockResolvedValue(this.createStripeCheckoutSession());
+    this.createCheckoutSession.mockResolvedValue(
+      this.createStripeCheckoutSession(),
+    );
+    this.retrieveCheckoutSession.mockResolvedValue(
+      this.createStripeCheckoutSession(),
+    );
 
     // Account defaults (Connect)
     this.createAccount.mockResolvedValue(this.createStripeAccount());
@@ -137,13 +151,18 @@ export class MockStripeService {
     });
 
     // Webhook defaults
-    this.constructEvent.mockImplementation((payload, signature, secret) => payload);
+    this.constructEvent.mockImplementation(
+      (payload, signature, secret) => payload,
+    );
   }
 
   /**
    * Helper to simulate a Stripe API error
    */
-  simulateError(methodName: keyof MockStripeService, error: Stripe.StripeAPIError | Error) {
+  simulateError(
+    methodName: keyof MockStripeService,
+    error: Stripe.StripeAPIError | Error,
+  ) {
     const method = this[methodName];
     if (typeof method === 'function' && 'mockRejectedValue' in method) {
       method.mockRejectedValue(error);
@@ -230,12 +249,14 @@ export class MockStripeService {
       current_period_end: (Date.now() + 30 * 24 * 60 * 60 * 1000) / 1000,
       items: {
         object: 'list',
-        data: [{
-          id: 'si_test123',
-          object: 'subscription_item',
-          price: this.createStripePrice() as Stripe.Price,
-          quantity: 1,
-        }],
+        data: [
+          {
+            id: 'si_test123',
+            object: 'subscription_item',
+            price: this.createStripePrice() as Stripe.Price,
+            quantity: 1,
+          },
+        ],
         has_more: false,
         url: '',
       },
@@ -334,7 +355,7 @@ export function createMockStripeService(config?: {
 export function createStripeError(
   type: string = 'invalid_request_error',
   message: string = 'Test error',
-  code?: string
+  code?: string,
 ): Partial<Stripe.StripeAPIError> {
   return {
     type: type as any,

@@ -96,7 +96,11 @@ export class CheckoutMetadataService {
     }
 
     // Check if expired
-    if (data.expires_at && new Date(data.expires_at) < new Date() && data.status === 'pending') {
+    if (
+      data.expires_at &&
+      new Date(data.expires_at) < new Date() &&
+      data.status === 'pending'
+    ) {
       this.logger.warn(`Checkout metadata ${metadataId} has expired`);
       await this.updateMetadataStatus(metadataId, 'expired');
       throw new NotFoundException('Checkout metadata has expired');
@@ -201,7 +205,9 @@ export class CheckoutMetadataService {
   async cleanupExpiredMetadata(): Promise<number> {
     const supabase = this.supabaseService.getClient();
 
-    const { data, error } = await supabase.rpc('cleanup_expired_checkout_metadata');
+    const { data, error } = await supabase.rpc(
+      'cleanup_expired_checkout_metadata',
+    );
 
     if (error) {
       this.logger.error('Failed to cleanup expired metadata:', error);

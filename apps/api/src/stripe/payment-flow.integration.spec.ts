@@ -61,7 +61,9 @@ describe('Payment Flow Integration Tests', () => {
     refundService = module.get<RefundService>(RefundService);
     redisService = module.get<RedisService>(RedisService);
     databaseService = module.get<DatabaseService>(DatabaseService);
-    metadataService = module.get<CheckoutMetadataService>(CheckoutMetadataService);
+    metadataService = module.get<CheckoutMetadataService>(
+      CheckoutMetadataService,
+    );
   });
 
   describe('Idempotency', () => {
@@ -78,7 +80,9 @@ describe('Payment Flow Integration Tests', () => {
       jest.spyOn(redisService, 'setIdempotencyKey').mockResolvedValueOnce(true);
 
       // Second call should be blocked
-      jest.spyOn(redisService, 'setIdempotencyKey').mockResolvedValueOnce(false);
+      jest
+        .spyOn(redisService, 'setIdempotencyKey')
+        .mockResolvedValueOnce(false);
 
       // Act & Assert
       const result1 = await redisService.setIdempotencyKey(
@@ -108,7 +112,8 @@ describe('Payment Flow Integration Tests', () => {
 
       // Create metadata with idempotency
       const metadataId = 'meta_123';
-      jest.spyOn(metadataService, 'createMetadata')
+      jest
+        .spyOn(metadataService, 'createMetadata')
         .mockResolvedValueOnce({ id: metadataId, expiresAt: new Date() })
         .mockRejectedValueOnce(new Error('Duplicate key violation'));
 
@@ -117,7 +122,9 @@ describe('Payment Flow Integration Tests', () => {
       expect(result1.id).toBe(metadataId);
 
       // Second attempt should fail gracefully
-      await expect(metadataService.createMetadata(checkoutData as any)).rejects.toThrow('Duplicate key');
+      await expect(
+        metadataService.createMetadata(checkoutData as any),
+      ).rejects.toThrow('Duplicate key');
     });
   });
 
@@ -141,18 +148,23 @@ describe('Payment Flow Integration Tests', () => {
         organizationId: 'org_123',
       };
 
-      jest.spyOn(databaseService, 'createSubscriptionAtomic').mockResolvedValue({
-        subscriptionId: 'sub_123',
-        success: true,
-      });
+      jest
+        .spyOn(databaseService, 'createSubscriptionAtomic')
+        .mockResolvedValue({
+          subscriptionId: 'sub_123',
+          success: true,
+        });
 
       // Act
-      const result = await databaseService.createSubscriptionAtomic(subscriptionData);
+      const result =
+        await databaseService.createSubscriptionAtomic(subscriptionData);
 
       // Assert
       expect(result.success).toBe(true);
       expect(result.subscriptionId).toBe('sub_123');
-      expect(databaseService.createSubscriptionAtomic).toHaveBeenCalledWith(subscriptionData);
+      expect(databaseService.createSubscriptionAtomic).toHaveBeenCalledWith(
+        subscriptionData,
+      );
     });
 
     it('should handle race condition in subscription creation', async () => {
@@ -166,13 +178,16 @@ describe('Payment Flow Integration Tests', () => {
       };
 
       // Simulate unique violation (race condition)
-      jest.spyOn(databaseService, 'createSubscriptionAtomic').mockResolvedValue({
-        subscriptionId: 'existing_sub',
-        success: false,
-      });
+      jest
+        .spyOn(databaseService, 'createSubscriptionAtomic')
+        .mockResolvedValue({
+          subscriptionId: 'existing_sub',
+          success: false,
+        });
 
       // Act
-      const result = await databaseService.createSubscriptionAtomic(subscriptionData);
+      const result =
+        await databaseService.createSubscriptionAtomic(subscriptionData);
 
       // Assert
       expect(result.success).toBe(false);
@@ -285,13 +300,15 @@ describe('Payment Flow Integration Tests', () => {
 
     it('should handle race condition in customer creation', async () => {
       // Simulate multiple concurrent requests
-      const promises = Array(5).fill(null).map(() =>
-        databaseService.upsertCustomerAtomic({
-          organizationId: 'org_123',
-          email: 'concurrent@example.com',
-          externalId: 'ext_concurrent',
-        }),
-      );
+      const promises = Array(5)
+        .fill(null)
+        .map(() =>
+          databaseService.upsertCustomerAtomic({
+            organizationId: 'org_123',
+            email: 'concurrent@example.com',
+            externalId: 'ext_concurrent',
+          }),
+        );
 
       jest.spyOn(databaseService, 'upsertCustomerAtomic').mockResolvedValue({
         customerId: 'cust_single',
@@ -301,7 +318,7 @@ describe('Payment Flow Integration Tests', () => {
       const results = await Promise.all(promises);
 
       // All should return the same customer ID
-      const customerIds = results.map(r => r.customerId);
+      const customerIds = results.map((r) => r.customerId);
       expect(new Set(customerIds).size).toBe(1);
     });
   });
@@ -327,7 +344,9 @@ describe('Payment Flow Integration Tests', () => {
       });
 
       // Act
-      const metadata = await metadataService.createMetadata(checkoutParams as any);
+      const metadata = await metadataService.createMetadata(
+        checkoutParams as any,
+      );
 
       // Assert
       expect(metadata.id).toBe('meta_123');
@@ -351,7 +370,9 @@ describe('Payment Flow Integration Tests', () => {
         price_amount: 2999,
       };
 
-      jest.spyOn(metadataService, 'getMetadata').mockResolvedValue(expectedData);
+      jest
+        .spyOn(metadataService, 'getMetadata')
+        .mockResolvedValue(expectedData);
 
       // Act
       const data = await metadataService.getMetadata(metadataId);

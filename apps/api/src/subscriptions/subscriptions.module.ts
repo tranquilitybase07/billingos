@@ -10,7 +10,11 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [SupabaseModule, forwardRef(() => StripeModule), AuthModule],
   controllers: [SubscriptionsController],
-  providers: [SubscriptionsService, SubscriptionUpgradeService, SubscriptionSchedulerService],
+  providers: [
+    SubscriptionsService,
+    SubscriptionUpgradeService,
+    SubscriptionSchedulerService,
+  ],
   exports: [SubscriptionsService, SubscriptionUpgradeService],
 })
 export class SubscriptionsModule {}

@@ -12,24 +12,29 @@ export class SessionTokenAuthGuard implements CanActivate {
   constructor(private readonly sessionTokensService: SessionTokensService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
 
     // Extract session token from Authorization header
-    const authorization = request.headers.authorization;
+    const authorization = request.headers['authorization'] as
+      | string
+      | undefined;
     if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const token = authorization.substring('Bearer '.length);
 
     // Validate token (throws UnauthorizedException if invalid)
-    const payload: SessionTokenPayload = await this.sessionTokensService.validate(token);
+    const payload: SessionTokenPayload =
+      await this.sessionTokensService.validate(token);
 
     // Attach payload to request for use in controllers
-    request.sessionToken = payload;
+    (request as any).sessionToken = payload;
 
     // Attach customer context for convenience
-    request.customer = {
+    (request as any).customer = {
       externalUserId: payload.external_user_id,
       externalOrganizationId: payload.external_organization_id,
       organizationId: payload.merchant_id,

@@ -22,7 +22,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
 @ApiTags('API Keys')
-
 @Controller('organizations/:organizationId/api-keys')
 @UseGuards(JwtAuthGuard) // Requires authentication
 export class ApiKeysController {
@@ -117,7 +116,9 @@ export class ApiKeysController {
       name: apiKey.name || undefined,
       keyPairId: apiKey.key_pair_id || undefined,
       createdAt: new Date(apiKey.created_at),
-      lastUsedAt: apiKey.last_used_at ? new Date(apiKey.last_used_at) : undefined,
+      lastUsedAt: apiKey.last_used_at
+        ? new Date(apiKey.last_used_at)
+        : undefined,
       revokedAt: apiKey.revoked_at ? new Date(apiKey.revoked_at) : undefined,
     };
   }

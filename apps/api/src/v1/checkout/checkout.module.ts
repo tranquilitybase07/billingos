@@ -6,6 +6,7 @@ import { StripeModule } from '../../stripe/stripe.module';
 import { SupabaseModule } from '../../supabase/supabase.module';
 import { SessionTokensModule } from '../../session-tokens/session-tokens.module';
 import { CustomersModule } from '../../customers/customers.module';
+import { RedisModule } from '../../redis/redis.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { CustomersModule } from '../../customers/customers.module';
     SupabaseModule,
     SessionTokensModule,
     CustomersModule,
+    RedisModule,
   ],
   controllers: [CheckoutController],
   providers: [CheckoutService, CheckoutMetadataService],
