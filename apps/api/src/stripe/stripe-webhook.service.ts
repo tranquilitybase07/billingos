@@ -629,7 +629,7 @@ export class StripeWebhookService {
         return;
       }
 
-      // FIX 9: Fetch fresh subscription state from Stripe to prevent race conditions
+      // Fetch fresh subscription state from Stripe to prevent race conditions
       // Another webhook may have already processed a newer state
       let authoritativeSubscription = subscription;
       try {
@@ -1486,7 +1486,7 @@ export class StripeWebhookService {
           stripeSubscriptionId,
         );
       } else {
-        // FIX 2: Check if this PaymentIntent actually belongs to an existing
+        // Check if this PaymentIntent actually belongs to an existing
         // Stripe subscription (webhook arrived before our DB commit).
         // Expand the invoice to find the subscription.
         let resolvedStripeSubId: string | null = null;
@@ -1953,7 +1953,7 @@ export class StripeWebhookService {
 
     let shouldGrantTrial = false;
     if (trialDays > 0) {
-      // FIX 6: Acquire trial lock to prevent concurrent trial grants
+      // Acquire trial lock to prevent concurrent trial grants
       const trialLockKey = `trial-lock:${customerId}:${productId}`;
       const acquiredTrialLock = await this.redisService.setIdempotencyKey(
         trialLockKey,

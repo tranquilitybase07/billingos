@@ -678,7 +678,7 @@ export class FeaturesService {
           result.reason = 'quota_exceeded';
         }
       } else {
-        // FIX 16: No usage record yet — return 0 consumed (matches auto-creation in trackUsage)
+        // No usage record yet — return 0 consumed (matches auto-creation in trackUsage)
         const featureLimit = (feature.properties as any)?.limit ?? 0;
         result.feature.properties = {
           ...result.feature.properties,
@@ -750,7 +750,7 @@ export class FeaturesService {
       throw new NotFoundException('No active subscription with this feature');
     }
 
-    // FIX 15: Block usage on canceled/expired subscriptions
+    // Block usage on canceled/expired subscriptions
     const subStatus = (grant as any).subscriptions?.status;
     if (subStatus && !['active', 'trialing', 'past_due'].includes(subStatus)) {
       throw new BadRequestException('subscription_inactive', {
