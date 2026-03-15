@@ -27,26 +27,37 @@ export const priceFactory = Factory.define<PriceFactoryParams>(
 
     return {
       id: params?.id || `price_${sequence}`,
-      product_id: params?.product_id || associations?.product?.id || `product_${sequence}`,
+      product_id:
+        params?.product_id ||
+        associations?.product?.id ||
+        `product_${sequence}`,
       amount_type: amountType,
-      price_amount: params?.price_amount !== undefined
-        ? params.price_amount
-        : (isFixed ? mockData.price(100, 100000) : null),
+      price_amount:
+        params?.price_amount !== undefined
+          ? params.price_amount
+          : isFixed
+            ? mockData.price(100, 100000)
+            : null,
       price_currency: params?.price_currency || 'usd',
-      recurring_interval: params?.recurring_interval !== undefined
-        ? params.recurring_interval
-        : 'month',
-      recurring_interval_count: params?.recurring_interval_count !== undefined
-        ? params.recurring_interval_count
-        : 1,
-      stripe_price_id: params?.stripe_price_id !== undefined
-        ? params.stripe_price_id
-        : (isFixed ? `price_stripe_${sequence}` : null),
+      recurring_interval:
+        params?.recurring_interval !== undefined
+          ? params.recurring_interval
+          : 'month',
+      recurring_interval_count:
+        params?.recurring_interval_count !== undefined
+          ? params.recurring_interval_count
+          : 1,
+      stripe_price_id:
+        params?.stripe_price_id !== undefined
+          ? params.stripe_price_id
+          : isFixed
+            ? `price_stripe_${sequence}`
+            : null,
       is_archived: params?.is_archived || false,
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };
-  }
+  },
 );
 
 /**

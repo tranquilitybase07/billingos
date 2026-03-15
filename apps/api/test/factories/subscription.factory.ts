@@ -31,13 +31,24 @@ export const subscriptionFactory = Factory.define<SubscriptionFactoryParams>(
 
     return {
       id: params?.id || `sub_${sequence}`,
-      organization_id: params?.organization_id || associations?.organization?.id || `org_${sequence}`,
-      product_id: params?.product_id || associations?.product?.id || `product_${sequence}`,
-      price_id: params?.price_id || associations?.price?.id || `price_${sequence}`,
-      customer_id: params?.customer_id || associations?.customer?.id || `customer_${sequence}`,
-      stripe_subscription_id: params?.stripe_subscription_id !== undefined
-        ? params.stripe_subscription_id
-        : `sub_stripe_${sequence}`,
+      organization_id:
+        params?.organization_id ||
+        associations?.organization?.id ||
+        `org_${sequence}`,
+      product_id:
+        params?.product_id ||
+        associations?.product?.id ||
+        `product_${sequence}`,
+      price_id:
+        params?.price_id || associations?.price?.id || `price_${sequence}`,
+      customer_id:
+        params?.customer_id ||
+        associations?.customer?.id ||
+        `customer_${sequence}`,
+      stripe_subscription_id:
+        params?.stripe_subscription_id !== undefined
+          ? params.stripe_subscription_id
+          : `sub_stripe_${sequence}`,
       status: params?.status || 'active',
       current_period_start: periodStart,
       current_period_end: periodEnd,
@@ -48,7 +59,7 @@ export const subscriptionFactory = Factory.define<SubscriptionFactoryParams>(
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };
-  }
+  },
 );
 
 /**
@@ -93,12 +104,30 @@ export const pausedSubscription = subscriptionFactory.params({
 /**
  * Helper to create subscriptions with specific statuses
  */
-export function createSubscriptionsByStatus(organizationId: string, productId: string) {
+export function createSubscriptionsByStatus(
+  organizationId: string,
+  productId: string,
+) {
   return {
-    active: activeSubscription.build({ organization_id: organizationId, product_id: productId }),
-    canceling: cancelingSubscription.build({ organization_id: organizationId, product_id: productId }),
-    canceled: canceledSubscription.build({ organization_id: organizationId, product_id: productId }),
-    pastDue: pastDueSubscription.build({ organization_id: organizationId, product_id: productId }),
-    trialing: trialingSubscription.build({ organization_id: organizationId, product_id: productId }),
+    active: activeSubscription.build({
+      organization_id: organizationId,
+      product_id: productId,
+    }),
+    canceling: cancelingSubscription.build({
+      organization_id: organizationId,
+      product_id: productId,
+    }),
+    canceled: canceledSubscription.build({
+      organization_id: organizationId,
+      product_id: productId,
+    }),
+    pastDue: pastDueSubscription.build({
+      organization_id: organizationId,
+      product_id: productId,
+    }),
+    trialing: trialingSubscription.build({
+      organization_id: organizationId,
+      product_id: productId,
+    }),
   };
 }

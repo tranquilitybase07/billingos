@@ -10,7 +10,8 @@ export class UpdateCustomerDto extends PartialType(
   @IsString()
   @IsOptional()
   @Matches(/^[a-zA-Z0-9_-]+$/, {
-    message: 'external_id must contain only alphanumeric characters, hyphens, and underscores',
+    message:
+      'external_id must contain only alphanumeric characters, hyphens, and underscores',
   })
   @MaxLength(255)
   external_id?: string;

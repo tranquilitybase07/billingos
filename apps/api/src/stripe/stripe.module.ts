@@ -15,7 +15,12 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     forwardRef(() => SubscriptionsModule),
   ],
   controllers: [StripeController],
-  providers: [StripeService, StripeWebhookService, StripFeesService, RefundService],
+  providers: [
+    StripeService,
+    StripeWebhookService,
+    StripFeesService,
+    RefundService,
+  ],
   exports: [StripeService, StripFeesService, RefundService], // Export for use in other modules
 })
 export class StripeModule {}

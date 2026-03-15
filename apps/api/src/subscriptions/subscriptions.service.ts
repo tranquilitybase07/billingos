@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Injectable,
   Logger,
@@ -194,9 +193,14 @@ export class SubscriptionsService {
               stripeSubscription.id,
               account.stripe_id,
             );
-            this.logger.warn(`Cancelled Stripe subscription ${stripeSubscription.id} due to database error`);
+            this.logger.warn(
+              `Cancelled Stripe subscription ${stripeSubscription.id} due to database error`,
+            );
           } catch (cancelError) {
-            this.logger.error('Failed to cancel Stripe subscription after database error:', cancelError);
+            this.logger.error(
+              'Failed to cancel Stripe subscription after database error:',
+              cancelError,
+            );
           }
         }
 
@@ -402,7 +406,8 @@ export class SubscriptionsService {
 
     const { data: subscription, error } = await supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         *,
         customer:customers (
           id,
@@ -420,7 +425,8 @@ export class SubscriptionsService {
           recurring_interval,
           recurring_interval_count
         )
-      `)
+      `,
+      )
       .eq('id', id)
       .single();
 
@@ -491,7 +497,8 @@ export class SubscriptionsService {
 
     let query = supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         *,
         customer:customers (
           id,
@@ -509,7 +516,8 @@ export class SubscriptionsService {
           recurring_interval,
           recurring_interval_count
         )
-      `)
+      `,
+      )
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
 

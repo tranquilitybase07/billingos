@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CreateSessionTokenDto {
   @IsString()

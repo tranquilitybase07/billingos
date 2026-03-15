@@ -71,7 +71,9 @@ export class CustomersService {
             .single();
 
           if (!error) {
-            this.logger.log(`Upserted customer ${customer.id} with Stripe ID ${createDto.stripe_customer_id}`);
+            this.logger.log(
+              `Upserted customer ${customer.id} with Stripe ID ${createDto.stripe_customer_id}`,
+            );
             return this.mapToResponseDto(customer);
           }
 
@@ -133,7 +135,6 @@ export class CustomersService {
             lastError = error;
           }
         }
-
       } catch (error) {
         lastError = error;
 
@@ -143,7 +144,7 @@ export class CustomersService {
           this.logger.warn(
             `Customer upsert attempt failed, retrying in ${delay}ms... (${retries - 1} attempts left)`,
           );
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
@@ -222,9 +223,7 @@ export class CustomersService {
   /**
    * Create a new customer
    */
-  async create(
-    createDto: CreateCustomerDto,
-  ): Promise<CustomerResponseDto> {
+  async create(createDto: CreateCustomerDto): Promise<CustomerResponseDto> {
     const supabase = this.supabaseService.getClient();
 
     // 1. Validate email uniqueness per organization
@@ -337,7 +336,9 @@ export class CustomersService {
 
     if (error) {
       this.logger.error('Failed to insert customer into database', error);
-      throw new BadRequestException(`Failed to create customer: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create customer: ${error.message}`,
+      );
     }
 
     return this.mapToResponseDto(customer);
@@ -352,7 +353,15 @@ export class CustomersService {
   ): Promise<PaginatedCustomersResponseDto> {
     const supabase = this.supabaseService.getClient();
 
-    const { limit = 50, page = 1, email, external_id, query: searchQuery, sort_by, sort_order } = query;
+    const {
+      limit = 50,
+      page = 1,
+      email,
+      external_id,
+      query: searchQuery,
+      sort_by,
+      sort_order,
+    } = query;
     const offset = (page - 1) * limit;
 
     // Build query
@@ -380,7 +389,9 @@ export class CustomersService {
     // Apply sorting
     const sortField = sort_by || CustomerSortField.CREATED_AT;
     const sortDirection = sort_order || 'desc';
-    supabaseQuery = supabaseQuery.order(sortField, { ascending: sortDirection === 'asc' });
+    supabaseQuery = supabaseQuery.order(sortField, {
+      ascending: sortDirection === 'asc',
+    });
 
     // Apply pagination
     supabaseQuery = supabaseQuery.range(offset, offset + limit - 1);
@@ -389,7 +400,9 @@ export class CustomersService {
 
     if (error) {
       this.logger.error('Failed to fetch customers', error);
-      throw new BadRequestException(`Failed to fetch customers: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch customers: ${error.message}`,
+      );
     }
 
     const total = count || 0;
@@ -479,7 +492,11 @@ export class CustomersService {
     const existingCustomerData = existingCustomer as any;
 
     // 2. Validate email uniqueness if changed
-    if ('email' in updateDto && updateDto.email && updateDto.email.toLowerCase() !== existingCustomerData.email) {
+    if (
+      'email' in updateDto &&
+      updateDto.email &&
+      updateDto.email.toLowerCase() !== existingCustomerData.email
+    ) {
       const { data: emailConflict } = await supabase
         .from('customers')
         .select('id')
@@ -499,9 +516,13 @@ export class CustomersService {
     // 3. Validate external_id uniqueness and immutability
     if ('external_id' in updateDto && updateDto.external_id) {
       // Check if external_id is being changed (can only set once)
-      if (existingCustomerData.external_id && existingCustomerData.external_id !== updateDto.external_id) {
+      if (
+        existingCustomerData.external_id &&
+        existingCustomerData.external_id !== updateDto.external_id
+      ) {
         throw new BadRequestException(
-          'external_id cannot be changed once set. Current value: ' + existingCustomerData.external_id,
+          'external_id cannot be changed once set. Current value: ' +
+            existingCustomerData.external_id,
         );
       }
 
@@ -540,11 +561,18 @@ export class CustomersService {
       updateData.name = updateDto.name;
     }
 
-    if ('external_id' in updateDto && updateDto.external_id && !existingCustomerData.external_id) {
+    if (
+      'external_id' in updateDto &&
+      updateDto.external_id &&
+      !existingCustomerData.external_id
+    ) {
       updateData.external_id = updateDto.external_id;
     }
 
-    if ('billing_address' in updateDto && updateDto.billing_address !== undefined) {
+    if (
+      'billing_address' in updateDto &&
+      updateDto.billing_address !== undefined
+    ) {
       updateData.billing_address = updateDto.billing_address;
     }
 
@@ -562,7 +590,9 @@ export class CustomersService {
 
     if (updateError) {
       this.logger.error('Failed to update customer', updateError);
-      throw new BadRequestException(`Failed to update customer: ${updateError.message}`);
+      throw new BadRequestException(
+        `Failed to update customer: ${updateError.message}`,
+      );
     }
 
     // 6. Sync to Stripe Connect account (if stripe_customer_id exists)
@@ -616,7 +646,9 @@ export class CustomersService {
       .is('deleted_at', null);
 
     if (activeSubscriptions && activeSubscriptions.length > 0) {
-      this.logger.log(`Cancelling ${activeSubscriptions.length} active subscriptions for customer ${id}`);
+      this.logger.log(
+        `Cancelling ${activeSubscriptions.length} active subscriptions for customer ${id}`,
+      );
 
       // Cancel subscriptions in Stripe
       const stripe = this.stripeService.getClient();
@@ -643,7 +675,10 @@ export class CustomersService {
                   { stripeAccount: account.stripe_id },
                 );
               } catch (error) {
-                this.logger.error(`Failed to cancel Stripe subscription ${subscription.stripe_subscription_id}`, error);
+                this.logger.error(
+                  `Failed to cancel Stripe subscription ${subscription.stripe_subscription_id}`,
+                  error,
+                );
               }
             }
           }
@@ -668,7 +703,9 @@ export class CustomersService {
       .is('revoked_at', null);
 
     if (featureGrants && featureGrants.length > 0) {
-      this.logger.log(`Revoking ${featureGrants.length} feature grants for customer ${id}`);
+      this.logger.log(
+        `Revoking ${featureGrants.length} feature grants for customer ${id}`,
+      );
 
       await supabase
         .from('feature_grants')
@@ -687,7 +724,9 @@ export class CustomersService {
 
     if (deleteError) {
       this.logger.error('Failed to delete customer', deleteError);
-      throw new BadRequestException(`Failed to delete customer: ${deleteError.message}`);
+      throw new BadRequestException(
+        `Failed to delete customer: ${deleteError.message}`,
+      );
     }
 
     // 5. Invalidate cache
@@ -718,7 +757,8 @@ export class CustomersService {
     const cacheKey = `customer:state:${id}`;
 
     // Try to get from cache
-    const cached = await this.cacheManager.get<CustomerStateResponseDto>(cacheKey);
+    const cached =
+      await this.cacheManager.get<CustomerStateResponseDto>(cacheKey);
     if (cached) {
       this.logger.log(`Customer state cache HIT for ${id}`);
       return cached;
@@ -742,7 +782,8 @@ export class CustomersService {
     // 3. Get granted features - use left join to see all grants even if feature is missing
     const { data: featureGrants, error: featureGrantsError } = await supabase
       .from('feature_grants')
-      .select(`
+      .select(
+        `
         id,
         feature_id,
         granted_at,
@@ -751,7 +792,8 @@ export class CustomersService {
           title,
           organization_id
         )
-      `)
+      `,
+      )
       .eq('customer_id', id)
       .is('revoked_at', null);
 
@@ -759,7 +801,7 @@ export class CustomersService {
       featureGrants,
       featureGrantsError,
       count: featureGrants?.length || 0,
-      rawGrants: JSON.stringify(featureGrants, null, 2)
+      rawGrants: JSON.stringify(featureGrants, null, 2),
     });
 
     const state: CustomerStateResponseDto = {
@@ -781,14 +823,17 @@ export class CustomersService {
             grantId: grant.id,
             featureId: grant.feature_id,
             features: grant.features,
-            hasFeatures: !!grant.features
+            hasFeatures: !!grant.features,
           });
-          
+
           return {
             id: grant.id,
             feature_id: grant.feature_id,
             feature_key: grant.features?.name || 'unknown',
-            feature_name: grant.features?.title || grant.features?.name || 'Unknown Feature',
+            feature_name:
+              grant.features?.title ||
+              grant.features?.name ||
+              'Unknown Feature',
             granted_at: grant.granted_at || new Date().toISOString(),
           };
         }) || [],
@@ -825,7 +870,9 @@ export class CustomersService {
         .single();
 
       if (!org?.account_id) {
-        this.logger.warn(`No Stripe account for organization ${customer.organization_id}`);
+        this.logger.warn(
+          `No Stripe account for organization ${customer.organization_id}`,
+        );
         return;
       }
 
@@ -867,7 +914,10 @@ export class CustomersService {
 
       this.logger.log(`Synced customer ${customer.id} to Stripe`);
     } catch (error) {
-      this.logger.error(`Failed to sync customer to Stripe: ${error.message}`, error);
+      this.logger.error(
+        `Failed to sync customer to Stripe: ${error.message}`,
+        error,
+      );
       // Don't throw - sync failures shouldn't block the operation
     }
   }

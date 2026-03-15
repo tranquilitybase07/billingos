@@ -48,11 +48,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
       status = exception.getStatus();
     } else if (exception instanceof HttpException) {
-      errorResponse = this.handleHttpException(
-        exception,
-        requestId,
-        timestamp,
-      );
+      errorResponse = this.handleHttpException(exception, requestId, timestamp);
       status = exception.getStatus();
     } else if (this.isStripeError(exception)) {
       const billingException = StripeErrorMapper.mapStripeError(
@@ -108,7 +104,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
 
     // Handle class-validator errors
-    if (typeof resp === 'object' && 'message' in (resp as object)) {
+    if (typeof resp === 'object' && 'message' in resp) {
       const res = resp as any;
       if (Array.isArray(res.message) && res.message.length > 0) {
         return {
@@ -198,11 +194,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     };
   }
 
-  private logError(
-    exception: unknown,
-    context: any,
-    errorResponse: any,
-  ): void {
+  private logError(exception: unknown, context: any, errorResponse: any): void {
     const level = this.getLogLevel(errorResponse.error.code);
 
     const logMessage = {
@@ -214,7 +206,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     switch (level) {
       case 'error':
-        this.logger.error(JSON.stringify(logMessage), (exception as any)?.stack);
+        this.logger.error(
+          JSON.stringify(logMessage),
+          (exception as any)?.stack,
+        );
         break;
       case 'warn':
         this.logger.warn(JSON.stringify(logMessage));
@@ -292,7 +287,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private detectErrorCode(message: string): ErrorCode {
     const lowercaseMessage = message.toLowerCase();
 
-    if (lowercaseMessage.includes('database') || lowercaseMessage.includes('db')) {
+    if (
+      lowercaseMessage.includes('database') ||
+      lowercaseMessage.includes('db')
+    ) {
       return ErrorCode.SYS_DATABASE_ERROR;
     }
     if (lowercaseMessage.includes('timeout')) {

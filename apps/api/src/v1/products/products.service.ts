@@ -89,7 +89,7 @@ export class V1ProductsService {
       )
       .eq('organization_id', organizationId)
       .eq('is_archived', false)
-      .eq('visible_in_pricing_table', true)  // Only show products marked as visible
+      .eq('visible_in_pricing_table', true) // Only show products marked as visible
       .or('version_status.is.null,version_status.neq.superseded') // Include products without versioning OR current versions
       .eq('prices.is_archived', false)
       .order('created_at', { ascending: true });
@@ -141,7 +141,11 @@ export class V1ProductsService {
             id: subscription.id,
             productId: subscription.product_id,
             priceId: subscription.product_id, // Note: We might need to add price_id to subscriptions table
-            status: subscription.status as 'active' | 'trialing' | 'past_due' | 'canceled',
+            status: subscription.status as
+              | 'active'
+              | 'trialing'
+              | 'past_due'
+              | 'canceled',
             currentPeriodEnd: subscription.current_period_end,
             cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
           };
@@ -153,13 +157,19 @@ export class V1ProductsService {
     const pricingProducts: PricingProduct[] = (products || []).map(
       (product) => {
         // Transform prices
-        const prices: PricingPrice[] = (product.prices || []).map((price: any) => ({
-          id: price.id,
-          amount: price.price_amount || 0,
-          currency: price.price_currency || 'usd',
-          interval: price.recurring_interval as 'month' | 'year' | 'week' | 'day',
-          intervalCount: price.recurring_interval_count || 1,
-        }));
+        const prices: PricingPrice[] = (product.prices || []).map(
+          (price: any) => ({
+            id: price.id,
+            amount: price.price_amount || 0,
+            currency: price.price_currency || 'usd',
+            interval: price.recurring_interval as
+              | 'month'
+              | 'year'
+              | 'week'
+              | 'day',
+            intervalCount: price.recurring_interval_count || 1,
+          }),
+        );
 
         // Transform features
         const features: PricingFeature[] = (product.productFeatures || [])
@@ -179,7 +189,10 @@ export class V1ProductsService {
               id: feature.id,
               name: feature.name,
               title: feature.title,
-              type: feature.type as 'boolean_flag' | 'usage_quota' | 'numeric_limit',
+              type: feature.type as
+                | 'boolean_flag'
+                | 'usage_quota'
+                | 'numeric_limit',
               properties,
             };
           });

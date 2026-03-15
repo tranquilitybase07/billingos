@@ -22,7 +22,9 @@ export class DiscountsService {
   /**
    * Look up the Stripe Connect account ID for an organization
    */
-  private async getStripeAccountId(organizationId: string): Promise<string | null> {
+  private async getStripeAccountId(
+    organizationId: string,
+  ): Promise<string | null> {
     const supabase = this.supabaseService.getClient();
 
     const { data: org } = await supabase
@@ -47,7 +49,9 @@ export class DiscountsService {
    * Create a new discount
    */
   async create(userId: string, createDto: CreateDiscountDto) {
-    this.logger.log(`Creating discount with payload: ${JSON.stringify(createDto)}`);
+    this.logger.log(
+      `Creating discount with payload: ${JSON.stringify(createDto)}`,
+    );
     const supabase = this.supabaseService.getClient();
 
     // Verify user is a member of the organization
@@ -72,9 +76,7 @@ export class DiscountsService {
       }
     } else if (createDto.type === 'fixed') {
       if (createDto.amount == null) {
-        throw new BadRequestException(
-          'amount is required for fixed discounts',
-        );
+        throw new BadRequestException('amount is required for fixed discounts');
       }
       if (!createDto.currency) {
         throw new BadRequestException(
@@ -104,7 +106,9 @@ export class DiscountsService {
     let stripeCouponId: string | null = null;
     let stripePromotionCodeId: string | null = null;
 
-    const stripeAccountId = await this.getStripeAccountId(createDto.organization_id);
+    const stripeAccountId = await this.getStripeAccountId(
+      createDto.organization_id,
+    );
 
     if (stripeAccountId) {
       try {
@@ -122,7 +126,10 @@ export class DiscountsService {
           couponParams.currency = createDto.currency;
         }
 
-        if (createDto.duration === 'repeating' && createDto.duration_in_months) {
+        if (
+          createDto.duration === 'repeating' &&
+          createDto.duration_in_months
+        ) {
           couponParams.duration_in_months = createDto.duration_in_months;
         }
 
@@ -147,7 +154,9 @@ export class DiscountsService {
             stripeAccountId,
           );
           stripePromotionCodeId = promoCode.id;
-          this.logger.log(`Created Stripe promotion code: ${stripePromotionCodeId}`);
+          this.logger.log(
+            `Created Stripe promotion code: ${stripePromotionCodeId}`,
+          );
         }
       } catch (stripeError) {
         this.logger.error('Failed to create Stripe coupon', stripeError);
@@ -197,7 +206,9 @@ export class DiscountsService {
 
       if (productError) {
         this.logger.error('Failed to save discount products', productError);
-        throw new BadRequestException(`Failed to save discount products: ${productError.message}`);
+        throw new BadRequestException(
+          `Failed to save discount products: ${productError.message}`,
+        );
       }
     }
 
@@ -351,7 +362,9 @@ export class DiscountsService {
 
     // --- Stripe Sync: Update coupon on connected account ---
     if (discount.stripe_coupon_id) {
-      const stripeAccountId = await this.getStripeAccountId(discount.organization_id);
+      const stripeAccountId = await this.getStripeAccountId(
+        discount.organization_id,
+      );
 
       if (stripeAccountId) {
         try {
@@ -361,10 +374,15 @@ export class DiscountsService {
             { name: updateDto.name || discount.name },
             stripeAccountId,
           );
-          this.logger.log(`Updated Stripe coupon: ${discount.stripe_coupon_id}`);
+          this.logger.log(
+            `Updated Stripe coupon: ${discount.stripe_coupon_id}`,
+          );
 
           // Handle promotion code changes
-          if (updateDto.code !== undefined && updateDto.code !== discount.code) {
+          if (
+            updateDto.code !== undefined &&
+            updateDto.code !== discount.code
+          ) {
             // Deactivate old promotion code if exists
             if (discount.stripe_promotion_code_id) {
               await this.stripeService.deactivatePromotionCode(
@@ -380,13 +398,18 @@ export class DiscountsService {
             if (updateDto.code) {
               const promoCode = await this.stripeService.createPromotionCode(
                 {
-                  promotion: { coupon: discount.stripe_coupon_id, type: 'coupon' },
+                  promotion: {
+                    coupon: discount.stripe_coupon_id,
+                    type: 'coupon',
+                  },
                   code: updateDto.code,
                 },
                 stripeAccountId,
               );
               updatePayload.stripe_promotion_code_id = promoCode.id;
-              this.logger.log(`Created new Stripe promotion code: ${promoCode.id}`);
+              this.logger.log(
+                `Created new Stripe promotion code: ${promoCode.id}`,
+              );
             } else {
               updatePayload.stripe_promotion_code_id = null;
             }
@@ -453,7 +476,9 @@ export class DiscountsService {
 
     // --- Stripe Sync: Delete coupon on connected account ---
     if (discount.stripe_coupon_id) {
-      const stripeAccountId = await this.getStripeAccountId(discount.organization_id);
+      const stripeAccountId = await this.getStripeAccountId(
+        discount.organization_id,
+      );
 
       if (stripeAccountId) {
         try {
@@ -473,7 +498,9 @@ export class DiscountsService {
             discount.stripe_coupon_id,
             stripeAccountId,
           );
-          this.logger.log(`Deleted Stripe coupon: ${discount.stripe_coupon_id}`);
+          this.logger.log(
+            `Deleted Stripe coupon: ${discount.stripe_coupon_id}`,
+          );
         } catch (stripeError) {
           this.logger.error('Failed to delete Stripe coupon', stripeError);
           // Continue with local soft delete even if Stripe fails
@@ -498,7 +525,11 @@ export class DiscountsService {
    * Find all applicable discounts for a specific product.
    * Returns discounts that apply to ALL products (no product_ids) + discounts specific to this product.
    */
-  async findByProduct(productId: string, organizationId: string, userId: string) {
+  async findByProduct(
+    productId: string,
+    organizationId: string,
+    userId: string,
+  ) {
     const supabase = this.supabaseService.getClient();
 
     // Verify membership

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, RedisClientType } from 'redis';
 
@@ -17,7 +22,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     // Skip Redis connection entirely if no Redis config is provided
     if (!redisUrl && !host) {
-      this.logger.warn('No Redis configuration found (REDIS_URL or REDIS_HOST). Running in degraded mode without Redis.');
+      this.logger.warn(
+        'No Redis configuration found (REDIS_URL or REDIS_HOST). Running in degraded mode without Redis.',
+      );
       this.isConnected = false;
       return;
     }
@@ -71,7 +78,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   ): Promise<boolean> {
     if (!this.isConnected) {
       // Fail-open: If Redis is down, process the request
-      this.logger.warn(`Redis not connected, processing request without idempotency check for key: ${key}`);
+      this.logger.warn(
+        `Redis not connected, processing request without idempotency check for key: ${key}`,
+      );
       return true;
     }
 

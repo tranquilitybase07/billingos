@@ -19,7 +19,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
 @ApiTags('Products')
-
 @Controller('products')
 @UseGuards(JwtAuthGuard)
 export class ProductsController {
@@ -89,7 +88,12 @@ export class ProductsController {
   ) {
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
     const parsedOffset = offset ? parseInt(offset, 10) : 0;
-    return this.productsService.getProductSubscriptions(id, user.id, parsedLimit, parsedOffset);
+    return this.productsService.getProductSubscriptions(
+      id,
+      user.id,
+      parsedLimit,
+      parsedOffset,
+    );
   }
 
   /**

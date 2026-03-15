@@ -44,12 +44,16 @@ export class JwtOrSessionAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
 
     // Extract token from Authorization header
-    const authorization = request.headers.authorization;
+    const authorization = request.headers['authorization'] as
+      | string
+      | undefined;
     if (!authorization || !authorization.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const token = authorization.substring('Bearer '.length);
@@ -59,18 +63,18 @@ export class JwtOrSessionAuthGuard implements CanActivate {
       const sessionPayload = await this.sessionTokensService.validate(token);
 
       // Attach session token payload to request
-      request.sessionToken = sessionPayload;
-      request.customer = {
+      (request as any).sessionToken = sessionPayload;
+      (request as any).customer = {
         externalUserId: sessionPayload.external_user_id,
         externalOrganizationId: sessionPayload.external_organization_id,
         organizationId: sessionPayload.merchant_id,
       };
 
       // Mark request as coming from SDK
-      request.isSDKRequest = true;
+      (request as any).isSDKRequest = true;
 
       return true;
-    } catch (sessionError) {
+    } catch {
       // Session token validation failed, try JWT
     }
 
@@ -80,13 +84,13 @@ export class JwtOrSessionAuthGuard implements CanActivate {
       const payload = this.jwtService.verify(token, { secret });
 
       // Attach user to request (consistent with JwtStrategy)
-      request.user = { id: payload.sub };
+      (request as any).user = { id: payload.sub };
 
       // Mark request as coming from web app
-      request.isSDKRequest = false;
+      (request as any).isSDKRequest = false;
 
       return true;
-    } catch (jwtError) {
+    } catch {
       // Both authentication methods failed
       throw new UnauthorizedException('Invalid authentication token');
     }

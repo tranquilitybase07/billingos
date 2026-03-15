@@ -98,13 +98,11 @@ export function sanitizeErrorMessage(message: string): string {
   if (!message) return 'Unknown error';
 
   // Remove potential API keys from error messages
-  message = message.replace(
-    /sk_[a-zA-Z0-9_]{10,}/g,
-    (match) => maskApiKey(match),
+  message = message.replace(/sk_[a-zA-Z0-9_]{10,}/g, (match) =>
+    maskApiKey(match),
   );
-  message = message.replace(
-    /pk_[a-zA-Z0-9_]{10,}/g,
-    (match) => maskApiKey(match),
+  message = message.replace(/pk_[a-zA-Z0-9_]{10,}/g, (match) =>
+    maskApiKey(match),
   );
 
   // Remove potential emails

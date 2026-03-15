@@ -23,8 +23,16 @@ export const mockData = {
 
   // Generate names
   name: () => {
-    const names = ['Acme Corp', 'TechStart', 'CloudBase', 'DataFlow', 'NextGen Solutions'];
-    return names[Math.floor(Math.random() * names.length)] + ` ${sequenceCounter++}`;
+    const names = [
+      'Acme Corp',
+      'TechStart',
+      'CloudBase',
+      'DataFlow',
+      'NextGen Solutions',
+    ];
+    return (
+      names[Math.floor(Math.random() * names.length)] + ` ${sequenceCounter++}`
+    );
   },
 
   // Generate company names
@@ -32,7 +40,9 @@ export const mockData = {
 
   // Generate emails
   email: (name?: string) => {
-    const username = name ? name.toLowerCase().replace(/\s+/g, '.') : `user${sequenceCounter}`;
+    const username = name
+      ? name.toLowerCase().replace(/\s+/g, '.')
+      : `user${sequenceCounter}`;
     const domains = ['example.com', 'test.com', 'demo.com'];
     return `${username}@${domains[Math.floor(Math.random() * domains.length)]}`;
   },
@@ -41,7 +51,8 @@ export const mockData = {
   url: (path = '') => `https://example.com${path}`,
 
   // Generate numbers
-  number: (min = 1, max = 1000) => Math.floor(Math.random() * (max - min + 1)) + min,
+  number: (min = 1, max = 1000) =>
+    Math.floor(Math.random() * (max - min + 1)) + min,
 
   // Generate prices (in cents)
   price: (min = 100, max = 100000) => mockData.number(min, max),
@@ -71,8 +82,23 @@ export const mockData = {
 
   // Generate text/descriptions
   text: (words = 10) => {
-    const wordList = ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing',
-                      'elit', 'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore'];
+    const wordList = [
+      'lorem',
+      'ipsum',
+      'dolor',
+      'sit',
+      'amet',
+      'consectetur',
+      'adipiscing',
+      'elit',
+      'sed',
+      'do',
+      'eiusmod',
+      'tempor',
+      'incididunt',
+      'ut',
+      'labore',
+    ];
     const result = [];
     for (let i = 0; i < words; i++) {
       result.push(wordList[Math.floor(Math.random() * wordList.length)]);
@@ -83,7 +109,10 @@ export const mockData = {
   // Generate slugs
   slug: (text?: string) => {
     const base = text || mockData.name();
-    return base.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    return base
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
   },
 
   // Pick random item from array

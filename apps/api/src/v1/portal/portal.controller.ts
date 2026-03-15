@@ -32,7 +32,10 @@ export class PortalController {
   @Post('create')
   @UseGuards(SessionTokenAuthGuard)
   @ApiOperation({ summary: 'Create a portal session for customer access' })
-  @ApiResponse({ status: 201, description: 'Portal session created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Portal session created successfully',
+  })
   @ApiResponse({ status: 404, description: 'Customer not found' })
   async createPortalSession(
     @CurrentCustomer() customer: CustomerContext,
@@ -59,7 +62,10 @@ export class PortalController {
 
   @Get(':sessionId/data')
   @ApiOperation({ summary: 'Get aggregated portal data for a session' })
-  @ApiResponse({ status: 200, description: 'Portal data retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Portal data retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Session invalid or expired' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
   async getPortalData(@Param('sessionId') sessionId: string) {
@@ -69,14 +75,19 @@ export class PortalController {
 
   @Post(':sessionId/cancel-subscription')
   @ApiOperation({ summary: 'Cancel a customer subscription' })
-  @ApiResponse({ status: 200, description: 'Subscription cancelled successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription cancelled successfully',
+  })
   @ApiResponse({ status: 401, description: 'Session invalid or expired' })
   @ApiResponse({ status: 404, description: 'Subscription not found' })
   async cancelSubscription(
     @Param('sessionId') sessionId: string,
     @Body() dto: CancelSubscriptionDto,
   ) {
-    this.logger.log(`Cancelling subscription ${dto.subscriptionId} for session: ${sessionId}`);
+    this.logger.log(
+      `Cancelling subscription ${dto.subscriptionId} for session: ${sessionId}`,
+    );
     return this.portalService.cancelSubscription(sessionId, dto);
   }
 
@@ -104,39 +115,57 @@ export class PortalController {
 
   @Delete(':sessionId/payment-methods/:paymentMethodId')
   @ApiOperation({ summary: 'Remove a payment method' })
-  @ApiResponse({ status: 200, description: 'Payment method removed successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment method removed successfully',
+  })
   @ApiResponse({ status: 401, description: 'Session invalid or expired' })
   @ApiResponse({ status: 404, description: 'Payment method not found' })
   async removePaymentMethod(
     @Param('sessionId') sessionId: string,
     @Param('paymentMethodId') paymentMethodId: string,
   ) {
-    this.logger.log(`Removing payment method ${paymentMethodId} for session: ${sessionId}`);
+    this.logger.log(
+      `Removing payment method ${paymentMethodId} for session: ${sessionId}`,
+    );
     return this.portalService.removePaymentMethod(sessionId, paymentMethodId);
   }
 
   @Patch(':sessionId/default-payment-method')
   @ApiOperation({ summary: 'Set default payment method' })
-  @ApiResponse({ status: 200, description: 'Default payment method updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Default payment method updated successfully',
+  })
   @ApiResponse({ status: 401, description: 'Session invalid or expired' })
   async setDefaultPaymentMethod(
     @Param('sessionId') sessionId: string,
     @Body() body: { paymentMethodId: string },
   ) {
     this.logger.log(`Setting default payment method for session: ${sessionId}`);
-    return this.portalService.setDefaultPaymentMethod(sessionId, body.paymentMethodId);
+    return this.portalService.setDefaultPaymentMethod(
+      sessionId,
+      body.paymentMethodId,
+    );
   }
 
   @Get(':sessionId/subscriptions/:subscriptionId/available-plans')
-  @ApiOperation({ summary: 'Get available plans for subscription upgrade/downgrade' })
-  @ApiResponse({ status: 200, description: 'Available plans retrieved successfully' })
+  @ApiOperation({
+    summary: 'Get available plans for subscription upgrade/downgrade',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available plans retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Session invalid or expired' })
   @ApiResponse({ status: 404, description: 'Subscription not found' })
   async getAvailablePlans(
     @Param('sessionId') sessionId: string,
     @Param('subscriptionId') subscriptionId: string,
   ) {
-    this.logger.log(`Getting available plans for subscription ${subscriptionId}, session: ${sessionId}`);
+    this.logger.log(
+      `Getting available plans for subscription ${subscriptionId}, session: ${sessionId}`,
+    );
     return this.portalService.getAvailablePlans(sessionId, subscriptionId);
   }
 
@@ -150,7 +179,9 @@ export class PortalController {
     @Param('subscriptionId') subscriptionId: string,
     @Body() dto: PreviewChangeDto,
   ) {
-    this.logger.log(`Previewing plan change for subscription ${subscriptionId}, session: ${sessionId}`);
+    this.logger.log(
+      `Previewing plan change for subscription ${subscriptionId}, session: ${sessionId}`,
+    );
     return this.portalService.previewPlanChange(sessionId, subscriptionId, dto);
   }
 
@@ -165,7 +196,9 @@ export class PortalController {
     @Param('subscriptionId') subscriptionId: string,
     @Body() dto: ChangePlanDto,
   ) {
-    this.logger.log(`Changing plan for subscription ${subscriptionId}, session: ${sessionId}`);
+    this.logger.log(
+      `Changing plan for subscription ${subscriptionId}, session: ${sessionId}`,
+    );
     return this.portalService.changePlan(sessionId, subscriptionId, dto);
   }
 }

@@ -20,7 +20,9 @@ export class SubscriptionSchedulerService {
   async processScheduledChanges() {
     // Prevent concurrent execution
     if (this.isProcessing) {
-      this.logger.log('Skipping scheduled changes processing - already running');
+      this.logger.log(
+        'Skipping scheduled changes processing - already running',
+      );
       return;
     }
 
@@ -45,7 +47,8 @@ export class SubscriptionSchedulerService {
     // Find all scheduled changes that are due
     const { data: scheduledChanges, error } = await supabase
       .from('subscription_changes')
-      .select(`
+      .select(
+        `
         *,
         subscription:subscriptions (
           *,
@@ -59,7 +62,8 @@ export class SubscriptionSchedulerService {
           *,
           product:products (*)
         )
-      `)
+      `,
+      )
       .eq('status', 'scheduled')
       .lte('scheduled_for', now.toISOString())
       .order('scheduled_for', { ascending: true })
@@ -80,7 +84,10 @@ export class SubscriptionSchedulerService {
       try {
         await this.executeDowngrade(change);
       } catch (error) {
-        this.logger.error(`Failed to execute scheduled change ${change.id}:`, error);
+        this.logger.error(
+          `Failed to execute scheduled change ${change.id}:`,
+          error,
+        );
 
         // Mark as failed
         await supabase
@@ -106,7 +113,9 @@ export class SubscriptionSchedulerService {
       throw new Error('Missing subscription or price data');
     }
 
-    this.logger.log(`Executing scheduled downgrade for subscription ${subscription.id}`);
+    this.logger.log(
+      `Executing scheduled downgrade for subscription ${subscription.id}`,
+    );
 
     // Start transaction by marking as processing
     const { error: updateError } = await supabase
@@ -136,7 +145,11 @@ export class SubscriptionSchedulerService {
       .single();
 
     // Update Stripe subscription if it exists
-    if (subscription.stripe_subscription_id && newPrice.stripe_price_id && account?.stripe_id) {
+    if (
+      subscription.stripe_subscription_id &&
+      newPrice.stripe_price_id &&
+      account?.stripe_id
+    ) {
       try {
         await this.stripeService.updateSubscriptionPrice(
           subscription.stripe_subscription_id,
@@ -200,7 +213,9 @@ export class SubscriptionSchedulerService {
       })
       .eq('id', change.id);
 
-    this.logger.log(`Successfully completed scheduled downgrade for subscription ${subscription.id}`);
+    this.logger.log(
+      `Successfully completed scheduled downgrade for subscription ${subscription.id}`,
+    );
 
     // TODO: Send notification email to customer
   }

@@ -1,4 +1,12 @@
-import { Injectable, Logger, NotFoundException, UnauthorizedException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { StripeService } from '../../stripe/stripe.service';
 import { SubscriptionUpgradeService } from '../../subscriptions/subscription-upgrade.service';
@@ -63,7 +71,9 @@ export class PortalService {
         .single();
 
       if (customerError || !customer) {
-        throw new NotFoundException('Customer not found or does not belong to organization');
+        throw new NotFoundException(
+          'Customer not found or does not belong to organization',
+        );
       }
 
       customerId = customer.id;
@@ -126,7 +136,9 @@ export class PortalService {
   /**
    * Get portal session status and validate
    */
-  async getPortalSessionStatus(sessionId: string): Promise<PortalSessionStatus> {
+  async getPortalSessionStatus(
+    sessionId: string,
+  ): Promise<PortalSessionStatus> {
     const supabase = this.supabaseService.getClient();
 
     const { data: session, error } = await supabase
@@ -197,7 +209,8 @@ export class PortalService {
     // 3. Get active subscriptions with product and price details
     const { data: subscriptions, error: subscriptionsError } = await supabase
       .from('subscriptions')
-      .select(`
+      .select(
+        `
         id,
         status,
         current_period_start,
@@ -217,7 +230,8 @@ export class PortalService {
           recurring_interval,
           recurring_interval_count
         )
-      `)
+      `,
+      )
       .eq('customer_id', customerId)
       .in('status', ['active', 'trialing', 'past_due', 'canceled']);
 
@@ -230,7 +244,8 @@ export class PortalService {
         // Get features for this product
         const { data: productFeatures } = await supabase
           .from('product_features')
-          .select(`
+          .select(
+            `
             feature:features (
               id,
               name,
@@ -238,7 +253,8 @@ export class PortalService {
               feature_type,
               limit
             )
-          `)
+          `,
+          )
           .eq('product_id', product.id);
 
         const features = (productFeatures || []).map((pf: any) => ({
@@ -277,13 +293,16 @@ export class PortalService {
     const portalInvoices: PortalInvoice[] = [];
 
     // Get customer's Stripe customer ID
-    const { data: customerWithStripe, error: stripeCustomerError } = await supabase
-      .from('customers')
-      .select('stripe_customer_id, organization_id')
-      .eq('id', customerId)
-      .single();
+    const { data: customerWithStripe, error: stripeCustomerError } =
+      await supabase
+        .from('customers')
+        .select('stripe_customer_id, organization_id')
+        .eq('id', customerId)
+        .single();
 
-    this.logger.debug(`Customer data: stripe_customer_id=${customerWithStripe?.stripe_customer_id}`);
+    this.logger.debug(
+      `Customer data: stripe_customer_id=${customerWithStripe?.stripe_customer_id}`,
+    );
 
     if (!stripeCustomerError && customerWithStripe?.stripe_customer_id) {
       const stripeCustomerId = customerWithStripe.stripe_customer_id;
@@ -305,21 +324,27 @@ export class PortalService {
 
         const stripeAccountId = account?.stripe_id;
 
-        this.logger.debug(`Stripe IDs - Customer: ${stripeCustomerId}, Account: ${stripeAccountId}`);
+        this.logger.debug(
+          `Stripe IDs - Customer: ${stripeCustomerId}, Account: ${stripeAccountId}`,
+        );
 
         if (stripeAccountId) {
           try {
-            this.logger.debug(`Fetching invoices from Stripe for customer ${stripeCustomerId} in account ${stripeAccountId}`);
+            this.logger.debug(
+              `Fetching invoices from Stripe for customer ${stripeCustomerId} in account ${stripeAccountId}`,
+            );
             const stripe = this.stripeService.getClient();
             const invoices = await stripe.invoices.list(
               {
                 customer: stripeCustomerId,
                 limit: 100, // Fetch last 100 invoices
               },
-              { stripeAccount: stripeAccountId }
+              { stripeAccount: stripeAccountId },
             );
 
-            this.logger.debug(`Stripe returned ${invoices.data.length} invoices`);
+            this.logger.debug(
+              `Stripe returned ${invoices.data.length} invoices`,
+            );
 
             // Map Stripe invoices to PortalInvoice format
             for (const invoice of invoices.data) {
@@ -329,9 +354,13 @@ export class PortalService {
                 status: invoice.status || 'unknown',
                 amount: invoice.amount_due || 0,
                 currency: invoice.currency,
-                dueDate: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : undefined,
+                dueDate: invoice.due_date
+                  ? new Date(invoice.due_date * 1000).toISOString()
+                  : undefined,
                 paidAt: invoice.status_transitions?.paid_at
-                  ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
+                  ? new Date(
+                      invoice.status_transitions.paid_at * 1000,
+                    ).toISOString()
                   : undefined,
                 invoiceUrl: invoice.hosted_invoice_url || undefined,
                 invoicePdf: invoice.invoice_pdf || undefined,
@@ -339,20 +368,30 @@ export class PortalService {
               });
             }
 
-            this.logger.log(`✅ Fetched ${portalInvoices.length} invoices for customer ${customerId}`);
+            this.logger.log(
+              `✅ Fetched ${portalInvoices.length} invoices for customer ${customerId}`,
+            );
           } catch (error) {
-            this.logger.error(`❌ Failed to fetch invoices from Stripe: ${error.message}`);
+            this.logger.error(
+              `❌ Failed to fetch invoices from Stripe: ${error.message}`,
+            );
             this.logger.error(error.stack);
             // Don't throw - just return empty invoices array
           }
         } else {
-          this.logger.warn(`⚠️ No Stripe account ID found in accounts table - cannot fetch invoices`);
+          this.logger.warn(
+            `⚠️ No Stripe account ID found in accounts table - cannot fetch invoices`,
+          );
         }
       } else {
-        this.logger.warn(`⚠️ No account_id found for organization - cannot fetch invoices`);
+        this.logger.warn(
+          `⚠️ No account_id found for organization - cannot fetch invoices`,
+        );
       }
     } else {
-      this.logger.warn(`⚠️ No Stripe customer ID found for customer ${customerId} - skipping invoice fetch`);
+      this.logger.warn(
+        `⚠️ No Stripe customer ID found for customer ${customerId} - skipping invoice fetch`,
+      );
     }
 
     // 5. Get payment methods from Stripe
@@ -379,7 +418,9 @@ export class PortalService {
 
         if (stripeAccountId2) {
           try {
-            this.logger.debug(`Fetching payment methods from Stripe for customer ${stripeCustomerId}`);
+            this.logger.debug(
+              `Fetching payment methods from Stripe for customer ${stripeCustomerId}`,
+            );
 
             const paymentMethods = await this.stripeService.listPaymentMethods(
               stripeCustomerId,
@@ -391,12 +432,15 @@ export class PortalService {
             const stripe = this.stripeService.getClient();
             const stripeCustomer = await stripe.customers.retrieve(
               stripeCustomerId,
-              { stripeAccount: stripeAccountId2 }
+              { stripeAccount: stripeAccountId2 },
             );
 
-            const defaultPaymentMethodId = (stripeCustomer as any).invoice_settings?.default_payment_method;
+            const defaultPaymentMethodId = (stripeCustomer as any)
+              .invoice_settings?.default_payment_method;
 
-            this.logger.debug(`Stripe returned ${paymentMethods.data.length} payment methods`);
+            this.logger.debug(
+              `Stripe returned ${paymentMethods.data.length} payment methods`,
+            );
 
             for (const pm of paymentMethods.data) {
               portalPaymentMethods.push({
@@ -410,9 +454,13 @@ export class PortalService {
               });
             }
 
-            this.logger.log(`✅ Fetched ${portalPaymentMethods.length} payment methods for customer ${customerId}`);
+            this.logger.log(
+              `✅ Fetched ${portalPaymentMethods.length} payment methods for customer ${customerId}`,
+            );
           } catch (error) {
-            this.logger.error(`❌ Failed to fetch payment methods from Stripe: ${error.message}`);
+            this.logger.error(
+              `❌ Failed to fetch payment methods from Stripe: ${error.message}`,
+            );
           }
         }
       }
@@ -433,7 +481,8 @@ export class PortalService {
       // Query usage_records for this customer and these features
       const { data: usageRecords } = await supabase
         .from('usage_records')
-        .select(`
+        .select(
+          `
           feature_id,
           consumed_units,
           features (
@@ -442,12 +491,16 @@ export class PortalService {
             feature_type,
             limit
           )
-        `)
+        `,
+        )
         .eq('customer_id', customerId)
         .in('feature_id', Array.from(featureIds));
 
       // Aggregate usage by feature
-      const usageByFeature = new Map<string, { name: string; limit: number | null; total: number; type: string }>();
+      const usageByFeature = new Map<
+        string,
+        { name: string; limit: number | null; total: number; type: string }
+      >();
 
       if (usageRecords) {
         for (const record of usageRecords) {
@@ -470,7 +523,9 @@ export class PortalService {
 
       // Convert to usage metrics array
       for (const [featureId, data] of usageByFeature.entries()) {
-        const percentage = data.limit ? Math.min(100, (data.total / data.limit) * 100) : 0;
+        const percentage = data.limit
+          ? Math.min(100, (data.total / data.limit) * 100)
+          : 0;
 
         usageMetrics.push({
           featureId,
@@ -534,7 +589,9 @@ export class PortalService {
       .single();
 
     if (subError || !subscription) {
-      throw new NotFoundException('Subscription not found or does not belong to customer');
+      throw new NotFoundException(
+        'Subscription not found or does not belong to customer',
+      );
     }
 
     // Check if already cancelled
@@ -544,7 +601,9 @@ export class PortalService {
 
     // Ensure we have a Stripe subscription ID
     if (!subscription.stripe_subscription_id) {
-      throw new BadRequestException('Subscription does not have a Stripe subscription ID');
+      throw new BadRequestException(
+        'Subscription does not have a Stripe subscription ID',
+      );
     }
 
     const stripeSubscriptionId = subscription.stripe_subscription_id;
@@ -577,7 +636,9 @@ export class PortalService {
       .single();
 
     if (!account?.stripe_id) {
-      throw new BadRequestException('Stripe account not found for organization');
+      throw new BadRequestException(
+        'Stripe account not found for organization',
+      );
     }
 
     const stripeAccountId = account.stripe_id;
@@ -624,7 +685,9 @@ export class PortalService {
         .single();
 
       if (updateError) {
-        this.logger.error(`Failed to update subscription in database: ${updateError.message}`);
+        this.logger.error(
+          `Failed to update subscription in database: ${updateError.message}`,
+        );
         throw new Error('Failed to update subscription');
       }
 
@@ -646,8 +709,12 @@ export class PortalService {
           : 'Subscription cancelled immediately',
       };
     } catch (error) {
-      this.logger.error(`Failed to cancel subscription in Stripe: ${error.message}`);
-      throw new BadRequestException(`Failed to cancel subscription: ${error.message}`);
+      this.logger.error(
+        `Failed to cancel subscription in Stripe: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Failed to cancel subscription: ${error.message}`,
+      );
     }
   }
 
@@ -669,13 +736,16 @@ export class PortalService {
     const updateData: any = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.email !== undefined) updateData.email = dto.email;
-    if (dto.billing_address !== undefined) updateData.billing_address = dto.billing_address;
+    if (dto.billing_address !== undefined)
+      updateData.billing_address = dto.billing_address;
 
     const { data: updatedCustomer, error: updateError } = await supabase
       .from('customers')
       .update(updateData)
       .eq('id', customerId)
-      .select('id, email, name, billing_address, stripe_customer_id, organization_id')
+      .select(
+        'id, email, name, billing_address, stripe_customer_id, organization_id',
+      )
       .single();
 
     if (updateError || !updatedCustomer) {
@@ -722,9 +792,13 @@ export class PortalService {
               stripeAccountId,
             );
 
-            this.logger.log(`Updated Stripe customer ${updatedCustomer.stripe_customer_id}`);
+            this.logger.log(
+              `Updated Stripe customer ${updatedCustomer.stripe_customer_id}`,
+            );
           } catch (error) {
-            this.logger.error(`Failed to update Stripe customer: ${error.message}`);
+            this.logger.error(
+              `Failed to update Stripe customer: ${error.message}`,
+            );
             // Don't throw - database is already updated
           }
         }
@@ -764,7 +838,9 @@ export class PortalService {
       .single();
 
     if (!customer?.stripe_customer_id) {
-      throw new BadRequestException('Customer does not have a Stripe customer ID');
+      throw new BadRequestException(
+        'Customer does not have a Stripe customer ID',
+      );
     }
 
     const { data: org } = await supabase
@@ -796,10 +872,12 @@ export class PortalService {
           payment_method_types: ['card'],
           usage: 'off_session',
         },
-        { stripeAccount: account.stripe_id }
+        { stripeAccount: account.stripe_id },
       );
 
-      this.logger.log(`Created SetupIntent ${setupIntent.id} for customer ${customerId}`);
+      this.logger.log(
+        `Created SetupIntent ${setupIntent.id} for customer ${customerId}`,
+      );
 
       return {
         clientSecret: setupIntent.client_secret,
@@ -808,7 +886,9 @@ export class PortalService {
       };
     } catch (error) {
       this.logger.error(`Failed to create SetupIntent: ${error.message}`);
-      throw new BadRequestException(`Failed to create SetupIntent: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create SetupIntent: ${error.message}`,
+      );
     }
   }
 
@@ -834,7 +914,9 @@ export class PortalService {
       .single();
 
     if (!customer?.stripe_customer_id) {
-      throw new BadRequestException('Customer does not have a Stripe customer ID');
+      throw new BadRequestException(
+        'Customer does not have a Stripe customer ID',
+      );
     }
 
     const { data: org } = await supabase
@@ -859,9 +941,14 @@ export class PortalService {
 
     // 3. Detach payment method from Stripe
     try {
-      await this.stripeService.detachPaymentMethod(paymentMethodId, account.stripe_id);
+      await this.stripeService.detachPaymentMethod(
+        paymentMethodId,
+        account.stripe_id,
+      );
 
-      this.logger.log(`Removed payment method ${paymentMethodId} for customer ${customerId}`);
+      this.logger.log(
+        `Removed payment method ${paymentMethodId} for customer ${customerId}`,
+      );
 
       return {
         success: true,
@@ -869,7 +956,9 @@ export class PortalService {
       };
     } catch (error) {
       this.logger.error(`Failed to remove payment method: ${error.message}`);
-      throw new BadRequestException(`Failed to remove payment method: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to remove payment method: ${error.message}`,
+      );
     }
   }
 
@@ -895,7 +984,9 @@ export class PortalService {
       .single();
 
     if (!customer?.stripe_customer_id) {
-      throw new BadRequestException('Customer does not have a Stripe customer ID');
+      throw new BadRequestException(
+        'Customer does not have a Stripe customer ID',
+      );
     }
 
     const { data: org } = await supabase
@@ -930,15 +1021,21 @@ export class PortalService {
         account.stripe_id,
       );
 
-      this.logger.log(`Set default payment method to ${paymentMethodId} for customer ${customerId}`);
+      this.logger.log(
+        `Set default payment method to ${paymentMethodId} for customer ${customerId}`,
+      );
 
       return {
         success: true,
         message: 'Default payment method updated successfully',
       };
     } catch (error) {
-      this.logger.error(`Failed to set default payment method: ${error.message}`);
-      throw new BadRequestException(`Failed to set default payment method: ${error.message}`);
+      this.logger.error(
+        `Failed to set default payment method: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Failed to set default payment method: ${error.message}`,
+      );
     }
   }
 
@@ -971,13 +1068,20 @@ export class PortalService {
       isSDK: true as const,
     };
 
-    return this.subscriptionUpgradeService.getAvailablePlans(subscriptionId, context);
+    return this.subscriptionUpgradeService.getAvailablePlans(
+      subscriptionId,
+      context,
+    );
   }
 
   /**
    * Preview subscription plan change with proration
    */
-  async previewPlanChange(sessionId: string, subscriptionId: string, dto: PreviewChangeDto) {
+  async previewPlanChange(
+    sessionId: string,
+    subscriptionId: string,
+    dto: PreviewChangeDto,
+  ) {
     const supabase = this.supabaseService.getClient();
 
     // 1. Validate session
@@ -1003,13 +1107,21 @@ export class PortalService {
       isSDK: true as const,
     };
 
-    return this.subscriptionUpgradeService.previewChange(subscriptionId, context, dto);
+    return this.subscriptionUpgradeService.previewChange(
+      subscriptionId,
+      context,
+      dto,
+    );
   }
 
   /**
    * Execute subscription plan change
    */
-  async changePlan(sessionId: string, subscriptionId: string, dto: ChangePlanDto) {
+  async changePlan(
+    sessionId: string,
+    subscriptionId: string,
+    dto: ChangePlanDto,
+  ) {
     const supabase = this.supabaseService.getClient();
 
     // 1. Validate session
@@ -1035,6 +1147,10 @@ export class PortalService {
       isSDK: true as const,
     };
 
-    return this.subscriptionUpgradeService.changePlan(subscriptionId, context, dto);
+    return this.subscriptionUpgradeService.changePlan(
+      subscriptionId,
+      context,
+      dto,
+    );
   }
 }

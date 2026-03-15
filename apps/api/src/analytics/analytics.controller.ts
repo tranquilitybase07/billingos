@@ -4,10 +4,7 @@ import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
-import {
-  AnalyticsQueryDto,
-  Granularity,
-} from './dto/analytics-query.dto';
+import { AnalyticsQueryDto, Granularity } from './dto/analytics-query.dto';
 import { MRRResponseDto } from './dto/mrr-response.dto';
 import { ActiveSubscriptionsResponseDto } from './dto/active-subscriptions-response.dto';
 import { RevenueTrendResponseDto } from './dto/revenue-trend-response.dto';
@@ -22,7 +19,6 @@ import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
 
 @ApiTags('Analytics')
-
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)
 export class AnalyticsController {

@@ -115,9 +115,7 @@ export class BillingCleanupService {
   @Cron('0 0 * * * *')
   async cleanupStaleIncompleteSubscriptions() {
     if (this.isProcessingIncomplete) {
-      this.logger.log(
-        'Skipping stale incomplete cleanup — already running',
-      );
+      this.logger.log('Skipping stale incomplete cleanup — already running');
       return;
     }
 
@@ -187,9 +185,7 @@ export class BillingCleanupService {
           // Revoke features
           await this.subscriptionsService.revokeSubscriptionFeatures(sub.id);
 
-          this.logger.log(
-            `Cleaned up stale incomplete subscription ${sub.id}`,
-          );
+          this.logger.log(`Cleaned up stale incomplete subscription ${sub.id}`);
         } catch (itemError) {
           this.logger.error(
             `Failed to clean up stale subscription ${sub.id}:`,
@@ -214,9 +210,7 @@ export class BillingCleanupService {
   @Cron('0 0 3 * * *')
   async cleanupExpiredIdempotencyKeys() {
     if (this.isProcessingIdempotency) {
-      this.logger.log(
-        'Skipping idempotency key cleanup — already running',
-      );
+      this.logger.log('Skipping idempotency key cleanup — already running');
       return;
     }
 
@@ -253,9 +247,7 @@ export class BillingCleanupService {
   @Cron('0 */5 * * * *')
   async processReconciliationQueue() {
     if (this.isProcessingReconciliation) {
-      this.logger.log(
-        'Skipping reconciliation queue — already running',
-      );
+      this.logger.log('Skipping reconciliation queue — already running');
       return;
     }
 
@@ -277,17 +269,12 @@ export class BillingCleanupService {
 
       if (error || !items || items.length === 0) {
         if (error) {
-          this.logger.error(
-            'Error fetching reconciliation queue:',
-            error,
-          );
+          this.logger.error('Error fetching reconciliation queue:', error);
         }
         return;
       }
 
-      this.logger.log(
-        `Processing ${items.length} reconciliation queue items`,
-      );
+      this.logger.log(`Processing ${items.length} reconciliation queue items`);
 
       for (const item of items) {
         try {
@@ -342,9 +329,7 @@ export class BillingCleanupService {
         const stripeAccountId = metadata.stripe_account_id as string;
 
         if (!stripeSubId || !stripeAccountId) {
-          this.logger.warn(
-            `Reconciliation item ${item.id} missing Stripe IDs`,
-          );
+          this.logger.warn(`Reconciliation item ${item.id} missing Stripe IDs`);
           return;
         }
 

@@ -1,16 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
 import {
   EnhancedSupabaseMockBuilder,
-  EnhancedMockSupabaseService
+  EnhancedMockSupabaseService,
 } from '../../test/mocks/supabase-chainable.mock';
 import {
   MockStripeService,
-  createStripeError
+  createStripeError,
 } from '../../test/mocks/stripe.mock';
 import {
   productFactory,
@@ -55,7 +59,9 @@ describe('ProductsService', () => {
     supabaseMock = new EnhancedSupabaseMockBuilder()
       .withTableResponse('organizations', { data: testOrg })
       .withTableResponse('user_organizations', { data: testMembership })
-      .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+      .withTableResponse('accounts', {
+        data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+      })
       .withTableResponse('products', { data: [] })
       .withTableResponse('subscriptions', { data: [] })
       .build();
@@ -115,11 +121,13 @@ describe('ProductsService', () => {
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('products', { data: mockProduct })
           .withTableResponse('product_prices', { data: mockPrice })
           .withTableResponse('product_features', { data: [] })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_1' });
@@ -133,7 +141,7 @@ describe('ProductsService', () => {
           name: createDto.name,
           description: createDto.description,
         }),
-        'acct_stripe_1'
+        'acct_stripe_1',
       );
       expect(stripeService.createPrice).toHaveBeenCalled();
     });
@@ -154,11 +162,15 @@ describe('ProductsService', () => {
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('products', { data: mockProduct })
-          .withTableResponse('product_prices', { data: priceFactory.build({ amount_type: 'free' }) })
+          .withTableResponse('product_prices', {
+            data: priceFactory.build({ amount_type: 'free' }),
+          })
           .withTableResponse('product_features', { data: [] })
-          .build()
+          .build(),
       );
 
       await service.create(testUser, freePriceDto);
@@ -170,7 +182,9 @@ describe('ProductsService', () => {
     it('should rollback on Stripe failure', async () => {
       stripeService.createProduct.mockRejectedValue(new Error('Stripe error'));
 
-      await expect(service.create(testUser, createDto)).rejects.toThrow('Stripe error');
+      await expect(service.create(testUser, createDto)).rejects.toThrow(
+        'Stripe error',
+      );
     });
 
     it('should throw ForbiddenException when user is not organization member', async () => {
@@ -178,10 +192,12 @@ describe('ProductsService', () => {
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: null })
-          .build()
+          .build(),
       );
 
-      await expect(service.create(testUser, createDto)).rejects.toThrow(ForbiddenException);
+      await expect(service.create(testUser, createDto)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('should throw BadRequestException when organization has no Stripe account', async () => {
@@ -190,10 +206,12 @@ describe('ProductsService', () => {
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('organizations', { data: orgWithoutStripe })
           .withTableResponse('user_organizations', { data: testMembership })
-          .build()
+          .build(),
       );
 
-      await expect(service.create(testUser, createDto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(testUser, createDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -229,11 +247,13 @@ describe('ProductsService', () => {
     it('should create new version when adding prices with active subscriptions', async () => {
       const updateDto: UpdateProductDto = {
         prices: {
-          create: [{
-            amount_type: PriceAmountType.FIXED,
-            price_amount: 899, // New monthly price $8.99
-            recurring_interval: 'month' as any,
-          }],
+          create: [
+            {
+              amount_type: PriceAmountType.FIXED,
+              price_amount: 899, // New monthly price $8.99
+              recurring_interval: 'month' as any,
+            },
+          ],
         },
       };
 
@@ -253,31 +273,39 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: [] })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 }) // Mock RPC call
           .withTableResponse('rpc.has_active_subscriptions', { data: true }) // Mock RPC call
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
       stripeService.createPrice.mockResolvedValue({ id: 'price_stripe_new' });
 
-      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+      const result = await service.update(
+        mockProduct.id,
+        testUser.id,
+        updateDto,
+      );
 
       // Verify versioning occurred
       expect(stripeService.createProduct).toHaveBeenCalledWith(
         expect.objectContaining({
           name: expect.stringContaining('v2'),
         }),
-        'acct_stripe_1'
+        'acct_stripe_1',
       );
 
       // Verify new price was created for new version
       // Note: The product ID in the call might be the default or new version depending on mock setup
       const priceCalls = stripeService.createPrice.mock.calls;
-      const newMonthlyPrice = priceCalls.find(call => call[0].unit_amount === 899);
+      const newMonthlyPrice = priceCalls.find(
+        (call) => call[0].unit_amount === 899,
+      );
 
       expect(newMonthlyPrice).toBeDefined();
       expect(newMonthlyPrice[0]).toMatchObject({
@@ -292,11 +320,13 @@ describe('ProductsService', () => {
     it('should copy existing prices to new version (testing our fix)', async () => {
       const updateDto: UpdateProductDto = {
         prices: {
-          create: [{
-            amount_type: PriceAmountType.FIXED,
-            price_amount: 899, // Update monthly from $7.99 to $8.99
-            recurring_interval: 'month' as any,
-          }],
+          create: [
+            {
+              amount_type: PriceAmountType.FIXED,
+              price_amount: 899, // Update monthly from $7.99 to $8.99
+              recurring_interval: 'month' as any,
+            },
+          ],
           archive: ['price_monthly'], // Archive old monthly price
         },
       };
@@ -315,21 +345,21 @@ describe('ProductsService', () => {
             data: mockProduct,
           })
           .withTableResponse('product_prices', {
-            data: existingPrices
+            data: existingPrices,
           })
           .withTableResponse('product_features', { data: [] })
           .withTableResponse('subscriptions', {
-            data: activeSubscriptions
+            data: activeSubscriptions,
           })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('accounts', {
-            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' }
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
           })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 }) // Mock RPC call
           .withTableResponse('rpc.has_active_subscriptions', { data: true }) // Mock RPC call
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -346,8 +376,8 @@ describe('ProductsService', () => {
       expect(priceCalls.length).toBeGreaterThanOrEqual(1);
 
       // Verify the new monthly price was created with correct amount
-      const monthlyPriceCall = priceCalls.find(call =>
-        call[0].unit_amount === 899
+      const monthlyPriceCall = priceCalls.find(
+        (call) => call[0].unit_amount === 899,
       );
       expect(monthlyPriceCall).toBeDefined();
       expect(monthlyPriceCall[0]).toMatchObject({
@@ -363,10 +393,12 @@ describe('ProductsService', () => {
     it('should NOT create version when no active subscriptions', async () => {
       const updateDto: UpdateProductDto = {
         prices: {
-          create: [{
-            amount_type: PriceAmountType.FIXED,
-            price_amount: 999,
-          }],
+          create: [
+            {
+              amount_type: PriceAmountType.FIXED,
+              price_amount: 999,
+            },
+          ],
         },
       };
 
@@ -378,8 +410,10 @@ describe('ProductsService', () => {
           .withTableResponse('subscriptions', { data: [] }) // No active subscriptions
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
-          .build()
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
+          .build(),
       );
 
       await service.update(mockProduct.id, testUser.id, updateDto);
@@ -395,17 +429,21 @@ describe('ProductsService', () => {
 
       supabaseService.setMockClient(
         new EnhancedSupabaseMockBuilder()
-          .withTableResponse('products', { data: { ...mockProduct, trial_days: 14 } })
+          .withTableResponse('products', {
+            data: { ...mockProduct, trial_days: 14 },
+          })
           .withTableResponse('product_prices', { data: existingPrices })
           .withTableResponse('product_features', { data: [] })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 }) // Mock RPC call
           .withTableResponse('rpc.has_active_subscriptions', { data: true }) // Mock RPC call
           .withDefaultResponse({ data: mockProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -419,11 +457,13 @@ describe('ProductsService', () => {
     it('should create version when adding features with active subscriptions', async () => {
       const updateDto: UpdateProductDto = {
         features: {
-          link: [{
-            feature_id: 'feature_2',
-            display_order: 1,
-            config: { limit: 100 }
-          }],
+          link: [
+            {
+              feature_id: 'feature_2',
+              display_order: 1,
+              config: { limit: 100 },
+            },
+          ],
         },
       };
 
@@ -441,37 +481,49 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: [] })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
-          .withTableResponse('features', { data: { id: 'feature_2', stripe_feature_id: 'sf_2' } })
+          .withTableResponse('features', {
+            data: { id: 'feature_2', stripe_feature_id: 'sf_2' },
+          })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
 
-      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+      const result = await service.update(
+        mockProduct.id,
+        testUser.id,
+        updateDto,
+      );
 
       expect(stripeService.createProduct).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
     it('should create version when increasing feature limit with active subscriptions', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_1',
-        display_order: 0,
-        config: { limit: 10 },
-        features: { name: 'API Calls', type: 'usage_quota' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_1',
+          display_order: 0,
+          config: { limit: 10 },
+          features: { name: 'API Calls', type: 'usage_quota' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_1',
-            config: { limit: 20 } // Increased from 10
-          }],
+          update: [
+            {
+              feature_id: 'feature_1',
+              config: { limit: 20 }, // Increased from 10
+            },
+          ],
         },
       };
 
@@ -489,36 +541,46 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures }) // Use array
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
 
-      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+      const result = await service.update(
+        mockProduct.id,
+        testUser.id,
+        updateDto,
+      );
 
       expect(stripeService.createProduct).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
     it('should create version when updating Team Members limit', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_team_members',
-        display_order: 0,
-        config: { limit: 5 },
-        features: { name: 'Team Members', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_team_members',
+          display_order: 0,
+          config: { limit: 5 },
+          features: { name: 'Team Members', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_team_members',
-            config: { limit: 100 } // Increased from 5 to 100
-          }],
+          update: [
+            {
+              feature_id: 'feature_team_members',
+              config: { limit: 100 }, // Increased from 5 to 100
+            },
+          ],
         },
       };
 
@@ -536,36 +598,46 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures }) // Use array
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
 
-      const result = await service.update(mockProduct.id, testUser.id, updateDto);
+      const result = await service.update(
+        mockProduct.id,
+        testUser.id,
+        updateDto,
+      );
 
       expect(stripeService.createProduct).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
     it('should create version when changing from Unlimited to Limited', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_unlimited',
-        display_order: 0,
-        config: {}, // No limit (Unlimited)
-        features: { name: 'Unlimited Feature', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_unlimited',
+          display_order: 0,
+          config: {}, // No limit (Unlimited)
+          features: { name: 'Unlimited Feature', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_unlimited',
-            config: { limit: 100 }
-          }],
+          update: [
+            {
+              feature_id: 'feature_unlimited',
+              config: { limit: 100 },
+            },
+          ],
         },
       };
 
@@ -583,12 +655,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -599,19 +673,23 @@ describe('ProductsService', () => {
     });
 
     it('should create version when changing limit from 0 to 10', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_zero',
-        display_order: 0,
-        config: { limit: 0 },
-        features: { name: 'Zero Limit Feature', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_zero',
+          display_order: 0,
+          config: { limit: 0 },
+          features: { name: 'Zero Limit Feature', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_zero',
-            config: { limit: 10 }
-          }],
+          update: [
+            {
+              feature_id: 'feature_zero',
+              config: { limit: 10 },
+            },
+          ],
         },
       };
 
@@ -629,12 +707,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -645,19 +725,23 @@ describe('ProductsService', () => {
     });
 
     it('should create version when changing from Unlimited to 0', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_unlimited',
-        display_order: 0,
-        config: {}, // Unlimited
-        features: { name: 'Unlimited Feature', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_unlimited',
+          display_order: 0,
+          config: {}, // Unlimited
+          features: { name: 'Unlimited Feature', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_unlimited',
-            config: { limit: 0 }
-          }],
+          update: [
+            {
+              feature_id: 'feature_unlimited',
+              config: { limit: 0 },
+            },
+          ],
         },
       };
 
@@ -675,12 +759,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -691,19 +777,23 @@ describe('ProductsService', () => {
     });
 
     it('should create version when changing limit from 33 to 50', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_limited',
-        display_order: 0,
-        config: { limit: 33 },
-        features: { name: 'Limited Feature', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_limited',
+          display_order: 0,
+          config: { limit: 33 },
+          features: { name: 'Limited Feature', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_limited',
-            config: { limit: 50 }, // User scenario
-          }],
+          update: [
+            {
+              feature_id: 'feature_limited',
+              config: { limit: 50 }, // User scenario
+            },
+          ],
         },
       };
 
@@ -721,12 +811,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -737,19 +829,23 @@ describe('ProductsService', () => {
     });
 
     it('should create version when updating feature config (even if limits are same/null)', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_bool',
-        display_order: 0,
-        config: { enabled: false }, // Old config
-        features: { name: 'Boolean Feature', type: 'boolean_flag' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_bool',
+          display_order: 0,
+          config: { enabled: false }, // Old config
+          features: { name: 'Boolean Feature', type: 'boolean_flag' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_bool',
-            config: { enabled: true }, // New config
-          }],
+          update: [
+            {
+              feature_id: 'feature_bool',
+              config: { enabled: true }, // New config
+            },
+          ],
         },
       };
 
@@ -767,12 +863,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -783,20 +881,24 @@ describe('ProductsService', () => {
     });
 
     it('should create version when only display_order changes', async () => {
-      const existingFeatures = [{
-        feature_id: 'feature_order',
-        display_order: 1,
-        config: {}, 
-        features: { name: 'Ordered Feature', type: 'numeric_limit' }
-      }];
+      const existingFeatures = [
+        {
+          feature_id: 'feature_order',
+          display_order: 1,
+          config: {},
+          features: { name: 'Ordered Feature', type: 'numeric_limit' },
+        },
+      ];
 
       const updateDto: UpdateProductDto = {
         features: {
-          update: [{
-            feature_id: 'feature_order',
-            display_order: 5, // Changed order
-            config: {},
-          }],
+          update: [
+            {
+              feature_id: 'feature_order',
+              display_order: 5, // Changed order
+              config: {},
+            },
+          ],
         },
       };
 
@@ -814,12 +916,14 @@ describe('ProductsService', () => {
           .withTableResponse('product_features', { data: existingFeatures })
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
-          .withTableResponse('accounts', { data: { id: 'acc_1', stripe_id: 'acct_stripe_1' } })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
           .withTableResponse('subscriptions', { data: activeSubscriptions })
           .withTableResponse('rpc.get_latest_product_version', { data: 1 })
           .withTableResponse('rpc.has_active_subscriptions', { data: true })
           .withDefaultResponse({ data: newProduct })
-          .build()
+          .build(),
       );
 
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
@@ -832,13 +936,15 @@ describe('ProductsService', () => {
 
   describe('findAll', () => {
     it('should return all products for organization', async () => {
-      const products = productFactory.buildList(3, { organization_id: testOrg.id });
+      const products = productFactory.buildList(3, {
+        organization_id: testOrg.id,
+      });
 
       supabaseService.setMockClient(
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('products', { data: products })
-          .build()
+          .build(),
       );
 
       const result = await service.findAll(testOrg.id, testUser.id);
@@ -855,7 +961,7 @@ describe('ProductsService', () => {
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('products', { data: [activeProduct] })
-          .build()
+          .build(),
       );
 
       const result = await service.findAll(
@@ -863,7 +969,7 @@ describe('ProductsService', () => {
         testUser.id,
         false, // includeArchived = false
         false,
-        false
+        false,
       );
 
       expect(result).toHaveLength(1);
@@ -874,12 +980,12 @@ describe('ProductsService', () => {
       supabaseService.setMockClient(
         new EnhancedSupabaseMockBuilder()
           .withTableResponse('user_organizations', { data: null })
-          .build()
+          .build(),
       );
 
-      await expect(
-        service.findAll(testOrg.id, testUser.id)
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.findAll(testOrg.id, testUser.id)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -930,12 +1036,15 @@ describe('ProductsService', () => {
           .withTableResponse('subscriptions', { data: subscriptionsWithPrice })
           .withTableResponse('product_prices', { data: [monthlyPrice] })
           .withTableResponse('payment_intents', { data: [] })
-          .build()
+          .build(),
       );
 
       cacheManager.get.mockResolvedValue(null); // No cache
 
-      const result = await service.getRevenueMetrics(mockProduct.id, testUser.id);
+      const result = await service.getRevenueMetrics(
+        mockProduct.id,
+        testUser.id,
+      );
 
       expect(result.mrr).toBe(1998); // 2 subscriptions * $9.99 = $19.98 in cents
       expect(result.activeSubscriptionCount).toBe(2);
@@ -950,7 +1059,7 @@ describe('ProductsService', () => {
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('product_prices', { data: [] })
           .withTableResponse('product_features', { data: [] })
-          .build()
+          .build(),
       );
 
       const cachedMetrics = {
@@ -963,7 +1072,10 @@ describe('ProductsService', () => {
 
       cacheManager.get.mockResolvedValue(cachedMetrics);
 
-      const result = await service.getRevenueMetrics(mockProduct.id, testUser.id);
+      const result = await service.getRevenueMetrics(
+        mockProduct.id,
+        testUser.id,
+      );
 
       expect(result).toEqual(cachedMetrics);
       expect(cacheManager.set).not.toHaveBeenCalled();
@@ -977,7 +1089,7 @@ describe('ProductsService', () => {
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('subscriptions', { data: [] })
           .withTableResponse('payment_intents', { data: [] })
-          .build()
+          .build(),
       );
 
       cacheManager.get.mockResolvedValue(null);
@@ -987,7 +1099,7 @@ describe('ProductsService', () => {
       expect(cacheManager.set).toHaveBeenCalledWith(
         expect.stringContaining('product-metrics'),
         expect.any(Object),
-        300 // 5 minutes TTL
+        300, // 5 minutes TTL
       );
     });
   });
@@ -1010,15 +1122,15 @@ describe('ProductsService', () => {
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('subscriptions', {
-            data: [activeSubscription.build({ product_id: mockProduct.id })]
+            data: [activeSubscription.build({ product_id: mockProduct.id })],
           })
-          .build()
+          .build(),
       );
 
       const result = await service.checkVersioning(
         mockProduct.id,
         testUser.id,
-        updateDto
+        updateDto,
       );
 
       expect(result.will_version).toBe(true);
@@ -1040,19 +1152,21 @@ describe('ProductsService', () => {
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('subscriptions', {
-            data: [activeSubscription.build({ product_id: mockProduct.id })]
+            data: [activeSubscription.build({ product_id: mockProduct.id })],
           })
-          .build()
+          .build(),
       );
 
       const result = await service.checkVersioning(
         mockProduct.id,
         testUser.id,
-        updateDto
+        updateDto,
       );
 
       expect(result.will_version).toBe(true);
-      expect(result.changes).toContainEqual(expect.stringContaining('Adding 1 new feature(s)'));
+      expect(result.changes).toContainEqual(
+        expect.stringContaining('Adding 1 new feature(s)'),
+      );
     });
 
     it('should indicate no versioning for basic metadata updates', async () => {
@@ -1068,15 +1182,15 @@ describe('ProductsService', () => {
           .withTableResponse('organizations', { data: testOrg })
           .withTableResponse('user_organizations', { data: testMembership })
           .withTableResponse('subscriptions', {
-            data: [activeSubscription.build({ product_id: mockProduct.id })]
+            data: [activeSubscription.build({ product_id: mockProduct.id })],
           })
-          .build()
+          .build(),
       );
 
       const result = await service.checkVersioning(
         mockProduct.id,
         testUser.id,
-        updateDto
+        updateDto,
       );
 
       expect(result.will_version).toBe(false);

@@ -21,7 +21,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
 @ApiTags('Customers')
-
 @Controller('customers')
 @UseGuards(JwtAuthGuard)
 export class CustomersController {

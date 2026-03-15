@@ -524,6 +524,7 @@ export class StripeService {
   async createSubscription(
     params: Stripe.SubscriptionCreateParams,
     stripeAccountId: string,
+    idempotencyKey?: string,
   ): Promise<Stripe.Subscription> {
     this.logger.log(
       `Creating Stripe subscription for customer ${params.customer} in account ${stripeAccountId}`,
@@ -531,6 +532,7 @@ export class StripeService {
 
     return await this.stripe.subscriptions.create(params, {
       stripeAccount: stripeAccountId,
+      ...(idempotencyKey && { idempotencyKey }),
     });
   }
 
@@ -553,6 +555,7 @@ export class StripeService {
     subscriptionId: string,
     stripeAccountId: string,
     cancelAtPeriodEnd: boolean = true,
+    idempotencyKey?: string,
   ): Promise<Stripe.Subscription> {
     this.logger.log(
       `Canceling Stripe subscription: ${subscriptionId} in account ${stripeAccountId}`,
@@ -566,6 +569,7 @@ export class StripeService {
         },
         {
           stripeAccount: stripeAccountId,
+          ...(idempotencyKey && { idempotencyKey }),
         },
       );
     } else {
@@ -574,6 +578,7 @@ export class StripeService {
         {},
         {
           stripeAccount: stripeAccountId,
+          ...(idempotencyKey && { idempotencyKey }),
         },
       );
     }
@@ -586,6 +591,7 @@ export class StripeService {
     subscriptionId: string,
     params: Stripe.SubscriptionUpdateParams,
     stripeAccountId: string,
+    idempotencyKey?: string,
   ): Promise<Stripe.Subscription> {
     this.logger.log(
       `Updating Stripe subscription: ${subscriptionId} in account ${stripeAccountId}`,
@@ -593,6 +599,7 @@ export class StripeService {
 
     return await this.stripe.subscriptions.update(subscriptionId, params, {
       stripeAccount: stripeAccountId,
+      ...(idempotencyKey && { idempotencyKey }),
     });
   }
 

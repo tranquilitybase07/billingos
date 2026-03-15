@@ -19,7 +19,6 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
 @ApiTags('Subscriptions')
-
 @Controller('subscriptions')
 @UseGuards(JwtAuthGuard)
 export class SubscriptionsController {
@@ -87,7 +86,11 @@ export class SubscriptionsController {
     @Body() previewDto: PreviewChangeDto,
   ) {
     const context = { userId: user.id, isSDK: false } as const;
-    return this.subscriptionUpgradeService.previewChange(id, context, previewDto);
+    return this.subscriptionUpgradeService.previewChange(
+      id,
+      context,
+      previewDto,
+    );
   }
 
   /**
@@ -101,7 +104,11 @@ export class SubscriptionsController {
     @Body() changePlanDto: ChangePlanDto,
   ) {
     const context = { userId: user.id, isSDK: false } as const;
-    return this.subscriptionUpgradeService.changePlan(id, context, changePlanDto);
+    return this.subscriptionUpgradeService.changePlan(
+      id,
+      context,
+      changePlanDto,
+    );
   }
 
   /**
