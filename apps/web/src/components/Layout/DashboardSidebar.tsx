@@ -158,7 +158,7 @@ export const DashboardSidebar = () => {
         {/* Logo row */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 transition-[padding] duration-200">
           <Link href={`/dashboard/${organization.slug}`} className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            {!logoError ? (
+            {/* {!logoError ? (
               <Image
                 src="/Logo.png"
                 alt="BillingOS Logo"
@@ -172,7 +172,12 @@ export const DashboardSidebar = () => {
               <div className="bg-sidebar-primary text-sidebar-primary-foreground h-6 w-6 rounded-md flex items-center justify-center font-bold text-xs shrink-0">
                 B
               </div>
-            )}
+            )} */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="217" height="218" viewBox="0 0 217 218" fill="none">
+              <path d="M41.5 193.5L22 174.5L73.5 121.5H0.5V94H75L21.5 42L41 22L93.5 74.5V0.5H122V74.5L174.5 22L194 42L142 94H216.5V122H126C123.381 123.252 122.422 124.382 122 127.5V217H93.5V142L41.5 193.5Z" fill="#DEACF5" stroke="#DEACF5" />
+              <path d="M41.5 193.5L22 174.5L73.5 121.5H0.5V94H75L21.5 42L41 22L93.5 74.5V0.5H122V74.5L174.5 22L194 42L142 94H216.5V122H126C123.381 123.252 122.422 124.382 122 127.5V217H93.5V142L41.5 193.5Z" fill="#1570EF" stroke="#1570EF" />
+              <rect x="159.016" y="139.862" width="54.2889" height="28.145" rx="14.0725" transform="rotate(44 159.016 139.862)" fill="white" />
+            </svg>
           </Link>
           {/* Theme switcher + trigger — hidden when collapsed */}
           <div className="flex items-center gap-0.5 group-data-[collapsible=icon]:hidden">

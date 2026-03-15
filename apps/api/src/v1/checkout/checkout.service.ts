@@ -3,12 +3,14 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
 import { CheckoutMetadataService } from './checkout-metadata.service';
+import { RedisService } from '../../redis/redis.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
 
@@ -69,6 +71,7 @@ export class CheckoutService {
     private readonly supabaseService: SupabaseService,
     private readonly customersService: CustomersService,
     private readonly metadataService: CheckoutMetadataService,
+    private readonly redisService: RedisService,
   ) {}
 
   async createCheckout(
@@ -182,7 +185,67 @@ export class CheckoutService {
       customerId = customerResult.id;
     }
 
-    // 4. Check if this is a free product
+    // 4. Check for existing active subscription (prevent duplicate checkouts)
+    if (!dto.existingSubscriptionId) {
+      const { data: existingSubs } = await supabase
+        .from('subscriptions')
+        .select('id, status, created_at')
+        .eq('customer_id', customerId)
+        .eq('product_id', product.id)
+        .in('status', ['active', 'trialing', 'past_due', 'incomplete']);
+
+      if (existingSubs && existingSubs.length > 0) {
+        // Reject if customer has active/trialing/past_due subscription
+        const activeSub = existingSubs.find((s) =>
+          ['active', 'trialing', 'past_due'].includes(s.status),
+        );
+        if (activeSub) {
+          throw new BadRequestException(
+            'Customer already has an active subscription for this product',
+          );
+        }
+
+        // Clean up stale incomplete subscriptions (older than 1 hour)
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const staleSubs = existingSubs.filter(
+          (s) =>
+            s.status === 'incomplete' &&
+            s.created_at &&
+            new Date(s.created_at) < oneHourAgo,
+        );
+        for (const staleSub of staleSubs) {
+          // Cancel on Stripe if possible
+          const { data: staleSubData } = await supabase
+            .from('subscriptions')
+            .select('stripe_subscription_id')
+            .eq('id', staleSub.id)
+            .single();
+
+          if (staleSubData?.stripe_subscription_id) {
+            try {
+              await this.stripeService.cancelSubscription(
+                staleSubData.stripe_subscription_id,
+                stripeAccountId,
+              );
+            } catch (cancelErr) {
+              this.logger.warn(
+                `Failed to cancel stale incomplete subscription ${staleSubData.stripe_subscription_id}:`,
+                cancelErr,
+              );
+            }
+          }
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'canceled' })
+            .eq('id', staleSub.id);
+          this.logger.log(
+            `Cleaned up stale incomplete subscription ${staleSub.id}`,
+          );
+        }
+      }
+    }
+
+    // 5. Check if this is a free product
     const amount = price.price_amount || 0;
     const currency = price.price_currency || 'usd';
     const isFreeProduct = price.amount_type === 'free' || amount === 0;
@@ -425,8 +488,34 @@ export class CheckoutService {
 
     if (subDbError) {
       this.logger.error('Failed to store subscription in database:', subDbError);
-      // Don't cancel the Stripe subscription — the webhook can still handle it.
-      // The subscription exists in Stripe and will be reconciled.
+      // Cancel the Stripe subscription since we can't track it in our DB
+      try {
+        await this.stripeService.cancelSubscription(
+          stripeSubscription.id,
+          stripeAccountId,
+        );
+        this.logger.warn(
+          `Cancelled Stripe subscription ${stripeSubscription.id} due to DB insert failure`,
+        );
+      } catch (cancelError) {
+        this.logger.error(
+          'Failed to cancel Stripe subscription after DB error — inserting into reconciliation queue:',
+          cancelError,
+        );
+        // Insert into reconciliation queue for manual cleanup
+        await supabase.from('reconciliation_queue').insert({
+          type: 'orphaned_stripe_subscription',
+          organization_id: organizationId,
+          metadata: {
+            stripe_subscription_id: stripeSubscription.id,
+            stripe_account_id: stripeAccountId,
+            customer_id: customerId,
+            product_id: product.id,
+            error: cancelError instanceof Error ? cancelError.message : String(cancelError),
+          },
+          status: 'pending',
+        } as any);
+      }
     }
 
     // Create checkout session record
@@ -457,6 +546,32 @@ export class CheckoutService {
 
     if (sessionError) {
       this.logger.error('Failed to create checkout session:', sessionError);
+      // Cancel the Stripe subscription since the checkout session can't be tracked
+      try {
+        await this.stripeService.cancelSubscription(
+          stripeSubscription.id,
+          stripeAccountId,
+        );
+        this.logger.warn(
+          `Cancelled Stripe subscription ${stripeSubscription.id} due to checkout session DB error`,
+        );
+      } catch (cancelError) {
+        this.logger.error(
+          'Failed to cancel Stripe subscription after checkout session error:',
+          cancelError,
+        );
+        await supabase.from('reconciliation_queue').insert({
+          type: 'orphaned_stripe_subscription',
+          organization_id: organizationId,
+          metadata: {
+            stripe_subscription_id: stripeSubscription.id,
+            stripe_account_id: stripeAccountId,
+            customer_id: customerId,
+            product_id: product.id,
+          },
+          status: 'pending',
+        } as any);
+      }
       throw new BadRequestException(
         `Failed to create checkout session: ${sessionError.message || 'Database error occurred'}`,
       );
@@ -1064,6 +1179,36 @@ export class CheckoutService {
     discountLabel: string;
     clientSecret?: string;
   }> {
+    // Acquire lock to prevent concurrent discount operations
+    const lockKey = `discount-lock:${sessionId}`;
+    const acquiredLock = await this.redisService.setIdempotencyKey(
+      lockKey,
+      Date.now().toString(),
+      30000, // 30s TTL
+    );
+
+    if (!acquiredLock) {
+      throw new ConflictException(
+        'Another discount operation is in progress',
+      );
+    }
+
+    try {
+      return await this._applyDiscountInner(sessionId, code);
+    } finally {
+      await this.redisService.delete(lockKey);
+    }
+  }
+
+  private async _applyDiscountInner(
+    sessionId: string,
+    code: string,
+  ): Promise<{
+    discountAmount: number;
+    totalAmount: number;
+    discountLabel: string;
+    clientSecret?: string;
+  }> {
     const supabase = this.supabaseService.getClient();
 
     const { data: session, error: sessionError } = await supabase
@@ -1297,6 +1442,28 @@ export class CheckoutService {
   }
 
   async removeDiscount(sessionId: string): Promise<{ totalAmount: number; clientSecret?: string }> {
+    // Acquire lock to prevent concurrent discount operations
+    const lockKey = `discount-lock:${sessionId}`;
+    const acquiredLock = await this.redisService.setIdempotencyKey(
+      lockKey,
+      Date.now().toString(),
+      30000, // 30s TTL
+    );
+
+    if (!acquiredLock) {
+      throw new ConflictException(
+        'Another discount operation is in progress',
+      );
+    }
+
+    try {
+      return await this._removeDiscountInner(sessionId);
+    } finally {
+      await this.redisService.delete(lockKey);
+    }
+  }
+
+  private async _removeDiscountInner(sessionId: string): Promise<{ totalAmount: number; clientSecret?: string }> {
     const supabase = this.supabaseService.getClient();
 
     const { data: session, error: sessionError } = await supabase
@@ -1629,6 +1796,46 @@ export class CheckoutService {
         ...dto?.metadata,
       },
     });
+
+    // Cancel orphaned Stripe subscriptions for this customer+price
+    // These can exist if a previous checkout completed but the webhook was missed
+    try {
+      const existingStripeSubs = await this.stripeService
+        .getClient()
+        .subscriptions.list(
+          {
+            customer: stripeCustomerId,
+            price: price.stripe_price_id,
+            status: 'all',
+            limit: 10,
+          },
+          { stripeAccount: stripeAccountId },
+        );
+
+      for (const sub of existingStripeSubs.data) {
+        if (['canceled', 'ended'].includes(sub.status)) continue;
+
+        const { data: dbSub } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('stripe_subscription_id', sub.id)
+          .maybeSingle();
+
+        if (!dbSub) {
+          this.logger.warn(
+            `Canceling orphaned Stripe subscription ${sub.id} (status: ${sub.status}) for customer ${stripeCustomerId}`,
+          );
+          await this.stripeService
+            .getClient()
+            .subscriptions.cancel(sub.id, { stripeAccount: stripeAccountId });
+        }
+      }
+    } catch (cleanupError) {
+      this.logger.warn(
+        'Failed to clean up orphaned subscriptions:',
+        cleanupError,
+      );
+    }
 
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);

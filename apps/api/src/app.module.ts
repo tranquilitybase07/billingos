@@ -26,6 +26,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
 import { SandboxModule } from './sandbox/sandbox.module';
+import { BillingModule } from './billing/billing.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import {
   getClientIp,
@@ -96,6 +97,7 @@ import {
     AnalyticsModule,
     DiscountsModule,
     SandboxModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [
