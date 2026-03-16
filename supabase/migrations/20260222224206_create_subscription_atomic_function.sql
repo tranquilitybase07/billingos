@@ -1,4 +1,4 @@
--- Atomic subscription creation function (inspired by Flowglad's transaction pattern)
+-- Atomic subscription creation function
 CREATE OR REPLACE FUNCTION create_subscription_atomic(
   p_subscription JSONB,
   p_features JSONB[],

@@ -5,7 +5,6 @@ import { QueueService } from '../queue/queue.service';
 import Stripe from 'stripe';
 
 /**
- * Service for handling refunds - inspired by both Autum and Flowglad patterns
  * Critical for maintaining customer trust when payments succeed but service delivery fails
  */
 @Injectable()

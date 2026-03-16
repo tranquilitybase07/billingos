@@ -1,5 +1,5 @@
 -- Create trial history table to prevent trial abuse
--- Simple approach: One trial per product per customer, ever (inspired by Autum)
+-- Simple approach: One trial per product per customer
 CREATE TABLE IF NOT EXISTS trial_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 

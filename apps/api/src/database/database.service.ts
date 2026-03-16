@@ -4,7 +4,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Database service with transaction support
- * Inspired by Flowglad's comprehensiveAdminTransaction pattern
  */
 @Injectable()
 export class DatabaseService {

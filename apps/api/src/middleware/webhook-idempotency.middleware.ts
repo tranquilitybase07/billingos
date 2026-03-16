@@ -4,7 +4,6 @@ import { RedisService } from '../redis/redis.service';
 
 /**
  * Middleware for handling webhook idempotency using Redis SET NX pattern
- * Inspired by Autum's approach to webhook processing
  */
 @Injectable()
 export class WebhookIdempotencyMiddleware implements NestMiddleware {

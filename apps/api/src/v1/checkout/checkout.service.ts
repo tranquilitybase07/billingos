@@ -300,7 +300,6 @@ export class CheckoutService {
       );
     }
 
-    // Create metadata record (Autum pattern - store data separately from Stripe)
     const checkoutMetadata = await this.metadataService.createMetadata({
       organizationId,
       customerId,
@@ -326,7 +325,6 @@ export class CheckoutService {
       },
     });
 
-    // --- Direct Subscription Creation (Autumn pattern) ---
     // Instead of creating a standalone PaymentIntent, create the subscription directly.
     // Stripe generates a PaymentIntent from the subscription's first invoice.
     // The client confirms THAT PaymentIntent — single atomic charge, no double-billing.

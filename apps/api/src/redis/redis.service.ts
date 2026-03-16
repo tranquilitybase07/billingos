@@ -69,7 +69,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Set idempotency key with NX (only if not exists) and PX (expiry in ms)
    * Returns true if key was set (first request), false if already exists (duplicate)
    *
-   * Inspired by Autum's pattern for webhook idempotency
    */
   async setIdempotencyKey(
     key: string,

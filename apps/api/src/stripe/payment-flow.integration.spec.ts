@@ -8,7 +8,6 @@ import Stripe from 'stripe';
 
 /**
  * Integration tests for critical payment flow fixes
- * Based on patterns from Autum and Flowglad
  */
 describe('Payment Flow Integration Tests', () => {
   let _webhookService: StripeWebhookService;

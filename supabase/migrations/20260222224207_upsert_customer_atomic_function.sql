@@ -1,4 +1,4 @@
--- Atomic customer upsert with race condition handling (inspired by Flowglad's ON CONFLICT pattern)
+-- Atomic customer upsert with race condition handling
 CREATE OR REPLACE FUNCTION upsert_customer_atomic(
   p_organization_id UUID,
   p_email VARCHAR,

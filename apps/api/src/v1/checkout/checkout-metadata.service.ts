@@ -3,7 +3,6 @@ import { SupabaseService } from '../../supabase/supabase.service';
 
 /**
  * Service for managing checkout metadata
- * Implements Autum's pattern of storing checkout data separately from Stripe
  */
 @Injectable()
 export class CheckoutMetadataService {

@@ -36,7 +36,6 @@ export class StripeWebhookService {
       `Processing webhook event: ${event.type} (livemode: ${event.livemode}, id: ${event.id})`,
     );
 
-    // Redis-based idempotency check (Autum pattern)
     // Key includes event ID and environment (livemode)
     const idempotencyKey = `stripe:webhook:${event.livemode ? 'live' : 'test'}:${event.id}`;
     const isFirstRequest = await this.redisService.setIdempotencyKey(
