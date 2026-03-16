@@ -63,6 +63,8 @@ function genId(): string {
 
 /**
  * Seed a complete organization with a Stripe Connect account.
+ * Creates an auth user first (required by public.users FK to auth.users),
+ * then account, organization, and user_organizations.
  */
 export async function seedOrganization(
   module: TestingModule,
@@ -74,21 +76,41 @@ export async function seedOrganization(
   const supabase = module.get(SupabaseService).getClient();
   const orgId = genId();
   const accountId = genId();
-  const adminId = genId();
   const stripeAccountId =
     overrides.stripeAccountId || `acct_test_${orgId.substring(0, 8)}`;
+  const email = `admin-${orgId.substring(0, 8)}@test.billingos.dev`;
 
-  // Create a minimal user for admin_id FK
-  await supabase.from('users').insert({
+  // Create auth user first (public.users.id references auth.users.id)
+  const { data: authData, error: authError } =
+    await supabase.auth.admin.createUser({
+      email,
+      password: 'test-password-integration-123',
+      email_confirm: true,
+    });
+
+  if (authError || !authData?.user) {
+    throw new Error(
+      `Failed to create auth user: ${authError?.message || 'no user returned'}`,
+    );
+  }
+
+  const adminId = authData.user.id;
+
+  // Create public.users row (FK satisfied by auth user above)
+  const { error: userError } = await supabase.from('users').insert({
     id: adminId,
-    email: `admin-${orgId.substring(0, 8)}@test.billingos.dev`,
+    email,
     email_verified: true,
     accepted_terms_of_service: true,
     meta: {},
   });
 
+  if (userError) {
+    throw new Error(`Failed to seed user: ${userError.message}`);
+  }
+
   // Create account (Stripe Connect)
-  await supabase.from('accounts').insert({
+  const { error: accountError } = await supabase.from('accounts').insert({
     id: accountId,
     admin_id: adminId,
     stripe_id: stripeAccountId,
@@ -100,23 +122,34 @@ export async function seedOrganization(
     data: {},
   });
 
-  // Create organization
+  if (accountError) {
+    throw new Error(`Failed to seed account: ${accountError.message}`);
+  }
+
+  // Create organization (no non-existent columns)
   const orgName = overrides.orgName || `Test Org ${orgId.substring(0, 6)}`;
-  await supabase.from('organizations').insert({
+  const { error: orgError } = await supabase.from('organizations').insert({
     id: orgId,
     name: orgName,
     slug: orgName.toLowerCase().replace(/\s+/g, '-'),
     account_id: accountId,
-    payment_setup_complete: true,
-    payment_required: false,
   });
 
+  if (orgError) {
+    throw new Error(`Failed to seed organization: ${orgError.message}`);
+  }
+
   // Link admin to org
-  await supabase.from('user_organizations').insert({
-    user_id: adminId,
-    organization_id: orgId,
-    role: 'admin',
-  });
+  const { error: linkError } = await supabase
+    .from('user_organizations')
+    .insert({
+      user_id: adminId,
+      organization_id: orgId,
+    });
+
+  if (linkError) {
+    throw new Error(`Failed to seed user_organizations: ${linkError.message}`);
+  }
 
   return {
     id: orgId,
@@ -144,7 +177,7 @@ export async function seedProduct(
   const stripeProductId =
     overrides.stripeProductId || `prod_test_${id.substring(0, 8)}`;
 
-  await supabase.from('products').insert({
+  const { error } = await supabase.from('products').insert({
     id,
     organization_id: organizationId,
     name: overrides.name || `Test Product ${id.substring(0, 6)}`,
@@ -157,6 +190,10 @@ export async function seedProduct(
     version: 1,
     version_status: 'current',
   });
+
+  if (error) {
+    throw new Error(`Failed to seed product: ${error.message}`);
+  }
 
   return {
     id,
@@ -188,7 +225,7 @@ export async function seedPrice(
   const stripePriceId =
     overrides.stripePriceId || `price_test_${id.substring(0, 8)}`;
 
-  await supabase.from('product_prices').insert({
+  const { error } = await supabase.from('product_prices').insert({
     id,
     product_id: productId,
     amount_type: isFree ? 'free' : overrides.amountType || 'fixed',
@@ -199,6 +236,10 @@ export async function seedPrice(
     stripe_price_id: stripePriceId,
     is_archived: false,
   });
+
+  if (error) {
+    throw new Error(`Failed to seed price: ${error.message}`);
+  }
 
   return {
     id,
@@ -231,7 +272,7 @@ export async function seedCustomer(
   const stripeCustomerId =
     overrides.stripeCustomerId || `cus_test_${id.substring(0, 8)}`;
 
-  await supabase.from('customers').insert({
+  const { error } = await supabase.from('customers').insert({
     id,
     organization_id: organizationId,
     external_id: externalId,
@@ -239,6 +280,10 @@ export async function seedCustomer(
     name: overrides.name || `Test Customer ${id.substring(0, 6)}`,
     stripe_customer_id: stripeCustomerId,
   });
+
+  if (error) {
+    throw new Error(`Failed to seed customer: ${error.message}`);
+  }
 
   return {
     id,
@@ -269,13 +314,13 @@ export async function seedFeature(
 ): Promise<SeedFeature> {
   const supabase = module.get(SupabaseService).getClient();
   const id = genId();
-  const type = overrides.type || 'boolean';
+  const type = overrides.type || 'boolean_flag';
   const name = overrides.name || `feature-${id.substring(0, 8)}`;
   const title =
     overrides.title || overrides.name || `Feature ${id.substring(0, 6)}`;
 
   // Create feature (schema: name, title, type, organization_id, properties)
-  await supabase.from('features').insert({
+  const { error: featureError } = await supabase.from('features').insert({
     id,
     organization_id: organizationId,
     name,
@@ -284,12 +329,20 @@ export async function seedFeature(
     properties: (overrides.properties || null) as any,
   });
 
+  if (featureError) {
+    throw new Error(`Failed to seed feature: ${featureError.message}`);
+  }
+
   // Attach to product (schema: feature_id, product_id, display_order)
-  await supabase.from('product_features').insert({
+  const { error: pfError } = await supabase.from('product_features').insert({
     product_id: productId,
     feature_id: id,
     display_order: overrides.displayOrder ?? 1,
   });
+
+  if (pfError) {
+    throw new Error(`Failed to seed product_feature: ${pfError.message}`);
+  }
 
   return {
     id,
@@ -323,7 +376,7 @@ export async function seedSubscription(
   const periodEnd = new Date(now);
   periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-  await supabase.from('subscriptions').insert({
+  const { error } = await supabase.from('subscriptions').insert({
     id,
     organization_id: opts.organizationId,
     product_id: opts.productId,
@@ -338,6 +391,10 @@ export async function seedSubscription(
     amount: opts.amount ?? 2999,
     currency: opts.currency || 'usd',
   });
+
+  if (error) {
+    throw new Error(`Failed to seed subscription: ${error.message}`);
+  }
 
   return id;
 }
@@ -382,26 +439,44 @@ export async function cleanupDatabase(module: TestingModule): Promise<void> {
   ];
 
   // Try TRUNCATE via exec_sql RPC first (fastest if available)
+  let truncated = false;
   try {
     await (supabase.rpc as (...args: any[]) => any)('exec_sql', {
       query: `TRUNCATE TABLE ${tables.map((t) => `public.${t}`).join(', ')} CASCADE`,
     });
-    return; // Success — done
+    truncated = true;
   } catch {
     // exec_sql RPC not available — fall through to manual deletes
   }
 
-  // Fallback: delete from each table in order
-  for (const table of tables) {
-    try {
-      // Use gt filter on created_at to delete all rows (workaround for requiring a filter)
-      await (supabase as any)
-        .from(table)
-        .delete()
-        .gte('created_at', '1970-01-01T00:00:00.000Z');
-    } catch {
-      // Ignore errors — some tables may have different schemas
+  if (!truncated) {
+    // Fallback: delete from each table in order
+    for (const table of tables) {
+      try {
+        // Use gt filter on created_at to delete all rows (workaround for requiring a filter)
+        await (supabase as any)
+          .from(table)
+          .delete()
+          .gte('created_at', '1970-01-01T00:00:00.000Z');
+      } catch {
+        // Ignore errors — some tables may have different schemas
+      }
     }
+  }
+
+  // Clean up auth users created during tests (always, even after TRUNCATE
+  // since TRUNCATE only affects public.users, not auth.users)
+  try {
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    if (authUsers?.users) {
+      for (const user of authUsers.users) {
+        if (user.email?.endsWith('@test.billingos.dev')) {
+          await supabase.auth.admin.deleteUser(user.id);
+        }
+      }
+    }
+  } catch {
+    // Auth cleanup is best-effort
   }
 
   // Purge PGMQ queues
