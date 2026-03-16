@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { QueueService } from '../queue/queue.service';
 import Stripe from 'stripe';
 
 /**
@@ -14,6 +15,7 @@ export class RefundService {
   constructor(
     private readonly stripeService: StripeService,
     private readonly supabaseService: SupabaseService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -67,16 +69,17 @@ export class RefundService {
         stripeAccountId: params.stripeAccountId,
       });
 
-      // Add to reconciliation queue for monitoring
-      await this.addToReconciliationQueue({
+      // Send to reconciliation queue for audit trail (auto-archives on processing)
+      await this.queueService.sendReconciliation({
         type: 'automatic_refund',
-        referenceId: params.paymentIntentId,
-        status: 'completed',
+        reference_id: params.paymentIntentId,
+        priority: 5,
         details: {
-          refundId: refund.id,
+          refund_id: refund.id,
           reason: params.reason,
           amount: refund.amount,
         },
+        created_by: 'refund.service',
       });
 
       this.logger.log(
@@ -93,18 +96,18 @@ export class RefundService {
         error,
       );
 
-      // Add to manual reconciliation queue for critical failures
-      await this.addToReconciliationQueue({
+      // Send to alerts queue for human review (critical failure)
+      await this.queueService.sendAlert({
         type: 'refund_failed',
-        referenceId: params.paymentIntentId,
-        status: 'pending_manual_review',
-        priority: 1, // Highest priority
-        error: error.message,
+        reference_id: params.paymentIntentId,
+        priority: 1,
+        error_message: error.message,
         details: {
-          paymentIntentId: params.paymentIntentId,
+          payment_intent_id: params.paymentIntentId,
           reason: params.reason,
-          stripeAccountId: params.stripeAccountId,
+          stripe_account_id: params.stripeAccountId,
         },
+        created_by: 'refund.service',
       });
 
       return {
@@ -197,7 +200,8 @@ export class RefundService {
   }
 
   /**
-   * Add item to reconciliation queue for manual review
+   * Add item to reconciliation or alerts queue via PGMQ.
+   * Items with status 'pending_manual_review' go to alerts; others go to reconciliation.
    */
   async addToReconciliationQueue(params: {
     type: string;
@@ -205,22 +209,21 @@ export class RefundService {
     status: string;
     priority?: number;
     error?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
   }): Promise<void> {
-    const supabase = this.supabaseService.getClient();
-
-    // Check if reconciliation_queue table exists (will be created in migration)
-    const { error } = await supabase.from('reconciliation_queue').insert({
+    const message = {
       type: params.type,
       reference_id: params.referenceId,
-      status: params.status,
       priority: params.priority || 5,
       error_message: params.error,
       details: params.details || {},
-    });
+      created_by: 'refund.service',
+    };
 
-    if (error && !error.message.includes('does not exist')) {
-      this.logger.error('Failed to add to reconciliation queue:', error);
+    if (params.status === 'pending_manual_review') {
+      await this.queueService.sendAlert(message);
+    } else {
+      await this.queueService.sendReconciliation(message);
     }
   }
 

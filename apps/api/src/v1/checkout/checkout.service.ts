@@ -11,6 +11,7 @@ import { SupabaseService } from '../../supabase/supabase.service';
 import { CustomersService } from '../../customers/customers.service';
 import { CheckoutMetadataService } from './checkout-metadata.service';
 import { RedisService } from '../../redis/redis.service';
+import { QueueService } from '../../queue/queue.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
 
@@ -72,6 +73,7 @@ export class CheckoutService {
     private readonly customersService: CustomersService,
     private readonly metadataService: CheckoutMetadataService,
     private readonly redisService: RedisService,
+    private readonly queueService: QueueService,
   ) {}
 
   async createCheckout(
@@ -508,11 +510,12 @@ export class CheckoutService {
           'Failed to cancel Stripe subscription after DB error — inserting into reconciliation queue:',
           cancelError,
         );
-        // Insert into reconciliation queue for manual cleanup
-        await supabase.from('reconciliation_queue').insert({
+        // Send to reconciliation queue for auto-cleanup
+        await this.queueService.sendReconciliation({
           type: 'orphaned_stripe_subscription',
-          organization_id: organizationId,
-          metadata: {
+          reference_id: stripeSubscription.id,
+          priority: 2,
+          details: {
             stripe_subscription_id: stripeSubscription.id,
             stripe_account_id: stripeAccountId,
             customer_id: customerId,
@@ -522,8 +525,9 @@ export class CheckoutService {
                 ? cancelError.message
                 : String(cancelError),
           },
-          status: 'pending',
-        } as any);
+          organization_id: organizationId,
+          created_by: 'checkout.service',
+        });
       }
     }
 
@@ -569,17 +573,19 @@ export class CheckoutService {
           'Failed to cancel Stripe subscription after checkout session error:',
           cancelError,
         );
-        await supabase.from('reconciliation_queue').insert({
+        await this.queueService.sendReconciliation({
           type: 'orphaned_stripe_subscription',
-          organization_id: organizationId,
-          metadata: {
+          reference_id: stripeSubscription.id,
+          priority: 2,
+          details: {
             stripe_subscription_id: stripeSubscription.id,
             stripe_account_id: stripeAccountId,
             customer_id: customerId,
             product_id: product.id,
           },
-          status: 'pending',
-        } as any);
+          organization_id: organizationId,
+          created_by: 'checkout.service',
+        });
       }
       throw new BadRequestException(
         `Failed to create checkout session: ${sessionError.message || 'Database error occurred'}`,

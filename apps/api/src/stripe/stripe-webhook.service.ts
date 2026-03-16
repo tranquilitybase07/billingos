@@ -9,6 +9,7 @@ import { StripeService } from './stripe.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RedisService } from '../redis/redis.service';
 import { RefundService } from './refund.service';
+import { QueueService } from '../queue/queue.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -23,6 +24,7 @@ export class StripeWebhookService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly redisService: RedisService,
     private readonly refundService: RefundService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -931,18 +933,20 @@ export class StripeWebhookService {
           pastDueSub.id,
         );
 
-        // Insert payment failure notification into reconciliation queue
-        await supabase.from('reconciliation_queue').insert({
+        // Send payment failure notification to reconciliation queue
+        await this.queueService.sendReconciliation({
           type: 'payment_failed_notification',
-          subscription_id: pastDueSub.id,
-          customer_id: pastDueSub.customer_id,
-          organization_id: pastDueSub.organization_id,
-          metadata: {
+          reference_id: pastDueSub.id,
+          priority: 3,
+          details: {
+            subscription_id: pastDueSub.id,
+            customer_id: pastDueSub.customer_id,
             invoice_id: invoice.id,
             attempt_count: invoiceData.attempt_count || 1,
           },
-          status: 'pending',
-        } as any);
+          organization_id: pastDueSub.organization_id,
+          created_by: 'stripe-webhook.service',
+        });
       }
     } catch (error) {
       this.logger.error('Error handling invoice.payment_failed:', error);
@@ -2575,19 +2579,10 @@ export class StripeWebhookService {
         );
       }
 
-      // Update reconciliation queue item
-      await supabase
-        .from('reconciliation_queue')
-        .update({
-          status: 'completed',
-          details: {
-            disputeOutcome: dispute.status,
-            closedAt: new Date().toISOString(),
-          } as any,
-        })
-        .eq('type', 'dispute_opened')
-        .eq('reference_id', subscriptionRecord.id)
-        .eq('status', 'pending_manual_review');
+      // Log dispute resolution (original alert will be resolved from admin dashboard)
+      this.logger.log(
+        `Dispute ${dispute.id} closed with outcome: ${dispute.status} for subscription ${subscriptionRecord.id}`,
+      );
     } catch (error) {
       this.logger.error('Error handling charge.dispute.closed:', error);
     }

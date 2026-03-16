@@ -7,6 +7,7 @@ import { SupabaseModule } from '../../supabase/supabase.module';
 import { SessionTokensModule } from '../../session-tokens/session-tokens.module';
 import { CustomersModule } from '../../customers/customers.module';
 import { RedisModule } from '../../redis/redis.module';
+import { QueueModule } from '../../queue/queue.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { RedisModule } from '../../redis/redis.module';
     SessionTokensModule,
     CustomersModule,
     RedisModule,
+    QueueModule,
   ],
   controllers: [CheckoutController],
   providers: [CheckoutService, CheckoutMetadataService],

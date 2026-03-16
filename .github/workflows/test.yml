@@ -1,0 +1,71 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      stripe-mock:
+        image: stripe/stripe-mock:latest
+        ports:
+          - 12111:12111
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --- Supabase (local instance with default keys) ---
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase
+        run: supabase start
+
+      - name: Get Supabase keys
+        id: supabase
+        run: |
+          echo "url=$(supabase status --output json | jq -r '.API_URL')" >> $GITHUB_OUTPUT
+          echo "service_role_key=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')" >> $GITHUB_OUTPUT
+          echo "anon_key=$(supabase status --output json | jq -r '.ANON_KEY')" >> $GITHUB_OUTPUT
+
+      # --- Checks ---
+      - name: Typecheck API
+        run: pnpm --filter api exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Run API unit tests
+        run: pnpm --filter api test
+        env:
+          SUPABASE_URL: ${{ steps.supabase.outputs.url }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supabase.outputs.service_role_key }}
+          SUPABASE_ANON_KEY: ${{ steps.supabase.outputs.anon_key }}
+          STRIPE_SECRET_KEY: sk_test_fake_for_mock
+          STRIPE_WEBHOOK_SECRET: whsec_test_fake
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test

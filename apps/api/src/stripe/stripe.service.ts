@@ -585,6 +585,25 @@ export class StripeService {
   }
 
   /**
+   * List all subscriptions on a Stripe Connect account (uses auto-pagination)
+   * Used for drift detection — compares Stripe state against local DB.
+   */
+  async listAccountSubscriptions(
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription[]> {
+    const subscriptions: Stripe.Subscription[] = [];
+
+    for await (const sub of this.stripe.subscriptions.list(
+      { limit: 100, expand: ['data.items.data.price'] },
+      { stripeAccount: stripeAccountId },
+    )) {
+      subscriptions.push(sub);
+    }
+
+    return subscriptions;
+  }
+
+  /**
    * Update a subscription in Stripe Connect account
    */
   async updateSubscription(

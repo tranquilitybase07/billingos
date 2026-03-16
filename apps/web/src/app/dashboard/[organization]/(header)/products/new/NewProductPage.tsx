@@ -70,7 +70,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
 
       toast({
         title: 'Product Created',
-        description: `Product "${form.name}" was created successfully and published to Stripe`,
+        description: `Product "${form.name}" was created successfully and created`,
       })
 
       router.push(`/dashboard/${organizationSlug}/products`)
@@ -237,12 +237,12 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
               {createProduct.isPending ? (
                 <>
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Publishing...
+                  Creating...
                 </>
               ) : (
                 <>
                   <SparklesIcon size={16} className="mr-2" />
-                  Publish to Stripe
+                  Create Product
                 </>
               )}
             </Button>
