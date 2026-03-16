@@ -1,6 +1,9 @@
 -- Enable PGMQ extension
 CREATE EXTENSION IF NOT EXISTS pgmq;
 
+-- PGMQ wipes the search_path on install — restore it so unqualified table names resolve
+SET search_path TO "$user", public, extensions;
+
 -- Create queues
 SELECT pgmq.create('billing_reconciliation');
 SELECT pgmq.create('billing_alerts');
