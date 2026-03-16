@@ -288,7 +288,7 @@ export async function seedFeature(
   await supabase.from('product_features').insert({
     product_id: productId,
     feature_id: id,
-    display_order: overrides.displayOrder ?? 0,
+    display_order: overrides.displayOrder ?? 1,
   });
 
   return {

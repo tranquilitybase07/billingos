@@ -60,20 +60,20 @@ describe('C6: Feature Grant/Revoke Lifecycle Integration Tests', () => {
       const boolFeature = await seedFeature(ctx.module, org.id, product.id, {
         name: 'dashboard-access',
         title: 'Dashboard Access',
-        type: 'boolean',
+        type: 'boolean_flag',
         displayOrder: 1,
       });
       const quotaFeature = await seedFeature(ctx.module, org.id, product.id, {
         name: 'api-calls',
         title: 'API Calls',
-        type: 'quota',
+        type: 'usage_quota',
         properties: { quota_limit: 1000 },
         displayOrder: 2,
       });
       const textFeature = await seedFeature(ctx.module, org.id, product.id, {
         name: 'support-level',
         title: 'Support Level',
-        type: 'text',
+        type: 'numeric_limit',
         properties: { value: 'premium' },
         displayOrder: 3,
       });
@@ -144,19 +144,19 @@ describe('C6: Feature Grant/Revoke Lifecycle Integration Tests', () => {
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'feat-1',
         title: 'Feature 1',
-        type: 'boolean',
+        type: 'boolean_flag',
         displayOrder: 1,
       });
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'feat-2',
         title: 'Feature 2',
-        type: 'boolean',
+        type: 'boolean_flag',
         displayOrder: 2,
       });
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'feat-3',
         title: 'Feature 3',
-        type: 'quota',
+        type: 'usage_quota',
         properties: { quota_limit: 500 },
         displayOrder: 3,
       });
@@ -234,7 +234,7 @@ describe('C6: Feature Grant/Revoke Lifecycle Integration Tests', () => {
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'idem-feat',
         title: 'Idem Feature',
-        type: 'boolean',
+        type: 'boolean_flag',
       });
 
       const now = new Date();

@@ -488,6 +488,12 @@ export class ProductsService {
       }
     }
 
+    // Check feature additions
+    if (updateDto.features?.link && updateDto.features.link.length > 0) {
+      requiresVersioning = true;
+      reasons.push(`Adding ${updateDto.features.link.length} new feature(s)`);
+    }
+
     // Check feature removals
     if (updateDto.features?.unlink && updateDto.features.unlink.length > 0) {
       requiresVersioning = true;

@@ -24,6 +24,7 @@ import { buildPaymentIntentSucceededEvent } from '../../test/integration/webhook
 import { StripeWebhookService } from './stripe-webhook.service';
 import { RedisService } from '../redis/redis.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { randomUUID } from 'crypto';
 
 describe('C4: Webhook Idempotency Integration Tests', () => {
   let ctx: IntegrationTestContext;
@@ -71,9 +72,12 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
 
     // Seed payment_intent record
     const supabase = ctx.module.get(SupabaseService).getClient();
-    const { data: piRecord } = await supabase
+    const piId = randomUUID();
+
+    const { error: piError } = await supabase
       .from('payment_intents')
       .insert({
+        id: piId,
         organization_id: org.id,
         customer_id: customer.id,
         stripe_payment_intent_id: stripePiId,
@@ -91,18 +95,18 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
           subscriptionCreatedDuringCheckout: true,
           stripeSubscriptionId: stripeSubId,
         },
-      })
-      .select()
-      .single();
+      });
+
+    if (piError) throw new Error(`Failed to seed payment_intent: ${piError.message}`);
 
     // Seed checkout session
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
-    await supabase.from('checkout_sessions').insert({
+    const { error: csError } = await supabase.from('checkout_sessions').insert({
       organization_id: org.id,
       session_token: customer.external_id,
-      payment_intent_id: piRecord!.id,
+      payment_intent_id: piId,
       stripe_subscription_id: stripeSubId,
       customer_email: customer.email,
       customer_name: customer.name,
@@ -115,6 +119,8 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
       },
     });
 
+    if (csError) throw new Error(`Failed to seed checkout_session: ${csError.message}`);
+
     return {
       org,
       product,
@@ -123,7 +129,7 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
       subId,
       stripeSubId,
       stripePiId,
-      piRecord,
+      piId,
     };
   }
 

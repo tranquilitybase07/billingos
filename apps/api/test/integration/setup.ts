@@ -22,6 +22,7 @@ import { QueueModule } from '../../src/queue/queue.module';
 
 // Feature modules
 import { StripeModule } from '../../src/stripe/stripe.module';
+import { StripeService } from '../../src/stripe/stripe.service';
 import { SubscriptionsModule } from '../../src/subscriptions/subscriptions.module';
 import { CustomersModule } from '../../src/customers/customers.module';
 import { ProductsModule } from '../../src/products/products.module';
@@ -115,7 +116,7 @@ export async function createIntegrationTestModule(): Promise<IntegrationTestCont
   const module = await moduleBuilder.compile();
 
   // Override the Stripe instance to point at stripe-mock
-  const stripeService = module.get('StripeService');
+  const stripeService = module.get(StripeService);
   const Stripe = (await import('stripe')).default;
   const stripeMockClient = new Stripe('sk_test_integration', {
     apiVersion: '2025-12-15.clover',
@@ -124,8 +125,8 @@ export async function createIntegrationTestModule(): Promise<IntegrationTestCont
     protocol: 'http',
   });
 
-  // Replace the private stripe field
-  stripeService.stripe = stripeMockClient;
+  // Replace the private stripe field (cast to bypass TypeScript's private/readonly)
+  (stripeService as any).stripe = stripeMockClient;
 
   const app = module.createNestApplication();
   await app.init();

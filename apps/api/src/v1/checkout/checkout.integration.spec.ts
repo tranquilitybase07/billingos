@@ -74,13 +74,13 @@ describe('Checkout Integration Tests (C1, C2, C3, C7)', () => {
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'feature-a',
         title: 'Feature A',
-        type: 'boolean',
+        type: 'boolean_flag',
         displayOrder: 1,
       });
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'feature-b',
         title: 'Feature B',
-        type: 'boolean',
+        type: 'boolean_flag',
         displayOrder: 2,
       });
     });
@@ -206,7 +206,7 @@ describe('Checkout Integration Tests (C1, C2, C3, C7)', () => {
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'basic-feature',
         title: 'Basic Feature',
-        type: 'boolean',
+        type: 'boolean_flag',
       });
     });
 
@@ -288,7 +288,7 @@ describe('Checkout Integration Tests (C1, C2, C3, C7)', () => {
       await seedFeature(ctx.module, org.id, product.id, {
         name: 'trial-feature',
         title: 'Trial Feature',
-        type: 'boolean',
+        type: 'boolean_flag',
       });
     });
 

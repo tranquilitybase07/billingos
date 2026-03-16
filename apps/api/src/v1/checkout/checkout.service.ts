@@ -89,7 +89,7 @@ export class CheckoutService {
       .select(
         `
         *,
-        product:products(*)
+        product:products!inner(*)
       `,
       )
       .eq('id', dto.priceId)
