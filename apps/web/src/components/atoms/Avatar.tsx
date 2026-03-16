@@ -49,12 +49,14 @@ const Avatar = ({
 
   // We need to look at the `.complete`-property on the <img>
   // in order to detect resources in the cache.
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: check cached image on mount */
   useEffect(() => {
     if (imgRef.current && imgRef.current.complete) {
       setHasLoaded(true)
       setShowInitials(false)
     }
-  }, [imgRef.current])
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const ImageElement = CustomImageComponent || 'img'
 
@@ -72,7 +74,7 @@ const Avatar = ({
         </div>
       ) : (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <ImageElement
             ref={imgRef}
             alt={name}

@@ -14,7 +14,7 @@ export interface ProductFormData {
   features: SelectedFeature[];
   is_archived?: boolean;
   visible_in_pricing_table?: boolean; // Only for create, not update
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   metadata?: Record<string, any>;
 }
 
@@ -152,14 +152,14 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
   };
 
   // Build update payload with change detection
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const buildUpdatePayload = (): any => {
     if (!initialProductRef) {
       // If no initial product, use buildPayload for create
       return buildPayload();
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const updatePayload: any = {};
 
     // Check basic fields

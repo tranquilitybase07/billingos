@@ -121,6 +121,7 @@ export function CreateFeatureDialog({
   onFeatureCreated,
 }: CreateFeatureDialogProps) {
   const open = openProp ?? isOpen ?? false
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: onOpenChange fallback is stable enough for this use case
   const onOpenChange =
     onOpenChangeProp ?? ((open: boolean) => !open && onClose?.())
   const { toast } = useToast()

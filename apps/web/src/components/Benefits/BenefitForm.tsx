@@ -47,7 +47,7 @@ export function BenefitForm({
 
   // Discord benefit properties
   const [discordRoleId, setDiscordRoleId] = useState('')
-  const [kickMember, setKickMember] = useState(false)
+  const [kickMember, _setKickMember] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

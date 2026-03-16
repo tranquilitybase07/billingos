@@ -40,8 +40,6 @@ export default function EditProductPage({
   organizationSlug,
   productId,
 }: EditProductPageProps) {
-  const router = useRouter()
-  const { toast } = useToast()
   const { organization } = useOrganization()
 
   // Fetch the existing product
@@ -120,7 +118,7 @@ function EditProductForm({
     changes: string[]
   } | null>(null)
   const [pendingPayload, setPendingPayload] = useState<any>(null)
-  const [isCheckingVersioning, setIsCheckingVersioning] = useState(false)
+  const [_isCheckingVersioning, setIsCheckingVersioning] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

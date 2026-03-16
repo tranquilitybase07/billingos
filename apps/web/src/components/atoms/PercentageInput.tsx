@@ -26,7 +26,7 @@ const getPercentageBasisPoints = (value: string): number => {
 }
 
 const PercentageInput = (props: Props) => {
-  let {
+  const {
     id,
     name,
     value,

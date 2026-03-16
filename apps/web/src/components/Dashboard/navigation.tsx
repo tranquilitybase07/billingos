@@ -189,7 +189,7 @@ const applyIsActive =
  * Apply active state to sub-routes
  */
 const applySubRouteIsActive =
-  (path: string, parentRoute: Route) =>
+  (path: string, _parentRoute: Route) =>
     (sr: SubRoute): SubRoute & { isActive: boolean } => {
       const isActive = Boolean(path && path.startsWith(sr.link));
       return { ...sr, isActive };

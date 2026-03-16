@@ -114,10 +114,12 @@ export function XAxis({ numTicks = 5, tickerHalfWidth = 50 }: XAxisProps) {
 
   // Use portal to render into the chart container
   // Only render after mount on client side
+  /* eslint-disable react-hooks/refs -- reading containerRef during render is needed for portal rendering */
   const container = containerRef.current;
   if (!(mounted && container)) {
     return null;
   }
+  /* eslint-enable react-hooks/refs */
 
   // Dynamic import to avoid SSR issues
   const { createPortal } = require("react-dom") as typeof import("react-dom");

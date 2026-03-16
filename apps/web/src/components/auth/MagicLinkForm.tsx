@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/client';
 import Button from '@/components/atoms/Button';
 import Input from '@/components/atoms/Input';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface MagicLinkFormProps {
   returnTo?: string;
@@ -19,7 +18,6 @@ export default function MagicLinkForm({
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const supabase = createClient();
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

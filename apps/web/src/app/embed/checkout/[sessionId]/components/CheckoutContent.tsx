@@ -18,7 +18,7 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<string | undefined>(undefined)
   const [clientSecretOverride, setClientSecretOverride] = useState<string | null>(null)
-  const { session, loading, error, refreshSession } = useCheckoutSession(sessionId)
+  const { session, loading, error } = useCheckoutSession(sessionId)
   const { sendMessage } = useParentMessaging()
 
   useEffect(() => {

@@ -3,9 +3,7 @@
 import {
   Sheet,
   SheetContent,
-  SheetTitle,
 } from "@/components/ui/sheet";
-import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
 import { CustomerDetails } from "./CustomerDetails";
 import type { Subscription } from "@/hooks/queries/subscriptions";
 

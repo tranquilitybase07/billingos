@@ -7,7 +7,7 @@ import { CheckoutLinkForm } from '@/components/CheckoutLinks/CheckoutLinkForm'
 import { Link01Icon, PlusSignIcon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 interface CheckoutLinksPageProps {
   organizationId: string
@@ -18,7 +18,6 @@ export default function CheckoutLinksPage({
   organizationId,
   organizationSlug,
 }: CheckoutLinksPageProps) {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const productId = searchParams.get('productId')
 

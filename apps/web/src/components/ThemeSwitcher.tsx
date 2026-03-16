@@ -27,9 +27,11 @@ export function ThemeSwitcher({
   const [mounted, setMounted] = useState(false)
 
   // Avoid hydration mismatch
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: track client-side mount for hydration safety */
   useEffect(() => {
     setMounted(true)
   }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!mounted) {
     return (

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { DiscountSelector } from '@/components/Discounts/DiscountSelector'
 import { useToast } from '@/hooks/use-toast'
 import { Cancel01Icon } from 'hugeicons-react'
@@ -19,7 +18,7 @@ interface CheckoutLinkFormProps {
 
 export const CheckoutLinkForm = ({
   organizationId,
-  organizationSlug,
+  organizationSlug: _organizationSlug,
   onClose,
   productIds = [],
 }: CheckoutLinkFormProps) => {
@@ -28,7 +27,7 @@ export const CheckoutLinkForm = ({
 
   // Form state
   const [label, setLabel] = useState('')
-  const [selectedProducts, setSelectedProducts] = useState<string[]>(productIds)
+  const [selectedProducts, _setSelectedProducts] = useState<string[]>(productIds)
   const [successUrl, setSuccessUrl] = useState('')
   const [presetDiscount, setPresetDiscount] = useState<string>('')
   const [allowDiscountCodes, setAllowDiscountCodes] = useState(true)
@@ -64,7 +63,7 @@ export const CheckoutLinkForm = ({
       })
 
       onClose(newCheckoutLink)
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to create checkout link',

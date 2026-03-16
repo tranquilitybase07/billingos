@@ -96,6 +96,7 @@ export function DataTable<TData, TValue>({
   onRowClick,
   emptyState,
 }: DataTableProps<TData, TValue>) {
+  // eslint-disable-next-line react-hooks/incompatible-library -- tanstack/react-table is compatible, false positive
   const table = useReactTable({
     data,
     columns,

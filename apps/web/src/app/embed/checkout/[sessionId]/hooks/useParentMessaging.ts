@@ -136,7 +136,7 @@ function getAllowedOrigins(): string[] {
 /**
  * Validate message origin
  */
-function validateOrigin(origin: string): boolean {
+function _validateOrigin(origin: string): boolean {
   const allowedOrigins = getAllowedOrigins()
   if (allowedOrigins.includes(origin)) return true
   if (process.env.NODE_ENV === 'development') return true

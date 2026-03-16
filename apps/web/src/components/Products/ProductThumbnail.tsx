@@ -24,6 +24,7 @@ export const ProductThumbnail = ({
       )}
     >
       {coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- external URLs from user-uploaded media
         <img
           src={coverUrl}
           alt={product.name}

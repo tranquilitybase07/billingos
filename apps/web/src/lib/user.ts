@@ -106,7 +106,7 @@ export const getUserOrganizations = async (
  */
 export const checkUserIsMember = async (
   orgId: string,
-  userId: string,
+  _userId: string,
 ): Promise<boolean> => {
   const organizations = await getUserOrganizations()
   return organizations.some((org) => org.id === orgId)

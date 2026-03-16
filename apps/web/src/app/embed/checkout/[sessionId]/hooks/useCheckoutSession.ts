@@ -81,6 +81,7 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
     if (sessionId) {
       fetchSession()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   // Check for session expiry

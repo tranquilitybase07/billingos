@@ -125,6 +125,7 @@ export function usePortalData(sessionId: string): UsePortalDataReturn {
     if (sessionId) {
       fetchData()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   const refresh = async () => {

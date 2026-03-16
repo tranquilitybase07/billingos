@@ -63,7 +63,7 @@ export function DashboardAreaCharts() {
     const revData = fillGaps(revenueTrend?.data.map(d => ({ date: d.date, value: d.revenue / 100 })))
 
     // For MRR trend, we use revenue as proxy but append the current MRR as the last point if it's more accurate
-    let mrrTrendData = [...revData]
+    const mrrTrendData = [...revData]
     if (mrrTrendData.length > 0 && mrrData) {
         // Update the last point with current real MRR
         mrrTrendData[mrrTrendData.length - 1].value = mrrData.mrr / 100
@@ -73,7 +73,7 @@ export function DashboardAreaCharts() {
     const activeSubData = growthData // Simple proxy
     const churnData = fillGaps(churnTrend?.data.map(d => ({ date: d.date, value: d.churn_rate })))
 
-    const isLoading = isLoadingMRR || isLoadingRev || isLoadingGrowth || isLoadingChurn
+    const _isLoading = isLoadingMRR || isLoadingRev || isLoadingGrowth || isLoadingChurn
 
     // Chart configurations and data
     const charts = [

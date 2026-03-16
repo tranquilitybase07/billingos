@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
@@ -28,7 +27,6 @@ import {
   PlusSignIcon,
   ArrowDown01Icon,
   Search01Icon,
-  MountainIcon,
   Home01Icon,
   CubeIcon,
   StarIcon,
@@ -40,7 +38,6 @@ import {
   Settings01Icon,
 } from 'hugeicons-react'
 
-import { Logo } from '@/components/Logo'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
 import { cn } from '@/lib/utils'
@@ -67,7 +64,7 @@ export const DashboardSidebar = () => {
   const router = useRouter()
   const pathname = usePathname()
   const isCollapsed = state === 'collapsed'
-  const [logoError, setLogoError] = useState(false)
+  const [_logoError, _setLogoError] = useState(false)
 
   const handleLogout = async () => {
     const supabase = createClient()

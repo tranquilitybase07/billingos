@@ -29,6 +29,7 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
 
   // Check if we're waiting for a structural change to settle
   // This is true when children state differs from our last committed state
+  /* eslint-disable react-hooks/refs -- reading ref during render is intentional for animation state tracking */
   const isWaitingForSettlement =
     committedChildrenStateRef.current !== null &&
     committedChildrenStateRef.current !== hasChildren;
@@ -65,6 +66,7 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
       }
     };
   }, [bounds.height, hasChildren, isWaitingForSettlement]);
+  /* eslint-enable react-hooks/refs */
 
   // Animate if we have a committed height
   const shouldAnimate = committedHeight !== null;

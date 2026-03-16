@@ -1,8 +1,7 @@
 'use client'
 
 import type { ProrationInfo, PlanInfo } from '@/lib/api/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card } from '@/components/ui/card'
 
 interface ProrationPreviewProps {
   currentPlan: PlanInfo
@@ -36,6 +35,7 @@ export function ProrationPreview({
     })
   }
 
+  // eslint-disable-next-line react-hooks/purity -- intentional: Date.now() is acceptable for display-only calculation
   const isImmediate = new Date(effectiveDate).getTime() - Date.now() < 60000 // Within 1 minute
 
   return (
