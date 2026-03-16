@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const LAST_VISITED_ORG_COOKIE = "billingos_last_org";
 const ENVIRONMENT_COOKIE = "billingos-environment";
+const ONBOARDING_COOKIE = "billingos_onboarded";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -45,6 +46,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/signup") ||
     request.nextUrl.pathname.startsWith("/auth");
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
+  const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
+  const hasOnboarded = !!request.cookies.get(ONBOARDING_COOKIE)?.value;
 
   if (!user && isDashboard) {
     // Redirect to login if accessing dashboard without auth
@@ -54,10 +57,25 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    // User is authenticated but on auth page - redirect to dashboard
-    // Let the dashboard page component handle organization routing
+    // User is authenticated but on auth page
+    // If not onboarded yet, send to onboarding; otherwise dashboard
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = hasOnboarded ? "/dashboard" : "/onboarding";
+    return NextResponse.redirect(url);
+  }
+
+  // If logged-in user hits /dashboard directly without completing onboarding,
+  // intercept and send to onboarding first
+  if (user && isDashboard && !hasOnboarded) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/onboarding";
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect unauthenticated users away from onboarding
+  if (!user && isOnboarding) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
