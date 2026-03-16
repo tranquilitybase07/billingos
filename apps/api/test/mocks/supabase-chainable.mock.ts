@@ -277,7 +277,7 @@ export class EnhancedSupabaseMockBuilder {
     // RPC mock
     const rpc = jest
       .fn()
-      .mockImplementation((functionName: string, params?: any) => {
+      .mockImplementation((functionName: string, _params?: any) => {
         const response =
           this.responses.get(`rpc.${functionName}`) || this.defaultResponse;
         return Promise.resolve(response);
@@ -301,7 +301,7 @@ export class EnhancedSupabaseMockBuilder {
         signOut: jest.fn().mockResolvedValue({ error: null }),
       },
       storage: {
-        from: jest.fn().mockImplementation((bucket: string) => ({
+        from: jest.fn().mockImplementation((_bucket: string) => ({
           upload: jest
             .fn()
             .mockResolvedValue({ data: { path: 'test-path' }, error: null }),

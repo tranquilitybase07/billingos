@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Injectable,
   Logger,
@@ -649,7 +648,7 @@ export class FeaturesService {
     };
 
     // If it's a usage quota, fetch current usage
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+
     if (feature.type === FeatureType.USAGE_QUOTA) {
       const { data: usageRecord } = await supabase
         .from('usage_records')
@@ -761,7 +760,6 @@ export class FeaturesService {
       });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
     if (grant.features.type !== FeatureType.USAGE_QUOTA) {
       throw new BadRequestException('Feature is not a usage quota type');
     }
@@ -900,7 +898,7 @@ export class FeaturesService {
    * Get all feature entitlements for a customer
    * Shows what features they have access to via their subscription
    */
-  async getCustomerEntitlements(customerId: string, organizationId: string) {
+  async getCustomerEntitlements(customerId: string, _organizationId: string) {
     const supabase = this.supabaseService.getClient();
 
     // Get all active feature grants for this customer

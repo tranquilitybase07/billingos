@@ -1,6 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
 /**
  * Service for managing checkout metadata

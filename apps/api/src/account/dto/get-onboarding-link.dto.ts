@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsOptional, IsUrl } from 'class-validator';
 
 export class GetOnboardingLinkDto {
   @IsUrl()

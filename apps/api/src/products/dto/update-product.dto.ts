@@ -7,7 +7,6 @@ import {
   IsArray,
   IsBoolean,
   ValidateNested,
-  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreatePriceDto } from './create-price.dto';

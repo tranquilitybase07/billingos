@@ -24,7 +24,7 @@ export interface TestModuleOptions {
  * Create a NestJS testing module with common mocks pre-configured
  */
 export async function createTestingModule(
-  options: TestModuleOptions = {}
+  options: TestModuleOptions = {},
 ): Promise<TestingModule> {
   const {
     providers = [],
@@ -73,13 +73,15 @@ export function createMockCacheManager() {
     get: jest.fn().mockImplementation((key: string) => {
       return Promise.resolve(cache.get(key));
     }),
-    set: jest.fn().mockImplementation((key: string, value: any, ttl?: number) => {
-      cache.set(key, value);
-      if (ttl) {
-        setTimeout(() => cache.delete(key), ttl * 1000);
-      }
-      return Promise.resolve();
-    }),
+    set: jest
+      .fn()
+      .mockImplementation((key: string, value: any, ttl?: number) => {
+        cache.set(key, value);
+        if (ttl) {
+          setTimeout(() => cache.delete(key), ttl * 1000);
+        }
+        return Promise.resolve();
+      }),
     del: jest.fn().mockImplementation((key: string) => {
       cache.delete(key);
       return Promise.resolve();

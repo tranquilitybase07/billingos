@@ -64,20 +64,18 @@ export interface UserOrganizationFactoryParams {
 }
 
 export const userOrganizationFactory =
-  Factory.define<UserOrganizationFactoryParams>(
-    ({ sequence, params }) => {
-      const now = new Date().toISOString();
+  Factory.define<UserOrganizationFactoryParams>(({ sequence, params }) => {
+    const now = new Date().toISOString();
 
-      return {
-        user_id: params?.user_id || `user_${sequence}`,
-        organization_id: params?.organization_id || `org_${sequence}`,
-        role: params?.role || 'member',
-        deleted_at: params?.deleted_at || null,
-        created_at: params?.created_at || mockData.date.past(),
-        updated_at: params?.updated_at || now,
-      };
-    },
-  );
+    return {
+      user_id: params?.user_id || `user_${sequence}`,
+      organization_id: params?.organization_id || `org_${sequence}`,
+      role: params?.role || 'member',
+      deleted_at: params?.deleted_at || null,
+      created_at: params?.created_at || mockData.date.past(),
+      updated_at: params?.updated_at || now,
+    };
+  });
 
 // Admin membership
 export const adminMembership = userOrganizationFactory.params({

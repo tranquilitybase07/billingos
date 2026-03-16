@@ -11,7 +11,7 @@ import Stripe from 'stripe';
  * Based on patterns from Autum and Flowglad
  */
 describe('Payment Flow Integration Tests', () => {
-  let webhookService: StripeWebhookService;
+  let _webhookService: StripeWebhookService;
   let refundService: RefundService;
   let redisService: RedisService;
   let databaseService: DatabaseService;
@@ -57,7 +57,7 @@ describe('Payment Flow Integration Tests', () => {
       ],
     }).compile();
 
-    webhookService = module.get<StripeWebhookService>(StripeWebhookService);
+    _webhookService = module.get<StripeWebhookService>(StripeWebhookService);
     refundService = module.get<RefundService>(RefundService);
     redisService = module.get<RedisService>(RedisService);
     databaseService = module.get<DatabaseService>(DatabaseService);
@@ -70,7 +70,7 @@ describe('Payment Flow Integration Tests', () => {
     it('should prevent duplicate webhook processing using Redis SET NX', async () => {
       // Arrange
       const eventId = 'evt_test_123';
-      const webhookEvent: Partial<Stripe.Event> = {
+      const _webhookEvent: Partial<Stripe.Event> = {
         id: eventId,
         type: 'payment_intent.succeeded',
         livemode: false,

@@ -8,15 +8,14 @@ import { RedisService } from '../redis/redis.service';
 import { RefundService } from './refund.service';
 import { QueueService } from '../queue/queue.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Logger, forwardRef } from '@nestjs/common';
 import Stripe from 'stripe';
 
 describe('StripeWebhookService', () => {
   let service: StripeWebhookService;
-  let stripeService: StripeService;
-  let supabaseService: SupabaseService;
-  let customersService: CustomersService;
-  let subscriptionsService: SubscriptionsService;
+  let _stripeService: StripeService;
+  let _supabaseService: SupabaseService;
+  let _customersService: CustomersService;
+  let _subscriptionsService: SubscriptionsService;
 
   // Mock Supabase client
   const mockSupabaseClient = {
@@ -94,7 +93,7 @@ describe('StripeWebhookService', () => {
     error: unknown = null,
   ): Record<string, jest.Mock> => {
     const mock: Record<string, jest.Mock> = {};
-    const self = () => mock;
+    const _self = () => mock;
     [
       'select',
       'eq',
@@ -166,10 +165,10 @@ describe('StripeWebhookService', () => {
     }).compile();
 
     service = module.get<StripeWebhookService>(StripeWebhookService);
-    stripeService = module.get<StripeService>(StripeService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
-    customersService = module.get<CustomersService>(CustomersService);
-    subscriptionsService =
+    _stripeService = module.get<StripeService>(StripeService);
+    _supabaseService = module.get<SupabaseService>(SupabaseService);
+    _customersService = module.get<CustomersService>(CustomersService);
+    _subscriptionsService =
       module.get<SubscriptionsService>(SubscriptionsService);
 
     // Reset all mocks
@@ -370,9 +369,7 @@ describe('StripeWebhookService', () => {
           }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
-              single: jest
-                .fn()
-                .mockResolvedValue({ data: null, error: null }),
+              single: jest.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
         };
@@ -619,7 +616,7 @@ describe('StripeWebhookService', () => {
 
   describe('handleInvoicePaymentSucceeded (FIX 1)', () => {
     const makeInvoice = (subscription: string) =>
-      ({ id: 'in_test123', subscription } as unknown as Stripe.Invoice);
+      ({ id: 'in_test123', subscription }) as unknown as Stripe.Invoice;
 
     it('should re-grant features when recovering from past_due', async () => {
       const invoice = makeInvoice('sub_stripe_123');
@@ -806,7 +803,7 @@ describe('StripeWebhookService', () => {
           priceId: 'price_123',
         },
         ...overrides,
-      } as Stripe.PaymentIntent);
+      }) as Stripe.PaymentIntent;
 
     const setupPIRecord = (extra: Record<string, unknown> = {}) => {
       const record = {
@@ -900,9 +897,7 @@ describe('StripeWebhookService', () => {
           }),
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
-              single: jest
-                .fn()
-                .mockResolvedValue({ data: null, error: null }),
+              single: jest.fn().mockResolvedValue({ data: null, error: null }),
             }),
           }),
         };
@@ -945,7 +940,9 @@ describe('StripeWebhookService', () => {
     it('should handle invoice retrieval failure gracefully', async () => {
       setupPIRecord();
 
-      const pi = makePI({ invoice: 'in_broken' } as Partial<Stripe.PaymentIntent>);
+      const pi = makePI({
+        invoice: 'in_broken',
+      } as Partial<Stripe.PaymentIntent>);
 
       mockStripeClient.invoices.retrieve.mockRejectedValue(
         new Error('Stripe API error'),

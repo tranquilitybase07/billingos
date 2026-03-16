@@ -1337,8 +1337,6 @@ export class CheckoutService {
     }
 
     const newAmount = amount - discountAmount;
-    const applicationFeeAmount = Math.round(newAmount * 0.05);
-
     // Build coupon params (shared by adaptive and standard paths)
     const buildCouponParams = (settlementCurrency: string) => {
       const discountDuration = discount.duration || 'once';

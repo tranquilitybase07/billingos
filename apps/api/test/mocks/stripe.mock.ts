@@ -152,7 +152,7 @@ export class MockStripeService {
 
     // Webhook defaults
     this.constructEvent.mockImplementation(
-      (payload, signature, secret) => payload,
+      (payload, _signature, _secret) => payload,
     );
   }
 

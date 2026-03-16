@@ -325,7 +325,10 @@ export class BillingCleanupService {
 
       if (orgError || !orgs || orgs.length === 0) {
         if (orgError) {
-          this.logger.error('Error fetching orgs for drift detection:', orgError);
+          this.logger.error(
+            'Error fetching orgs for drift detection:',
+            orgError,
+          );
         }
         return;
       }
@@ -337,7 +340,10 @@ export class BillingCleanupService {
       let totalDrifts = 0;
 
       for (const org of orgs) {
-        const account = org.accounts as unknown as { stripe_id: string; status: string };
+        const account = org.accounts as unknown as {
+          stripe_id: string;
+          status: string;
+        };
         if (!account?.stripe_id) continue;
 
         try {
@@ -391,9 +397,7 @@ export class BillingCleanupService {
       (dbSubscriptions || []).map((s) => [s.stripe_subscription_id, s]),
     );
 
-    const stripeSubMap = new Map(
-      stripeSubscriptions.map((s) => [s.id, s]),
-    );
+    const stripeSubMap = new Map(stripeSubscriptions.map((s) => [s.id, s]));
 
     // Check for Stripe-only subs (active in Stripe, missing or canceled in DB)
     for (const stripeSub of stripeSubscriptions) {
@@ -414,8 +418,7 @@ export class BillingCleanupService {
             organization_name: organizationName,
             stripe_status: stripeSub.status,
             db_status: dbSub?.status || null,
-            stripe_amount:
-              stripeSub.items.data[0]?.price?.unit_amount || null,
+            stripe_amount: stripeSub.items.data[0]?.price?.unit_amount || null,
             db_amount: null,
             detected_at: new Date().toISOString(),
           },
@@ -450,8 +453,7 @@ export class BillingCleanupService {
       }
 
       // Amount mismatch
-      const stripeAmount =
-        stripeSub.items.data[0]?.price?.unit_amount || 0;
+      const stripeAmount = stripeSub.items.data[0]?.price?.unit_amount || 0;
       if (dbSub.amount !== null && dbSub.amount !== stripeAmount) {
         await this.queueService.sendAlert({
           type: 'subscription_drift',
@@ -542,7 +544,7 @@ export class BillingCleanupService {
         this.logger.log(
           `Payment failure notification: ref=${payload.reference_id}, ` +
             `org=${payload.organization_id}, ` +
-            `attempt: ${details.attempt_count || 'unknown'}`,
+            `attempt: ${String(details.attempt_count || 'unknown')}`,
         );
         break;
       }

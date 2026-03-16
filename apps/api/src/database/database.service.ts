@@ -200,7 +200,7 @@ export class DatabaseService {
    */
   async acquireAdvisoryLock(
     key: string,
-    timeout: number = 5000,
+    _timeout: number = 5000,
   ): Promise<boolean> {
     try {
       // Convert string key to a numeric hash for PostgreSQL advisory lock

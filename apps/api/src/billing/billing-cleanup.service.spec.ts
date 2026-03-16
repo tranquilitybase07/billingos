@@ -537,9 +537,7 @@ describe('BillingCleanupService', () => {
 
       expect(mockStripeService.cancelSubscription).not.toHaveBeenCalled();
       expect(mockQueueService.archiveReconciliation).not.toHaveBeenCalled();
-      expect(
-        mockQueueService.escalateToManualReview,
-      ).not.toHaveBeenCalled();
+      expect(mockQueueService.escalateToManualReview).not.toHaveBeenCalled();
     });
 
     it('should skip if already running', async () => {
@@ -587,9 +585,7 @@ describe('BillingCleanupService', () => {
       );
 
       // Should not throw — error is caught and message becomes visible after VT expires
-      await expect(
-        service.processReconciliationQueue(),
-      ).resolves.not.toThrow();
+      await expect(service.processReconciliationQueue()).resolves.not.toThrow();
 
       // Should NOT archive the failed message
       expect(mockQueueService.archiveReconciliation).not.toHaveBeenCalledWith(

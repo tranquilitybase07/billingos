@@ -14,9 +14,9 @@ import {
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
-  let supabaseService: SupabaseService;
-  let customersService: CustomersService;
-  let stripeService: StripeService;
+  let _supabaseService: SupabaseService;
+  let _customersService: CustomersService;
+  let _stripeService: StripeService;
 
   const mockSupabaseClient = {
     from: jest.fn(),
@@ -143,9 +143,9 @@ describe('CheckoutService', () => {
     }).compile();
 
     service = module.get<CheckoutService>(CheckoutService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
-    customersService = module.get<CustomersService>(CustomersService);
-    stripeService = module.get<StripeService>(StripeService);
+    _supabaseService = module.get<SupabaseService>(SupabaseService);
+    _customersService = module.get<CustomersService>(CustomersService);
+    _stripeService = module.get<StripeService>(StripeService);
 
     jest.clearAllMocks();
     // Re-set defaults
@@ -421,10 +421,8 @@ describe('CheckoutService', () => {
           // and also resolves for update/single chains
           const c = chainable(staleSub);
           // Override: for the .in() chain (subscription status check), return the array
-          const origIn = c.in;
-          c.in = jest
-            .fn()
-            .mockResolvedValue({ data: [staleSub], error: null });
+          const _origIn = c.in;
+          c.in = jest.fn().mockResolvedValue({ data: [staleSub], error: null });
           return c;
         }
         return chainable(null);
@@ -473,8 +471,7 @@ describe('CheckoutService', () => {
         status: 'incomplete',
         latest_invoice: { id: 'in_123' },
         current_period_start: Math.floor(Date.now() / 1000),
-        current_period_end:
-          Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+        current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
       });
 
       mockStripeClient.invoices.retrieve.mockResolvedValue({

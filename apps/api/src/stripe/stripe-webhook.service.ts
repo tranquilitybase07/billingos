@@ -431,7 +431,6 @@ export class StripeWebhookService {
   private handlePayoutFailed(payout: Stripe.Payout): void {
     try {
       this.logger.error(
-        // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
         `Payout failed: ${payout.id} for account ${payout.destination} - ${payout.failure_message || 'Unknown error'}`,
       );
 

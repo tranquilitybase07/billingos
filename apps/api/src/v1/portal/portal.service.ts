@@ -207,7 +207,7 @@ export class PortalService {
     };
 
     // 3. Get active subscriptions with product and price details
-    const { data: subscriptions, error: subscriptionsError } = await supabase
+    const { data: subscriptions } = await supabase
       .from('subscriptions')
       .select(
         `
@@ -316,7 +316,7 @@ export class PortalService {
 
       if (!orgError && org?.account_id) {
         // Get Stripe account ID from accounts table
-        const { data: account, error: accountError } = await supabase
+        const { data: account } = await supabase
           .from('accounts')
           .select('stripe_id')
           .eq('id', org.account_id)
@@ -629,7 +629,7 @@ export class PortalService {
       throw new NotFoundException('Organization account not found');
     }
 
-    const { data: account, error: accountError } = await supabase
+    const { data: account } = await supabase
       .from('accounts')
       .select('stripe_id')
       .eq('id', org.account_id)
@@ -651,7 +651,7 @@ export class PortalService {
         `Cancelling Stripe subscription ${stripeSubscriptionId} (${dto.timing})`,
       );
 
-      const cancelledSubscription = await this.stripeService.cancelSubscription(
+      await this.stripeService.cancelSubscription(
         stripeSubscriptionId,
         stripeAccountId,
         cancelAtPeriodEnd,

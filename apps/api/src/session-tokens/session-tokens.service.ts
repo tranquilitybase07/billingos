@@ -171,7 +171,7 @@ export class SessionTokensService {
         'base64',
       ).toString('utf-8');
       payload = JSON.parse(payloadJson);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid token payload');
     }
 
