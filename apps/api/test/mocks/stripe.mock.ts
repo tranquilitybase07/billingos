@@ -161,7 +161,7 @@ export class MockStripeService {
    */
   simulateError(
     methodName: keyof MockStripeService,
-    error: Stripe.StripeAPIError | Error,
+    error: Stripe.StripeRawError | Error,
   ) {
     const method = this[methodName];
     if (typeof method === 'function' && 'mockRejectedValue' in method) {
@@ -230,6 +230,7 @@ export class MockStripeService {
       recurring: {
         interval: 'month',
         interval_count: 1,
+        meter: null,
         trial_period_days: null,
         usage_type: 'licensed',
       },
@@ -239,7 +240,7 @@ export class MockStripeService {
     };
   }
 
-  private createStripeSubscription(): Partial<Stripe.Subscription> {
+  private createStripeSubscription(): Record<string, any> {
     return {
       id: 'sub_test123',
       object: 'subscription',
@@ -255,7 +256,7 @@ export class MockStripeService {
             object: 'subscription_item',
             price: this.createStripePrice() as Stripe.Price,
             quantity: 1,
-          },
+          } as unknown as Stripe.SubscriptionItem,
         ],
         has_more: false,
         url: '',
@@ -356,7 +357,7 @@ export function createStripeError(
   type: string = 'invalid_request_error',
   message: string = 'Test error',
   code?: string,
-): Partial<Stripe.StripeAPIError> {
+): Partial<Stripe.StripeRawError> {
   return {
     type: type as any,
     message,

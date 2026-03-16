@@ -152,7 +152,7 @@ describe('ProductsService', () => {
         prices: [
           {
             amount_type: PriceAmountType.FREE,
-            price_amount: null,
+            price_amount: undefined,
           },
         ],
       };
@@ -1046,9 +1046,9 @@ describe('ProductsService', () => {
         testUser.id,
       );
 
-      expect(result.mrr).toBe(1998); // 2 subscriptions * $9.99 = $19.98 in cents
-      expect(result.activeSubscriptionCount).toBe(2);
-      expect(result.arpu).toBe(999); // $9.99 per user
+      expect((result as any).mrr).toBe(1998); // 2 subscriptions * $9.99 = $19.98 in cents
+      expect((result as any).activeSubscriptionCount).toBe(2);
+      expect((result as any).arpu).toBe(999); // $9.99 per user
     });
 
     it('should use cache when available', async () => {

@@ -206,11 +206,11 @@ export class EnhancedSupabaseMockBuilder {
           for (const filter of state.filters) {
             if (filter.type === 'eq' && filter.column) {
               filteredData = filteredData.filter(
-                (item) => item[filter.column] === filter.value,
+                (item) => item[filter.column!] === filter.value,
               );
             } else if (filter.type === 'in' && filter.column) {
               filteredData = filteredData.filter((item) =>
-                filter.value.includes(item[filter.column]),
+                filter.value.includes(item[filter.column!]),
               );
             }
           }

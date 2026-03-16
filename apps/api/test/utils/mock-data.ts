@@ -99,7 +99,7 @@ export const mockData = {
       'ut',
       'labore',
     ];
-    const result = [];
+    const result: string[] = [];
     for (let i = 0; i < words; i++) {
       result.push(wordList[Math.floor(Math.random() * wordList.length)]);
     }

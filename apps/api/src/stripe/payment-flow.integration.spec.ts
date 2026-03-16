@@ -350,7 +350,7 @@ describe('Payment Flow Integration Tests', () => {
 
       // Assert
       expect(metadata.id).toBe('meta_123');
-      expect(metadata.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      expect(metadata.expiresAt!.getTime()).toBeGreaterThan(Date.now());
 
       // Verify only metadata ID is passed to Stripe (not all data)
       const stripePayload = {
