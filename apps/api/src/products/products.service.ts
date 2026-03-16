@@ -6,7 +6,6 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
-import * as fs from 'fs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
@@ -487,6 +486,12 @@ export class ProductsService {
       if (updateDto.prices.archive) {
         reasons.push(`Archiving ${updateDto.prices.archive.length} price(s)`);
       }
+    }
+
+    // Check feature additions
+    if (updateDto.features?.link && updateDto.features.link.length > 0) {
+      requiresVersioning = true;
+      reasons.push(`Adding ${updateDto.features.link.length} new feature(s)`);
     }
 
     // Check feature removals
@@ -1453,7 +1458,7 @@ export class ProductsService {
     const supabase = this.supabaseService.getClient();
 
     // Verify product exists and user has access
-    const product = await this.findOne(id, userId);
+    await this.findOne(id, userId);
 
     // Get subscriptions with customer details
     const {
@@ -1621,8 +1626,6 @@ export class ProductsService {
     productId: string,
     userId: string,
   ): Promise<any> {
-    const supabase = this.supabaseService.getClient();
-
     // Get the product to find its name and organization
     const product = await this.findOne(productId, userId);
 
@@ -1638,9 +1641,9 @@ export class ProductsService {
    * Useful when webhooks fail or for initial migration
    */
   async syncSubscriptionsFromStripe(
-    userId: string,
+    _userId: string,
     stripeCustomerId: string,
-    stripeAccountId?: string,
+    _stripeAccountId?: string,
   ) {
     this.logger.log(`Syncing subscriptions for customer: ${stripeCustomerId}`);
 
@@ -1901,8 +1904,6 @@ export class ProductsService {
     await this.findOne(productId, userId);
 
     // Define cache keys
-    const mrrCacheKey = `product-mrr:${productId}`;
-    const revenue30dCacheKey = `product-rev30d:${productId}`;
     const metricsCacheKey = `product-metrics:${productId}`;
 
     // Try to get from cache first

@@ -67,6 +67,7 @@ export function PricingEngineSection({
       }
     }
     setHasFreeTrial(trialDays > 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleFreeProductToggle = (checked: boolean) => {

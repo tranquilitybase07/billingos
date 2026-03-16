@@ -23,13 +23,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -43,7 +36,6 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
 import { CreateFeatureDialog } from '@/components/Features/CreateFeatureDialog'
 import { FeatureTypeIcon } from '@/components/Features/FeatureTypeIcon'
 import type { Feature as FeatureFromAPI } from '@/hooks/queries/features'

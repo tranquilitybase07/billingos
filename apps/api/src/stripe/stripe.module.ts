@@ -7,11 +7,13 @@ import { StripFeesService } from './stripe-fees.service';
 import { RefundService } from './refund.service';
 import { SupabaseModule } from '../supabase/supabase.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
   imports: [
     ConfigModule,
     SupabaseModule,
+    QueueModule,
     forwardRef(() => SubscriptionsModule),
   ],
   controllers: [StripeController],

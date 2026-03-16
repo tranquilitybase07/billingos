@@ -44,7 +44,7 @@ const SelectContent = ({
   ref,
   className,
   children,
-  position = 'popper',
+  position: _position = 'popper',
   ...props
 }: React.ComponentProps<typeof SelectContentPrimitive>) => (
   <SelectContentPrimitive

@@ -14,7 +14,7 @@ export class SupabaseMockBuilder {
    */
   withTableResponse(
     table: string,
-    response: { data: any; error?: any } | { data?: any; error: any }
+    response: { data: any; error?: any } | { data?: any; error: any },
   ) {
     this.responses.set(table, {
       data: response.data || null,
@@ -55,39 +55,51 @@ export class SupabaseMockBuilder {
 
     // Helper to create chainable query methods
     const createQueryChain = (table: string) => ({
-      select: jest.fn().mockImplementation((columns?: string) => ({
-        eq: jest.fn().mockImplementation((column: string, value: any) => ({
+      select: jest.fn().mockImplementation((_columns?: string) => ({
+        eq: jest.fn().mockImplementation((_column: string, _value: any) => ({
           single: jest.fn().mockImplementation(() => getResponse(table)),
-          limit: jest.fn().mockImplementation((limit: number) => getResponse(table)),
+          limit: jest
+            .fn()
+            .mockImplementation((_limit: number) => getResponse(table)),
           order: jest.fn().mockImplementation(() => getResponse(table)),
         })),
-        neq: jest.fn().mockImplementation((column: string, value: any) => ({
+        neq: jest.fn().mockImplementation((_column: string, _value: any) => ({
           single: jest.fn().mockImplementation(() => getResponse(table)),
           limit: jest.fn().mockImplementation(() => getResponse(table)),
         })),
-        in: jest.fn().mockImplementation((column: string, values: any[]) =>
-          getResponse(table)
-        ),
-        is: jest.fn().mockImplementation((column: string, value: any) => ({
+        in: jest
+          .fn()
+          .mockImplementation((_column: string, _values: any[]) =>
+            getResponse(table),
+          ),
+        is: jest.fn().mockImplementation((_column: string, _value: any) => ({
           single: jest.fn().mockImplementation(() => getResponse(table)),
           limit: jest.fn().mockImplementation(() => getResponse(table)),
           order: jest.fn().mockImplementation(() => getResponse(table)),
         })),
-        gt: jest.fn().mockImplementation((column: string, value: any) =>
-          getResponse(table)
-        ),
-        gte: jest.fn().mockImplementation((column: string, value: any) =>
-          getResponse(table)
-        ),
+        gt: jest
+          .fn()
+          .mockImplementation((_column: string, _value: any) =>
+            getResponse(table),
+          ),
+        gte: jest
+          .fn()
+          .mockImplementation((_column: string, _value: any) =>
+            getResponse(table),
+          ),
         single: jest.fn().mockImplementation(() => getResponse(table)),
-        limit: jest.fn().mockImplementation((limit: number) => getResponse(table)),
-        order: jest.fn().mockImplementation((column: string, options?: any) =>
-          getResponse(table)
-        ),
+        limit: jest
+          .fn()
+          .mockImplementation((_limit: number) => getResponse(table)),
+        order: jest
+          .fn()
+          .mockImplementation((_column: string, _options?: any) =>
+            getResponse(table),
+          ),
         // Allow direct resolution for simple selects
         then: (resolve: any) => getResponse(table).then(resolve),
       })),
-      insert: jest.fn().mockImplementation((data: any) => ({
+      insert: jest.fn().mockImplementation((_data: any) => ({
         select: jest.fn().mockImplementation(() => ({
           single: jest.fn().mockImplementation(() => getResponse(table)),
           then: (resolve: any) => getResponse(table).then(resolve),
@@ -95,53 +107,68 @@ export class SupabaseMockBuilder {
         single: jest.fn().mockImplementation(() => getResponse(table)),
         then: (resolve: any) => getResponse(table).then(resolve),
       })),
-      update: jest.fn().mockImplementation((data: any) => ({
-        eq: jest.fn().mockImplementation((column: string, value: any) => ({
+      update: jest.fn().mockImplementation((_data: any) => ({
+        eq: jest.fn().mockImplementation((_column: string, _value: any) => ({
           select: jest.fn().mockImplementation(() => ({
             single: jest.fn().mockImplementation(() => getResponse(table)),
           })),
           single: jest.fn().mockImplementation(() => getResponse(table)),
           then: (resolve: any) => getResponse(table).then(resolve),
         })),
-        match: jest.fn().mockImplementation((filter: any) => getResponse(table)),
+        match: jest
+          .fn()
+          .mockImplementation((_filter: any) => getResponse(table)),
       })),
       delete: jest.fn().mockImplementation(() => ({
-        eq: jest.fn().mockImplementation((column: string, value: any) =>
-          getResponse(table)
-        ),
-        match: jest.fn().mockImplementation((filter: any) => getResponse(table)),
+        eq: jest
+          .fn()
+          .mockImplementation((_column: string, _value: any) =>
+            getResponse(table),
+          ),
+        match: jest
+          .fn()
+          .mockImplementation((_filter: any) => getResponse(table)),
       })),
-      upsert: jest.fn().mockImplementation((data: any) => ({
+      upsert: jest.fn().mockImplementation((_data: any) => ({
         select: jest.fn().mockImplementation(() => getResponse(table)),
         then: (resolve: any) => getResponse(table).then(resolve),
       })),
     });
 
     // RPC mock for stored procedures
-    const rpc = jest.fn().mockImplementation((functionName: string, params?: any) => {
-      const response = this.responses.get(`rpc.${functionName}`) || this.defaultResponse;
-      return Promise.resolve(response);
-    });
+    const rpc = jest
+      .fn()
+      .mockImplementation((_functionName: string, _params?: any) => {
+        const response =
+          this.responses.get(`rpc.${_functionName}`) || this.defaultResponse;
+        return Promise.resolve(response);
+      });
 
     // Main mock client
     return {
-      from: jest.fn().mockImplementation((table: string) => createQueryChain(table)),
+      from: jest
+        .fn()
+        .mockImplementation((table: string) => createQueryChain(table)),
       rpc,
       auth: {
         getUser: jest.fn().mockResolvedValue({
           data: { user: { id: 'test-user-id' } },
-          error: null
+          error: null,
         }),
         signInWithPassword: jest.fn().mockResolvedValue({
           data: { session: {} },
-          error: null
+          error: null,
         }),
         signOut: jest.fn().mockResolvedValue({ error: null }),
       },
       storage: {
-        from: jest.fn().mockImplementation((bucket: string) => ({
-          upload: jest.fn().mockResolvedValue({ data: { path: 'test-path' }, error: null }),
-          download: jest.fn().mockResolvedValue({ data: new Blob(), error: null }),
+        from: jest.fn().mockImplementation((_bucket: string) => ({
+          upload: jest
+            .fn()
+            .mockResolvedValue({ data: { path: 'test-path' }, error: null }),
+          download: jest
+            .fn()
+            .mockResolvedValue({ data: new Blob(), error: null }),
           remove: jest.fn().mockResolvedValue({ data: [], error: null }),
         })),
       },

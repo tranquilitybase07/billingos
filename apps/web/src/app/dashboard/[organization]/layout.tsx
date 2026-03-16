@@ -1,8 +1,7 @@
-import { redirect, notFound } from 'next/navigation'
-import { getOrganizationBySlugOrNotFound, getOrganizationBySlug } from '@/lib/organization'
+import { redirect } from 'next/navigation'
+import { getOrganizationBySlugOrNotFound } from '@/lib/organization'
 import { getUserOrganizations } from '@/lib/user'
 import { OrganizationProvider } from '@/providers/OrganizationProvider'
-import type { Organization } from '@/lib/api/types'
 
 interface OrganizationLayoutProps {
   children: React.ReactNode
@@ -17,6 +16,7 @@ export default async function OrganizationLayout({
 }: OrganizationLayoutProps) {
   const { organization: orgSlug } = await params
 
+  /* eslint-disable react-hooks/error-boundaries -- JSX in try/catch is needed for error handling with redirect in Server Components */
   try {
     // Fetch organization by slug
     const organization = await getOrganizationBySlugOrNotFound(orgSlug)
@@ -52,4 +52,5 @@ export default async function OrganizationLayout({
     console.error('[Organization Layout] Error:', error)
     redirect('/dashboard')
   }
+  /* eslint-enable react-hooks/error-boundaries */
 }

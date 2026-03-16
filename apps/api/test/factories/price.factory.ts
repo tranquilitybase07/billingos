@@ -20,17 +20,14 @@ export interface PriceFactoryParams {
 }
 
 export const priceFactory = Factory.define<PriceFactoryParams>(
-  ({ sequence, params, associations }) => {
+  ({ sequence, params }) => {
     const now = new Date().toISOString();
     const amountType = params?.amount_type || 'fixed';
     const isFixed = amountType === 'fixed';
 
     return {
       id: params?.id || `price_${sequence}`,
-      product_id:
-        params?.product_id ||
-        associations?.product?.id ||
-        `product_${sequence}`,
+      product_id: params?.product_id || `product_${sequence}`,
       amount_type: amountType,
       price_amount:
         params?.price_amount !== undefined

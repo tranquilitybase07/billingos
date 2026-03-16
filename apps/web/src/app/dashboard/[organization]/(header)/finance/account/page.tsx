@@ -9,7 +9,6 @@ import {
 import {
   useAccountByOrganization,
   useCreateAccount,
-  useGetOnboardingLink,
 } from '@/hooks/queries/account'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

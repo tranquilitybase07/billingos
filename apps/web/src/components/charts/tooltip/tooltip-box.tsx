@@ -113,10 +113,12 @@ export function TooltipBox({
   const transformOrigin = isFlipped ? "right top" : "left top";
 
   // Use portal to render into the container
+  /* eslint-disable react-hooks/refs -- reading containerRef during render is needed for portal rendering */
   const container = containerRef.current;
   if (!(mounted && container)) {
     return null;
   }
+  /* eslint-enable react-hooks/refs */
 
   // Dynamic import to avoid SSR issues
   const { createPortal } = require("react-dom") as typeof import("react-dom");

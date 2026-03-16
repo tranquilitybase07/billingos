@@ -216,5 +216,5 @@ END $$;
 
 -- Add comments for documentation
 COMMENT ON TABLE refunds IS 'Tracks all refund operations, both automatic and manual, for audit trail and reconciliation';
-COMMENT ON TABLE reconciliation_queue IS 'Queue for operations that need manual review or retry, inspired by both Autum and Flowglad patterns';
+COMMENT ON TABLE reconciliation_queue IS 'Queue for operations that need manual review or retry.';
 COMMENT ON COLUMN reconciliation_queue.priority IS '1 is highest priority, 10 is lowest. Refund failures should be priority 1.';

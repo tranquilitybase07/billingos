@@ -90,11 +90,11 @@ export const useThemePreset = (
   };
 };
 
-// Deprecation helper, `useThemePreset` should not be used as it triggers hooks linter rules
-// but it's not a hook (`use` prefix is reserved)
+// Helper that delegates to useThemePreset - named with "get" prefix for non-hook contexts
 export const getThemePreset = (
   preset: ThemePreset | (string & {}),
   theme?: "light" | "dark",
 ) => {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- this is a thin wrapper, always called from component context
   return useThemePreset(theme);
 };

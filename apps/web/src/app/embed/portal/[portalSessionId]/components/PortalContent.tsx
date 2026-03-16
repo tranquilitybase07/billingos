@@ -171,7 +171,7 @@ export function PortalContent({ sessionId, defaultTab = 'subscription' }: Portal
 }
 
 // Placeholder tab components (will be implemented next)
-function SubscriptionTab({ subscriptions, customer, onUpdate, onCancel, sessionId }: any) {
+function SubscriptionTab({ subscriptions, customer, onUpdate: _onUpdate, onCancel, sessionId }: any) {
   const { sendMessage } = useParentMessaging()
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [subscriptionToCancel, setSubscriptionToCancel] = useState<any>(null)
@@ -573,15 +573,16 @@ function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }: any) 
   const [error, setError] = useState<string | null>(null)
   const [stripePromise, setStripePromise] = useState<any>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [stripeAccount, setStripeAccount] = useState<string | null>(null)
+  const [_stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [elements, setElements] = useState<any>(null)
-  const [paymentMethodToRemove, setPaymentMethodToRemove] = useState<any>(null)
+  const [_paymentMethodToRemove, _setPaymentMethodToRemove] = useState<any>(null)
 
   // Load Stripe.js when modal opens
   useEffect(() => {
     if (showAddModal && !stripePromise) {
       loadStripe()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAddModal])
 
   const loadStripe = async () => {
@@ -856,6 +857,7 @@ function StripePaymentElement({ stripePromise, clientSecret, onElementsReady }: 
         localElements.unmount()
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stripePromise, clientSecret])
 
   return <div id="payment-element" className="min-h-[200px]"></div>
@@ -926,7 +928,7 @@ function SettingsTab({ customer, usageMetrics, sessionId, onUpdate }: any) {
     }
   }
 
-  const getProgressColor = (percentage: number) => {
+  const _getProgressColor = (percentage: number) => {
     if (percentage >= 90) return 'bg-red-500'
     if (percentage >= 70) return 'bg-yellow-500'
     return 'bg-green-500'

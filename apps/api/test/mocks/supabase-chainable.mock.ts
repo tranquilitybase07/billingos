@@ -206,11 +206,11 @@ export class EnhancedSupabaseMockBuilder {
           for (const filter of state.filters) {
             if (filter.type === 'eq' && filter.column) {
               filteredData = filteredData.filter(
-                (item) => item[filter.column] === filter.value,
+                (item) => item[filter.column!] === filter.value,
               );
             } else if (filter.type === 'in' && filter.column) {
               filteredData = filteredData.filter((item) =>
-                filter.value.includes(item[filter.column]),
+                filter.value.includes(item[filter.column!]),
               );
             }
           }
@@ -277,7 +277,7 @@ export class EnhancedSupabaseMockBuilder {
     // RPC mock
     const rpc = jest
       .fn()
-      .mockImplementation((functionName: string, params?: any) => {
+      .mockImplementation((functionName: string, _params?: any) => {
         const response =
           this.responses.get(`rpc.${functionName}`) || this.defaultResponse;
         return Promise.resolve(response);
@@ -301,7 +301,7 @@ export class EnhancedSupabaseMockBuilder {
         signOut: jest.fn().mockResolvedValue({ error: null }),
       },
       storage: {
-        from: jest.fn().mockImplementation((bucket: string) => ({
+        from: jest.fn().mockImplementation((_bucket: string) => ({
           upload: jest
             .fn()
             .mockResolvedValue({ data: { path: 'test-path' }, error: null }),

@@ -24,27 +24,17 @@ export interface SubscriptionFactoryParams {
 }
 
 export const subscriptionFactory = Factory.define<SubscriptionFactoryParams>(
-  ({ sequence, params, associations }) => {
+  ({ sequence, params }) => {
     const now = new Date().toISOString();
     const periodStart = params?.current_period_start || mockData.date.recent();
     const periodEnd = params?.current_period_end || mockData.date.future();
 
     return {
       id: params?.id || `sub_${sequence}`,
-      organization_id:
-        params?.organization_id ||
-        associations?.organization?.id ||
-        `org_${sequence}`,
-      product_id:
-        params?.product_id ||
-        associations?.product?.id ||
-        `product_${sequence}`,
-      price_id:
-        params?.price_id || associations?.price?.id || `price_${sequence}`,
-      customer_id:
-        params?.customer_id ||
-        associations?.customer?.id ||
-        `customer_${sequence}`,
+      organization_id: params?.organization_id || `org_${sequence}`,
+      product_id: params?.product_id || `product_${sequence}`,
+      price_id: params?.price_id || `price_${sequence}`,
+      customer_id: params?.customer_id || `customer_${sequence}`,
       stripe_subscription_id:
         params?.stripe_subscription_id !== undefined
           ? params.stripe_subscription_id

@@ -1068,7 +1068,7 @@ export class AnalyticsService {
           customer_id: r.customer_id,
           name:
             customer?.name ||
-            (customer?.email ? customer.email.split('@')[0] : '') ||
+            (customer?.email ? String(customer.email).split('@')[0] : '') ||
             '',
           external_id: customer?.external_id || '',
           email: customer?.email || '',

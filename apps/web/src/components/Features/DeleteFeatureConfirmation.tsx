@@ -41,7 +41,7 @@ export function DeleteFeatureConfirmation({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Feature</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete the feature "{feature.title}"?
+            Are you sure you want to delete the feature &quot;{feature.title}&quot;?
           </AlertDialogDescription>
         </AlertDialogHeader>
 

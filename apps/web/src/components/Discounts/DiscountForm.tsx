@@ -23,8 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Rotate01Icon, Cancel01Icon, Calendar01Icon, Search01Icon } from 'hugeicons-react'
+import { Rotate01Icon, Calendar01Icon, Search01Icon } from 'hugeicons-react'
 import { format } from 'date-fns'
 import { useState } from 'react'
 import { Discount } from '@/utils/discount'
@@ -88,7 +87,7 @@ export function DiscountForm({
   const [maxRedemptions, setMaxRedemptions] = useState(
     initialData?.max_redemptions?.toString() || '',
   )
-  const [productScope, setProductScope] = useState('all')
+  const [_productScope, _setProductScope] = useState('all')
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>(
     initialData?.product_ids || [],
   )

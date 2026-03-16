@@ -1,0 +1,16 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "../src",
+  "testRegex": ".*\\.integration\\.spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "testTimeout": 30000,
+  "maxWorkers": 1,
+  "moduleNameMapper": {
+    "^../test/(.*)$": "<rootDir>/../test/$1"
+  },
+  "modulePathIgnorePatterns": ["<rootDir>/../dist/"],
+  "globalSetup": "<rootDir>/../test/integration/global-setup.ts"
+}

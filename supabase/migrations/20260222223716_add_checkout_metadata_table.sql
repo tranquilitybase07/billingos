@@ -1,4 +1,3 @@
--- Create checkout_metadata table (inspired by Autum's pattern)
 -- This decouples Stripe from our internal data and enables better retry handling
 CREATE TABLE IF NOT EXISTS checkout_metadata (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,7 +76,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Add comment for documentation
-COMMENT ON TABLE checkout_metadata IS 'Stores checkout parameters separately from Stripe, enabling better retry handling and data sovereignty. Pattern inspired by Autum.';
+COMMENT ON TABLE checkout_metadata IS 'Stores checkout parameters separately from Stripe, enabling better retry handling and data sovereignty.';
 
 -- Add missing columns to checkout_sessions for idempotency and tracking
 ALTER TABLE checkout_sessions

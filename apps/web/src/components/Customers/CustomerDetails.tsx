@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { MoreVerticalIcon, ArrowDown01Icon, Cancel01Icon, PlusSignIcon, Tick01Icon } from "hugeicons-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,9 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Card, CardContent, CardGhost, CardHeader, CardTitle } from "@/components/ui/card";
-import { RevenueChart } from "./RevenueChart";
-import { TableSection } from "./TableSection";
+import { Card } from "@/components/ui/card";
 import {
   DataTable,
   DataTableColumnHeader,
@@ -74,7 +71,7 @@ function formatTime(dateStr: string) {
   });
 }
 
-export function CustomerDetails({ customer, organizationId, variant = 'full' }: CustomerDetailsProps) {
+export function CustomerDetails({ customer, organizationId, variant: _variant = 'full' }: CustomerDetailsProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "events" | "usage">(
     "overview"
   );
@@ -82,7 +79,7 @@ export function CustomerDetails({ customer, organizationId, variant = 'full' }: 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAttachSubscriptionOpen, setIsAttachSubscriptionOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
-  const [timePeriod, setTimePeriod] = useState<"Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly">("Daily");
+  const [_timePeriod, _setTimePeriod] = useState<"Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly">("Daily");
   const [editFormData, setEditFormData] = useState({
     name: customer.name,
     email: customer.email,

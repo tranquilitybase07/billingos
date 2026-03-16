@@ -62,7 +62,7 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
         description: 'Product has been successfully archived',
       })
       hideArchiveModal()
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to archive product',
@@ -82,7 +82,7 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
         description: 'Product has been successfully unarchived',
       })
       hideUnarchiveModal()
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to unarchive product',

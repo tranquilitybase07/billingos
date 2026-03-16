@@ -118,12 +118,14 @@ export function EditFeatureDialog({
     useFieldArray({ control: form.control, name: 'advanced_metadata' })
 
   // Reset form when feature changes or dialog opens
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: reset form state when dialog opens */
   useEffect(() => {
     if (isOpen) {
       form.reset(getDefaultValues())
       setShowAdvanced(false)
     }
   }, [feature, isOpen, getDefaultValues, form])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const onSubmit = useCallback(
     async (data: UpdateFeatureFormValues) => {

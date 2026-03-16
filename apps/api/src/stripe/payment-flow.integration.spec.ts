@@ -8,10 +8,9 @@ import Stripe from 'stripe';
 
 /**
  * Integration tests for critical payment flow fixes
- * Based on patterns from Autum and Flowglad
  */
 describe('Payment Flow Integration Tests', () => {
-  let webhookService: StripeWebhookService;
+  let _webhookService: StripeWebhookService;
   let refundService: RefundService;
   let redisService: RedisService;
   let databaseService: DatabaseService;
@@ -57,7 +56,7 @@ describe('Payment Flow Integration Tests', () => {
       ],
     }).compile();
 
-    webhookService = module.get<StripeWebhookService>(StripeWebhookService);
+    _webhookService = module.get<StripeWebhookService>(StripeWebhookService);
     refundService = module.get<RefundService>(RefundService);
     redisService = module.get<RedisService>(RedisService);
     databaseService = module.get<DatabaseService>(DatabaseService);
@@ -70,7 +69,7 @@ describe('Payment Flow Integration Tests', () => {
     it('should prevent duplicate webhook processing using Redis SET NX', async () => {
       // Arrange
       const eventId = 'evt_test_123';
-      const webhookEvent: Partial<Stripe.Event> = {
+      const _webhookEvent: Partial<Stripe.Event> = {
         id: eventId,
         type: 'payment_intent.succeeded',
         livemode: false,
@@ -299,6 +298,12 @@ describe('Payment Flow Integration Tests', () => {
     });
 
     it('should handle race condition in customer creation', async () => {
+      // Mock must be set up BEFORE dispatching concurrent calls
+      jest.spyOn(databaseService, 'upsertCustomerAtomic').mockResolvedValue({
+        customerId: 'cust_single',
+        created: true,
+      });
+
       // Simulate multiple concurrent requests
       const promises = Array(5)
         .fill(null)
@@ -309,11 +314,6 @@ describe('Payment Flow Integration Tests', () => {
             externalId: 'ext_concurrent',
           }),
         );
-
-      jest.spyOn(databaseService, 'upsertCustomerAtomic').mockResolvedValue({
-        customerId: 'cust_single',
-        created: true,
-      });
 
       const results = await Promise.all(promises);
 
@@ -350,7 +350,7 @@ describe('Payment Flow Integration Tests', () => {
 
       // Assert
       expect(metadata.id).toBe('meta_123');
-      expect(metadata.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      expect(metadata.expiresAt!.getTime()).toBeGreaterThan(Date.now());
 
       // Verify only metadata ID is passed to Stripe (not all data)
       const stripePayload = {

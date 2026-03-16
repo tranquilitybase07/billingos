@@ -18,6 +18,7 @@ export function useProductVisibility(product: Product | undefined) {
     if (product) {
       setIsVisible(product.visible_in_pricing_table ?? true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.visible_in_pricing_table]);
 
   const toggleVisibility = useCallback(async (newValue: boolean) => {
@@ -48,7 +49,7 @@ export function useProductVisibility(product: Product | undefined) {
             ? 'This product will now appear in your pricing table'
             : 'This product has been hidden from your pricing table',
         });
-      } catch (error) {
+      } catch {
         // Revert the toggle on error
         setIsVisible(!newValue);
 

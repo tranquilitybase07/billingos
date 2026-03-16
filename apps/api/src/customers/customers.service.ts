@@ -4,7 +4,6 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -390,7 +389,7 @@ export class CustomersService {
     const sortField = sort_by || CustomerSortField.CREATED_AT;
     const sortDirection = sort_order || 'desc';
     supabaseQuery = supabaseQuery.order(sortField, {
-      ascending: sortDirection === 'asc',
+      ascending: (sortDirection as string) === 'asc',
     });
 
     // Apply pagination

@@ -19,7 +19,7 @@ interface DataTablePaginationProps<TData> {
 }
 
 const SUPPORTED_PAGE_SIZES = [20, 50, 100]
-const DEFAULT_PAGE_SIZE = SUPPORTED_PAGE_SIZES[0]
+const _DEFAULT_PAGE_SIZE = SUPPORTED_PAGE_SIZES[0]
 
 export function DataTablePagination<TData>({
   table,

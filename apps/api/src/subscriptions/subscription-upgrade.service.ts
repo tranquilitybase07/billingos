@@ -21,7 +21,7 @@ interface ProrationResult {
   nextBillingDate: Date;
 }
 
-interface PlanDetails {
+interface _PlanDetails {
   id: string;
   product_id: string;
   product_name: string;
@@ -793,29 +793,26 @@ export class SubscriptionUpgradeService {
             );
 
           // Update subscription with new Stripe ID and status
-          const { data: updatedSubscription, error: updateError } =
-            await supabase
-              .from('subscriptions')
-              .update({
-                product_id: newPrice.product_id,
-                amount: newPrice.price_amount || 0,
-                currency: newPrice.price_currency || 'usd',
-                stripe_subscription_id: newStripeSubscription.id,
-                status:
-                  newStripeSubscription.status === 'trialing'
-                    ? 'trialing'
-                    : 'active',
-                // Type cast period dates as Stripe types might not match our DB
-                trial_end: newStripeSubscription.trial_end
-                  ? new Date(
-                      newStripeSubscription.trial_end * 1000,
-                    ).toISOString()
-                  : null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', subscription.id)
-              .select()
-              .single();
+          const { error: updateError } = await supabase
+            .from('subscriptions')
+            .update({
+              product_id: newPrice.product_id,
+              amount: newPrice.price_amount || 0,
+              currency: newPrice.price_currency || 'usd',
+              stripe_subscription_id: newStripeSubscription.id,
+              status:
+                newStripeSubscription.status === 'trialing'
+                  ? 'trialing'
+                  : 'active',
+              // Type cast period dates as Stripe types might not match our DB
+              trial_end: newStripeSubscription.trial_end
+                ? new Date(newStripeSubscription.trial_end * 1000).toISOString()
+                : null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', subscription.id)
+            .select()
+            .single();
 
           if (updateError) {
             // Attempt to cancel the Stripe subscription if DB update fails
@@ -885,7 +882,7 @@ export class SubscriptionUpgradeService {
         }
 
         // Update subscription in database
-        const { data: updatedSubscription, error: updateError } = await supabase
+        const { error: updateError } = await supabase
           .from('subscriptions')
           .update({
             product_id: newPrice.product_id,
@@ -902,7 +899,7 @@ export class SubscriptionUpgradeService {
         }
       } else {
         // Free-to-free change or no Stripe integration
-        const { data: updatedSubscription, error: updateError } = await supabase
+        const { error: updateError } = await supabase
           .from('subscriptions')
           .update({
             product_id: newPrice.product_id,
@@ -1039,7 +1036,7 @@ export class SubscriptionUpgradeService {
     subscription: any,
     currentPrice: any,
     newPrice: any,
-    preview: any,
+    _preview: any,
   ) {
     const supabase = this.supabaseService.getClient();
 

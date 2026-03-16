@@ -1,10 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
 /**
  * Service for managing checkout metadata
- * Implements Autum's pattern of storing checkout data separately from Stripe
  */
 @Injectable()
 export class CheckoutMetadataService {

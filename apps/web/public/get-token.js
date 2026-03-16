@@ -75,7 +75,7 @@ async function getSupabaseToken() {
         await navigator.clipboard.writeText(token);
         console.log('\n✅ Token copied to clipboard!');
         console.log('📝 Paste it into your .http files');
-      } catch (err) {
+      } catch {
         console.log('\n⚠️  Could not copy to clipboard automatically');
         console.log('📝 Please copy the token manually from above');
       }

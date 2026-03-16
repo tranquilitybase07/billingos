@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Alert01Icon, ChartDecreaseIcon, UserMultiple02Icon, Dollar01Icon } from 'hugeicons-react';
 
-interface VersioningChange {
+interface _VersioningChange {
   type: 'price_increase' | 'price_decrease' | 'price_archive' | 'feature_removal' | 'feature_reduction' | 'trial_reduction';
   description: string;
   oldValue?: string | number;

@@ -358,7 +358,7 @@ export class SubscriptionsService {
       }
 
       // If feature is usage quota, create usage record
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+
       if (feature.type === FeatureType.USAGE_QUOTA) {
         const limit = mergedProperties.limit || 0;
 
@@ -651,7 +651,6 @@ export class SubscriptionsService {
     if (!grants) return;
 
     for (const grant of grants) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
       if (grant.features?.type === FeatureType.USAGE_QUOTA) {
         const limit = (grant.properties as any)?.limit || 0;
 

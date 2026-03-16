@@ -412,6 +412,7 @@ function CheckoutFormAdaptive({
     if (total && currency && onTotalChange) {
       onTotalChange(total.minorUnitsAmount, currency)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(checkout as any)?.total?.total?.minorUnitsAmount, (checkout as any)?.currency, onTotalChange])
 
   // Monitor height changes
@@ -1005,7 +1006,7 @@ function CheckoutFormInner({
   )
 }
 
-function formatAmount(amount: number | undefined, currency: string): string {
+function _formatAmount(amount: number | undefined, currency: string): string {
   // Handle undefined or invalid amounts
   if (amount === undefined || amount === null || isNaN(amount)) {
     return 'Loading...'

@@ -1,10 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import {
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
@@ -12,10 +8,7 @@ import {
   EnhancedSupabaseMockBuilder,
   EnhancedMockSupabaseService,
 } from '../../test/mocks/supabase-chainable.mock';
-import {
-  MockStripeService,
-  createStripeError,
-} from '../../test/mocks/stripe.mock';
+import { MockStripeService } from '../../test/mocks/stripe.mock';
 import {
   productFactory,
   priceFactory,
@@ -24,9 +17,6 @@ import {
   userOrganizationFactory,
   subscriptionFactory,
   activeSubscription,
-  versionedProduct,
-  supersededProduct,
-  createPricePair,
 } from '../../test/factories';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -152,7 +142,7 @@ describe('ProductsService', () => {
         prices: [
           {
             amount_type: PriceAmountType.FREE,
-            price_amount: null,
+            price_amount: undefined,
           },
         ],
       };
@@ -286,11 +276,7 @@ describe('ProductsService', () => {
       stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_v2' });
       stripeService.createPrice.mockResolvedValue({ id: 'price_stripe_new' });
 
-      const result = await service.update(
-        mockProduct.id,
-        testUser.id,
-        updateDto,
-      );
+      await service.update(mockProduct.id, testUser.id, updateDto);
 
       // Verify versioning occurred
       expect(stripeService.createProduct).toHaveBeenCalledWith(
@@ -955,7 +941,7 @@ describe('ProductsService', () => {
 
     it('should filter archived products when requested', async () => {
       const activeProduct = productFactory.build({ is_archived: false });
-      const archivedProduct = productFactory.build({ is_archived: true });
+      const _archivedProduct = productFactory.build({ is_archived: true });
 
       supabaseService.setMockClient(
         new EnhancedSupabaseMockBuilder()
@@ -991,7 +977,7 @@ describe('ProductsService', () => {
 
   describe('getRevenueMetrics', () => {
     const mockProduct = productFactory.build();
-    const mockSubscriptions = [
+    const _mockSubscriptions = [
       subscriptionFactory.build({
         product_id: mockProduct.id,
         status: 'active',
@@ -1046,9 +1032,9 @@ describe('ProductsService', () => {
         testUser.id,
       );
 
-      expect(result.mrr).toBe(1998); // 2 subscriptions * $9.99 = $19.98 in cents
-      expect(result.activeSubscriptionCount).toBe(2);
-      expect(result.arpu).toBe(999); // $9.99 per user
+      expect((result as any).mrr).toBe(1998); // 2 subscriptions * $9.99 = $19.98 in cents
+      expect((result as any).activeSubscriptionCount).toBe(2);
+      expect((result as any).arpu).toBe(999); // $9.99 per user
     });
 
     it('should use cache when available', async () => {

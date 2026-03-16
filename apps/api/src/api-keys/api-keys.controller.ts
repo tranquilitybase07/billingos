@@ -101,7 +101,7 @@ export class ApiKeysController {
   async findOne(
     @Param('organizationId') organizationId: string,
     @Param('keyId') keyId: string,
-    @CurrentUser() user: User,
+    @CurrentUser() _user: User,
   ): Promise<ApiKeyResponseDto> {
     // TODO: Verify user is member of this organization
 
@@ -131,7 +131,7 @@ export class ApiKeysController {
   async revoke(
     @Param('organizationId') organizationId: string,
     @Param('keyId') keyId: string,
-    @CurrentUser() user: User,
+    @CurrentUser() _user: User,
   ): Promise<ApiKeyResponseDto[]> {
     // TODO: Verify user is admin of this organization
 

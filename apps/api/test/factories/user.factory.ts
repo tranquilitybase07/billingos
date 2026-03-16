@@ -8,8 +8,11 @@ import { mockData } from '../utils/mock-data';
 export interface UserFactoryParams {
   id: string;
   email: string;
-  full_name: string | null;
-  avatar_url: string | null;
+  email_verified: boolean;
+  avatar_url?: string;
+  is_admin: boolean;
+  accepted_terms_of_service: boolean;
+  meta: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
@@ -21,12 +24,11 @@ export const userFactory = Factory.define<UserFactoryParams>(
     return {
       id: params?.id || `user_${sequence}`,
       email: params?.email || mockData.email(),
-      full_name:
-        params?.full_name !== undefined ? params.full_name : mockData.name(),
-      avatar_url:
-        params?.avatar_url !== undefined
-          ? params.avatar_url
-          : mockData.url('/avatar.jpg'),
+      email_verified: params?.email_verified ?? true,
+      avatar_url: params?.avatar_url ?? mockData.url('/avatar.jpg'),
+      is_admin: params?.is_admin ?? false,
+      accepted_terms_of_service: params?.accepted_terms_of_service ?? true,
+      meta: params?.meta || {},
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };
@@ -40,13 +42,12 @@ export const userFactory = Factory.define<UserFactoryParams>(
 // Admin user
 export const adminUser = userFactory.params({
   email: 'admin@example.com',
-  full_name: 'Admin User',
+  is_admin: true,
 });
 
 // User without profile
 export const userWithoutProfile = userFactory.params({
-  full_name: null,
-  avatar_url: null,
+  avatar_url: undefined,
 });
 
 /**
@@ -63,24 +64,18 @@ export interface UserOrganizationFactoryParams {
 }
 
 export const userOrganizationFactory =
-  Factory.define<UserOrganizationFactoryParams>(
-    ({ sequence, params, associations }) => {
-      const now = new Date().toISOString();
+  Factory.define<UserOrganizationFactoryParams>(({ sequence, params }) => {
+    const now = new Date().toISOString();
 
-      return {
-        user_id:
-          params?.user_id || associations?.user?.id || `user_${sequence}`,
-        organization_id:
-          params?.organization_id ||
-          associations?.organization?.id ||
-          `org_${sequence}`,
-        role: params?.role || 'member',
-        deleted_at: params?.deleted_at || null,
-        created_at: params?.created_at || mockData.date.past(),
-        updated_at: params?.updated_at || now,
-      };
-    },
-  );
+    return {
+      user_id: params?.user_id || `user_${sequence}`,
+      organization_id: params?.organization_id || `org_${sequence}`,
+      role: params?.role || 'member',
+      deleted_at: params?.deleted_at || null,
+      created_at: params?.created_at || mockData.date.past(),
+      updated_at: params?.updated_at || now,
+    };
+  });
 
 // Admin membership
 export const adminMembership = userOrganizationFactory.params({

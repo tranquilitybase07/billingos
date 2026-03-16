@@ -13,7 +13,7 @@ interface CreateBenefitModalContentProps {
 }
 
 export function CreateBenefitModalContent({
-  organizationId,
+  organizationId: _organizationId,
   onBenefitCreated,
   hideModal,
 }: CreateBenefitModalContentProps) {
@@ -35,7 +35,7 @@ export function CreateBenefitModalContent({
       })
 
       onBenefitCreated()
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to create benefit',

@@ -117,9 +117,9 @@ export class SandboxSyncService {
       // Destructure out prod-specific fields so they're never sent to sandbox
       // (sandbox schema may not have all these columns)
       const {
-        stripe_customer_id,
-        subscription_id,
-        last_login_at,
+        stripe_customer_id: _sci1,
+        subscription_id: _si1,
+        last_login_at: _lla1,
         ...sandboxUser
       } = publicUser;
       const { error: insertError } = await this.sandboxSupabase
@@ -209,9 +209,9 @@ export class SandboxSyncService {
     if (!prodUser) throw new Error('User not found in production');
 
     const {
-      stripe_customer_id,
-      subscription_id,
-      last_login_at,
+      stripe_customer_id: _sci2,
+      subscription_id: _si2,
+      last_login_at: _lla2,
       ...sandboxUser
     } = prodUser;
     const { error } = await this.sandboxSupabase

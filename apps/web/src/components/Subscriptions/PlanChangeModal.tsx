@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert } from '@/components/ui/alert'
 import { PlanComparisonCard } from './PlanComparisonCard'
 import { ProrationPreview } from './ProrationPreview'
 import { useAvailablePlans, usePreviewPlanChange, useChangePlan } from '@/hooks/queries/subscriptions'
@@ -41,6 +41,7 @@ export function PlanChangeModal({
   const changePlanMutation = useChangePlan()
 
   // Reset state when modal closes
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: reset state when modal closes */
   useEffect(() => {
     if (!isOpen) {
       setSelectedPlan(null)
@@ -48,6 +49,7 @@ export function PlanChangeModal({
       setShowConfirmation(false)
     }
   }, [isOpen])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSelectPlan = async (plan: AvailablePlan) => {
     setSelectedPlan(plan)
@@ -111,7 +113,7 @@ export function PlanChangeModal({
     ...(availablePlans?.available_downgrades || []),
   ]
 
-  const getChangeType = (plan: AvailablePlan): ChangeType => {
+  const _getChangeType = (plan: AvailablePlan): ChangeType => {
     if (!availablePlans?.current_plan) return 'upgrade'
     return plan.amount > (availablePlans.current_plan.amount || 0) ? 'upgrade' : 'downgrade'
   }

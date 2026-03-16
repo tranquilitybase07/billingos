@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft01Icon, SparklesIcon, ViewIcon, ViewOffIcon, InformationCircleIcon } from 'hugeicons-react'
+import { SparklesIcon, ViewIcon, ViewOffIcon, InformationCircleIcon } from 'hugeicons-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
@@ -66,15 +65,15 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
         ...form.buildPayload(),
         visible_in_pricing_table: visibleInPricingTable,
       }
-      const product = await createProduct.mutateAsync(payload)
+      await createProduct.mutateAsync(payload)
 
       toast({
         title: 'Product Created',
-        description: `Product "${form.name}" was created successfully and published to Stripe`,
+        description: `Product "${form.name}" was created successfully and created`,
       })
 
       router.push(`/dashboard/${organizationSlug}/products`)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -237,12 +236,12 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
               {createProduct.isPending ? (
                 <>
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Publishing...
+                  Creating...
                 </>
               ) : (
                 <>
                   <SparklesIcon size={16} className="mr-2" />
-                  Publish to Stripe
+                  Create Product
                 </>
               )}
             </Button>

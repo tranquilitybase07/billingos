@@ -27,16 +27,13 @@ export interface ProductFactoryParams {
 }
 
 export const productFactory = Factory.define<ProductFactoryParams>(
-  ({ sequence, params, associations }) => {
+  ({ sequence, params }) => {
     const now = new Date().toISOString();
     const isVersioned = params?.version && params.version > 1;
 
     return {
       id: params?.id || `product_${sequence}`,
-      organization_id:
-        params?.organization_id ||
-        associations?.organization?.id ||
-        `org_${sequence}`,
+      organization_id: params?.organization_id || `org_${sequence}`,
       name: params?.name || mockData.name(),
       description:
         params?.description !== undefined

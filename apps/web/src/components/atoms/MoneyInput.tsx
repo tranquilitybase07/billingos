@@ -42,7 +42,7 @@ const getInternalValue = (
 }
 
 const MoneyInput = (props: Props) => {
-  let {
+  const {
     id,
     name,
     value,
@@ -62,12 +62,14 @@ const MoneyInput = (props: Props) => {
     getInternalValue(value),
   )
 
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: sync internal state when external value prop changes */
   useEffect(() => {
     if (value !== previousValue) {
       setPreviousValue(value)
       setInternalValue(getInternalValue(value))
     }
   }, [value, previousValue])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const updateValue = useCallback(
     (newValue: string) => {
