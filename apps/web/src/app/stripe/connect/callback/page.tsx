@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useExchangeOAuthCode } from '@/hooks/queries/migration'
 import { Card } from '@/components/ui/card'
 import { Loading03Icon, AlertCircleIcon } from 'hugeicons-react'
 
-export default function StripeConnectCallbackPage() {
+function CallbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const exchangeCode = useExchangeOAuthCode()
@@ -35,8 +35,6 @@ export default function StripeConnectCallbackPage() {
     exchangeCode
       .mutateAsync({ code, organization_id: state })
       .then((migration) => {
-        // Redirect to the account settings page with migration info
-        // We need to get the org slug — redirect to a generic path that will resolve it
         router.replace(
           `/stripe/connect/success?migration_id=${migration.id}&organization_id=${state}`,
         )
@@ -75,5 +73,24 @@ export default function StripeConnectCallbackPage() {
         </p>
       </Card>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md p-8 text-center">
+        <Loading03Icon size={48} className="mx-auto mb-4 animate-spin text-primary" />
+        <h1 className="text-xl font-semibold">Loading...</h1>
+      </Card>
+    </div>
+  )
+}
+
+export default function StripeConnectCallbackPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <CallbackContent />
+    </Suspense>
   )
 }

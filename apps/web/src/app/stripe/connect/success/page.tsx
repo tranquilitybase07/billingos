@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useStartMigration, useMigrationStatus } from '@/hooks/queries/migration'
 import { Card } from '@/components/ui/card'
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { CheckmarkCircle01Icon, Loading03Icon } from 'hugeicons-react'
 import { MigrationProgress } from '@/components/Migration/MigrationProgress'
 
-export default function StripeConnectSuccessPage() {
+function SuccessContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const startMigration = useStartMigration()
@@ -17,7 +18,6 @@ export default function StripeConnectSuccessPage() {
 
   const { data: migration } = useMigrationStatus(
     migrationId,
-    // Poll every 2 seconds while in progress
     migrationId ? 2000 : undefined,
   )
 
@@ -29,8 +29,6 @@ export default function StripeConnectSuccessPage() {
   }
 
   const handleGoToDashboard = () => {
-    // Navigate to the org dashboard — we'll use the organization_id to redirect
-    // since we don't have the slug here. The dashboard will redirect appropriately.
     router.push('/dashboard')
   }
 
@@ -45,14 +43,12 @@ export default function StripeConnectSuccessPage() {
           </p>
         </div>
 
-        {/* Migration status */}
         {migration && (
           <div className="mb-6">
             <MigrationProgress migration={migration} />
           </div>
         )}
 
-        {/* Actions */}
         {!migration || migration.status === 'pending' ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground text-center">
@@ -100,5 +96,19 @@ export default function StripeConnectSuccessPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+export default function StripeConnectSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-lg p-8 text-center">
+          <Loading03Icon size={48} className="mx-auto mb-4 animate-spin text-primary" />
+        </Card>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   )
 }
