@@ -57,6 +57,7 @@ interface CheckoutFormProps {
   onTotalChange?: (totalAmount: number, currency: string) => void
   /** When true (adaptive mode), the CheckoutProvider is already created outside — skip wrapping */
   skipProvider?: boolean
+  theme?: 'light' | 'dark' | 'auto'
 }
 
 export const stripeAppearance = {
@@ -133,6 +134,32 @@ export const stripeAppearance = {
   }
 }
 
+export const stripeAppearanceDark = {
+  theme: 'flat' as const,
+  variables: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSizeBase: '13px', borderRadius: '10px',
+    colorBackground: '#141722', colorText: '#f3f4f6',
+    colorTextSecondary: '#9ca3be', colorTextPlaceholder: '#5d647f',
+    colorPrimary: '#3b82f6', colorDanger: '#f87171',
+    spacingUnit: '4px', spacingGridRow: '14px',
+  },
+  rules: {
+    '.Input': { backgroundColor: '#141722', border: '1px solid #33384a', color: '#f3f4f6', padding: '10px 12px', boxShadow: 'none' },
+    '.Input:focus': { backgroundColor: '#141722', border: '1px solid #3b82f6', boxShadow: '0 0 0 3px rgba(59,130,246,0.15)' },
+    '.Input--invalid': { border: '1px solid #f87171', boxShadow: 'none' },
+    '.Tab': { backgroundColor: '#1e2230', border: '1px solid #33384a', color: '#9ca3be', padding: '8px 10px 7px' },
+    '.Tab:hover': { backgroundColor: '#262a38', border: '1px solid #4a5068', color: '#f3f4f6' },
+    '.Tab--selected, .Tab--selected:focus, .Tab--selected:hover': { backgroundColor: '#141722', border: '1.5px solid #f3f4f6', color: '#f3f4f6' },
+    '.Label': { color: '#9ca3be', fontSize: '12px', fontWeight: '500' },
+    '.Error': { color: '#f87171', fontSize: '11px' },
+    '.Block': { backgroundColor: '#1e2230', border: '1px solid #33384a' },
+  }
+}
+
+export const getStripeAppearance = (theme?: string) =>
+  theme === 'dark' ? stripeAppearanceDark : stripeAppearance
+
 // Component for handling free product checkouts (no payment required)
 function FreeProductCheckout({
   session,
@@ -184,8 +211,8 @@ function FreeProductCheckout({
   return (
     <div ref={formRef} className="space-y-4">
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
 
@@ -224,7 +251,7 @@ function TrustSignals() {
           </svg>
           Secure checkout
         </span>
-        <span className="text-gray-200">|</span>
+        <span className="text-gray-200 dark:text-gray-700">|</span>
         <span className="flex items-center gap-1">
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
@@ -245,6 +272,7 @@ export function CheckoutForm({
   onHeightChange,
   onTotalChange,
   skipProvider,
+  theme,
 }: CheckoutFormProps) {
   const isFreeProduct =
     session.checkoutMode === 'free' ||
@@ -280,15 +308,17 @@ export function CheckoutForm({
           onProcessing={onProcessing}
           onHeightChange={onHeightChange}
           onTotalChange={onTotalChange}
+          theme={theme}
         />
       )
     }
     return (
       <CheckoutProvider
+        key={`${session.clientSecret}-${theme ?? 'light'}`}
         stripe={stripePromise}
         options={{
           clientSecret: session.clientSecret,
-          elementsOptions: { appearance: stripeAppearance },
+          elementsOptions: { appearance: getStripeAppearance(theme) },
           adaptivePricing: { allowed: true },
         } as any}
       >
@@ -299,6 +329,7 @@ export function CheckoutForm({
           onProcessing={onProcessing}
           onHeightChange={onHeightChange}
           onTotalChange={onTotalChange}
+          theme={theme}
         />
       </CheckoutProvider>
     )
@@ -307,16 +338,17 @@ export function CheckoutForm({
   if (session.checkoutMode === 'trial') {
     const trialOptions: StripeElementsOptions = {
       clientSecret: session.clientSecret,
-      appearance: stripeAppearance,
+      appearance: getStripeAppearance(theme),
     }
     return (
-      <Elements stripe={stripePromise} options={trialOptions}>
+      <Elements key={`${session.clientSecret}-${theme ?? 'light'}`} stripe={stripePromise} options={trialOptions}>
         <CheckoutFormTrial
           session={session}
           onSuccess={onSuccess}
           onError={onError}
           onProcessing={onProcessing}
           onHeightChange={onHeightChange}
+          theme={theme}
         />
       </Elements>
     )
@@ -324,17 +356,18 @@ export function CheckoutForm({
 
   const options: StripeElementsOptions = {
     clientSecret: session.clientSecret,
-    appearance: stripeAppearance,
+    appearance: getStripeAppearance(theme),
   }
 
   return (
-    <Elements stripe={stripePromise} options={options}>
+    <Elements key={`${session.clientSecret}-${theme ?? 'light'}`} stripe={stripePromise} options={options}>
       <CheckoutFormInner
         session={session}
         onSuccess={onSuccess}
         onError={onError}
         onProcessing={onProcessing}
         onHeightChange={onHeightChange}
+        theme={theme}
       />
     </Elements>
   )
@@ -347,6 +380,7 @@ function CheckoutFormAdaptive({
   onProcessing,
   onHeightChange,
   onTotalChange,
+  theme,
 }: CheckoutFormProps) {
   const checkoutResult = useCheckout()
   const checkout = checkoutResult.type === 'success' ? checkoutResult.checkout : null
@@ -440,7 +474,7 @@ function CheckoutFormAdaptive({
   }
 
   if (checkoutResult.type === 'error') {
-    return <div className="p-3 bg-red-50 border border-red-200 rounded-md"><p className="text-sm text-red-600">{checkoutResult.error.message}</p></div>
+    return <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md"><p className="text-sm text-red-600 dark:text-red-400">{checkoutResult.error.message}</p></div>
   }
 
   return (
@@ -455,7 +489,7 @@ function CheckoutFormAdaptive({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -470,7 +504,7 @@ function CheckoutFormAdaptive({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -498,8 +532,8 @@ function CheckoutFormAdaptive({
       </div>
 
       {errorMessage && (
-        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs text-red-600">{errorMessage}</p>
+        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
         </div>
       )}
 
@@ -640,7 +674,7 @@ function CheckoutFormTrial({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -655,7 +689,7 @@ function CheckoutFormTrial({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -671,8 +705,8 @@ function CheckoutFormTrial({
       </div>
 
       {errorMessage && (
-        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs text-red-600">{errorMessage}</p>
+        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
         </div>
       )}
 
@@ -819,7 +853,7 @@ function CheckoutFormInner({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -834,7 +868,7 @@ function CheckoutFormInner({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -862,8 +896,8 @@ function CheckoutFormInner({
       </div>
 
       {errorMessage && (
-        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs text-red-600">{errorMessage}</p>
+        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
         </div>
       )}
 

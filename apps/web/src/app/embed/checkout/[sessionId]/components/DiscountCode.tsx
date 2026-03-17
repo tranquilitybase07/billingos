@@ -54,17 +54,17 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
   if (status === 'success') {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-2 bg-white border border-green-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 bg-white dark:bg-[#1e2230] border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
           <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
-          <span className="text-sm font-bold text-gray-900 flex-1">{appliedCode}</span>
+          <span className="text-sm font-bold text-gray-900 dark:text-gray-100 flex-1">{appliedCode}</span>
           {discountLabel && (
-            <span className="text-xs text-gray-500">{discountLabel}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{discountLabel}</span>
           )}
           <button
             onClick={handleRemove}
-            className="text-gray-400 hover:text-gray-600 transition-colors ml-1"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1"
             aria-label="Remove discount code"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -80,7 +80,7 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="text-xs text-gray-500 hover:text-gray-700 transition-colors underline underline-offset-2"
+        className="text-xs text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors underline underline-offset-2"
       >
         Have a promo code?
       </button>
@@ -101,11 +101,11 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
           disabled={status === 'loading'}
           placeholder="Enter code"
           className={[
-            'flex-1 text-sm px-3 py-2 rounded-lg border bg-white text-gray-900 placeholder-gray-400',
+            'flex-1 text-sm px-3 py-2 rounded-lg border bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             'uppercase tracking-wide',
-            status === 'error' ? 'border-red-400' : 'border-gray-200',
+            status === 'error' ? 'border-red-400' : 'border-gray-200 dark:border-[#33384a]',
           ].join(' ')}
           autoFocus
         />
@@ -116,8 +116,8 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
             'px-3 py-2 text-sm font-medium rounded-lg transition-colors',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             code.trim() && status !== 'loading'
-              ? 'bg-gray-200 hover:bg-blue-500 hover:text-white text-gray-700'
-              : 'bg-gray-100 text-gray-400 border border-gray-200',
+              ? 'bg-gray-200 dark:bg-[#262a38] hover:bg-blue-500 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white text-gray-700 dark:text-gray-200'
+              : 'bg-gray-100 dark:bg-[#1e2230] text-gray-400 dark:text-gray-600 border border-gray-200 dark:border-[#33384a]',
           ].join(' ')}
         >
           {status === 'loading' ? (
@@ -131,7 +131,7 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
         </button>
       </div>
       {status === 'error' && (
-        <p className="text-xs text-red-500">{errorMessage}</p>
+        <p className="text-xs text-red-500 dark:text-red-400">{errorMessage}</p>
       )}
     </div>
   )

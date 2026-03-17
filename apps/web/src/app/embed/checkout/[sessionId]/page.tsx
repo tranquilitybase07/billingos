@@ -2,16 +2,26 @@ import { Suspense } from 'react'
 import { CheckoutContent } from './components/CheckoutContent'
 
 export default async function CheckoutEmbedPage({
-  params
+  params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>
+  searchParams: Promise<{ theme?: string }>
 }) {
-  const { sessionId } = await params
+  const [{ sessionId }, { theme: rawTheme }] = await Promise.all([params, searchParams])
+  const theme = (rawTheme === 'dark' || rawTheme === 'light' || rawTheme === 'auto') ? rawTheme : 'light'
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#181b28]">
+      <script dangerouslySetInnerHTML={{ __html: `
+        (function(){
+          var t='${theme}';
+          if(t==='auto') t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+          if(t==='dark') document.documentElement.classList.add('dark');
+        })()
+      `}} />
       <Suspense fallback={<CheckoutSkeleton />}>
-        <CheckoutContent sessionId={sessionId} />
+        <CheckoutContent sessionId={sessionId} theme={theme} />
       </Suspense>
     </div>
   )

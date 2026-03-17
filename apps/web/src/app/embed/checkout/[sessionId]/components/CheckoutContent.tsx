@@ -6,7 +6,7 @@ import {
   CheckoutProvider,
   CurrencySelectorElement,
 } from '@stripe/react-stripe-js/checkout'
-import { CheckoutForm, stripeAppearance } from './CheckoutForm'
+import { CheckoutForm, getStripeAppearance } from './CheckoutForm'
 import { ProductSummary } from './ProductSummary'
 import { DiscountCode } from './DiscountCode'
 import { useCheckoutSession } from '../hooks/useCheckoutSession'
@@ -15,9 +15,10 @@ import { api } from '@/lib/api/client'
 
 interface CheckoutContentProps {
   sessionId: string
+  theme?: 'light' | 'dark' | 'auto'
 }
 
-export function CheckoutContent({ sessionId }: CheckoutContentProps) {
+export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
   const hasSentReadyMessageRef = useRef(false)
   const [discountAmount, setDiscountAmount] = useState(0)
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
@@ -121,11 +122,11 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold mb-2">Error Loading Checkout</h3>
-        <p className="text-gray-500 mb-4">{error.message}</p>
+        <h3 className="text-lg font-semibold mb-2 dark:text-gray-100">Error Loading Checkout</h3>
+        <p className="text-gray-500 dark:text-gray-400 mb-4">{error.message}</p>
         <button
           onClick={handleClose}
-          className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm font-medium"
+          className="px-4 py-2 bg-gray-100 dark:bg-[#262a38] rounded-lg hover:bg-gray-200 dark:hover:bg-[#33384a] text-sm font-medium dark:text-gray-200"
         >
           Close
         </button>
@@ -139,15 +140,15 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
 
   const leftPanel = (
     <div
-      className="w-[50%] flex-shrink-0 bg-[#f3f4f6] flex flex-col p-8 overflow-y-auto checkout-enter"
+      className="w-[50%] flex-shrink-0 bg-[#f3f4f6] dark:bg-[#1e2230] flex flex-col p-8 overflow-y-auto checkout-enter"
       style={{ animationFillMode: 'forwards' }}
     >
-      <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mb-2">
+      <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 dark:text-gray-500 uppercase mb-2">
         Order Summary
       </p>
-      <h1 className="text-2xl font-bold text-gray-900">{session.product?.name}</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{session.product?.name}</h1>
       {session.product?.description && (
-        <p className="text-sm text-gray-500 mt-1">{session.product.description}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{session.product.description}</p>
       )}
       <div className="mt-6">
         <ProductSummary
@@ -164,7 +165,7 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
       </div>
       {isAdaptive && (
         <div className="mt-4">
-          <label className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mb-2 block">
+          <label className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 dark:text-gray-500 uppercase mb-2 block">
             Currency
           </label>
           <CurrencySelectorElement />
@@ -181,13 +182,13 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
 
   const rightPanel = (
     <div
-      className="flex-1 bg-white flex flex-col p-8 relative overflow-y-auto checkout-enter-delayed"
+      className="flex-1 bg-white dark:bg-[#181b28] flex flex-col p-8 relative overflow-y-auto checkout-enter-delayed"
       style={{ animationFillMode: 'forwards' }}
     >
       {/* Close button — top right of right panel */}
       <button
         onClick={handleClose}
-        className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-colors p-1"
+        className="absolute top-5 right-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
         aria-label="Close"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -195,15 +196,16 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
         </svg>
       </button>
 
-      <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mb-1">
+      <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 dark:text-gray-500 uppercase mb-1">
         Payment Details
       </p>
-      <h2 className="text-xl font-bold text-gray-900 mb-6">Complete your purchase</h2>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Complete your purchase</h2>
 
       <CheckoutForm
-        key={clientSecretOverride ?? session.clientSecret}
+        key={`${clientSecretOverride ?? session.clientSecret}-${theme ?? 'light'}`}
         session={clientSecretOverride ? { ...session, clientSecret: clientSecretOverride } : session}
         skipProvider={isAdaptive}
+        theme={theme}
         onSuccess={(subscription) => {
           sendMessage({
             type: 'CHECKOUT_SUCCESS',
@@ -248,7 +250,7 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
           animation: checkoutSlideUp 200ms ease-out 50ms forwards;
         }
       `}</style>
-      <div className="bg-white h-screen flex overflow-hidden rounded-2xl">
+      <div className="bg-white dark:bg-[#181b28] h-screen flex overflow-hidden rounded-2xl">
         {leftPanel}
         {rightPanel}
       </div>
@@ -258,10 +260,11 @@ export function CheckoutContent({ sessionId }: CheckoutContentProps) {
   if (isAdaptive) {
     return (
       <CheckoutProvider
+        key={`${clientSecretOverride ?? session.clientSecret}-${theme ?? 'light'}`}
         stripe={stripePromise}
         options={{
           clientSecret: clientSecretOverride ?? session.clientSecret,
-          elementsOptions: { appearance: stripeAppearance },
+          elementsOptions: { appearance: getStripeAppearance(theme) },
           adaptivePricing: { allowed: true },
         } as any}
       >
