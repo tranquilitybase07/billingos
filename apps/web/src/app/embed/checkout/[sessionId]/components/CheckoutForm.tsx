@@ -10,7 +10,6 @@ import {
 import {
   CheckoutProvider,
   useCheckout,
-  CurrencySelectorElement,
   PaymentElement as CheckoutPaymentElement,
 } from '@stripe/react-stripe-js/checkout'
 import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js'
@@ -43,6 +42,7 @@ interface CheckoutSessionDetails {
     name?: string
     description?: string
     features?: string[]
+    interval?: 'day' | 'week' | 'month' | 'year'
   }
   subscription?: CheckoutSubscription
 }
@@ -55,185 +55,30 @@ interface CheckoutFormProps {
   onHeightChange: (height: number) => void
   /** Called when the adaptive pricing total updates (currency change) */
   onTotalChange?: (totalAmount: number, currency: string) => void
+  /** When true (adaptive mode), the CheckoutProvider is already created outside — skip wrapping */
+  skipProvider?: boolean
 }
 
-// Component for handling free product checkouts (no payment required)
-function FreeProductCheckout({
-  session,
-  onSuccess,
-  onHeightChange
-}: {
-  session: CheckoutSessionDetails
-  onSuccess: (subscription?: CheckoutSubscription) => void
-  onHeightChange: (height: number) => void
-}) {
-  const [isActivating, setIsActivating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const formRef = useRef<HTMLDivElement>(null)
-
-  // Monitor height changes
-  useEffect(() => {
-    if (!formRef.current) return
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const height = entry.contentRect.height
-        onHeightChange(height + 100) // Add some padding
-      }
-    })
-
-    resizeObserver.observe(formRef.current)
-
-    return () => {
-      resizeObserver.disconnect()
-    }
-  }, [onHeightChange])
-
-  const handleActivate = async () => {
-    setIsActivating(true)
-    setError(null)
-
-    try {
-      console.log('[FreeProductCheckout] Confirming free checkout...')
-
-      // Call the confirm endpoint to create the subscription
-      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-free`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to activate subscription')
-      }
-
-      const subscription = await response.json()
-      console.log('[FreeProductCheckout] Subscription created!', subscription)
-
-      // Small delay to show success state
-      setTimeout(() => {
-        onSuccess(subscription)
-      }, 500)
-    } catch (err) {
-      console.error('[FreeProductCheckout] Error activating subscription:', err)
-      setError(err instanceof Error ? err.message : 'Failed to activate subscription')
-      setIsActivating(false)
-    }
-  }
-
-  return (
-    <div ref={formRef} className="space-y-6">
-      <div className="text-center">
-        <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Start Your Free Subscription
-        </h2>
-
-        <p className="text-gray-600 mb-6">
-          Click below to activate your free subscription and get started.
-        </p>
-      </div>
-
-      {/* Product Details */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">What You&apos;re Getting</h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">Product:</span>
-            <span className="font-medium text-gray-900">{session.product?.name || 'Free Plan'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">Price:</span>
-            <span className="font-bold text-green-600 text-lg">FREE</span>
-          </div>
-          {session.product?.description && (
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-gray-600 text-sm">{session.product.description}</p>
-            </div>
-          )}
-          {session.product?.features && session.product.features.length > 0 && (
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-xs text-gray-500 mb-2">Includes:</p>
-              <ul className="space-y-1">
-                {session.product.features.map((feature: string, index: number) => (
-                  <li key={index} className="flex items-center text-sm text-gray-700">
-                    <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
-
-      {/* Activate Button */}
-      <button
-        onClick={handleActivate}
-        disabled={isActivating}
-        className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${isActivating
-          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-      >
-        {isActivating ? (
-          <span className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Activating...
-          </span>
-        ) : (
-          'Get Started for Free'
-        )}
-      </button>
-
-      <p className="text-xs text-gray-500 text-center">
-        No credit card required • Cancel anytime
-      </p>
-    </div>
-  )
-}
-
-const stripeAppearance = {
+export const stripeAppearance = {
   theme: 'flat' as const,
   variables: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     fontSizeBase: '13px',
     fontLineHeight: '1.5',
-    borderRadius: '8px',
-    colorBackground: '#f9fafb',
+    borderRadius: '10px',
+    colorBackground: '#ffffff',
     colorText: '#111827',
     colorTextSecondary: '#6b7280',
     colorTextPlaceholder: '#9ca3af',
-    colorPrimary: '#3b82f6',
+    colorPrimary: '#2563eb',
     colorDanger: '#ef4444',
-    spacingUnit: '3px',
-    spacingGridRow: '12px',
+    spacingUnit: '4px',
+    spacingGridRow: '14px',
   },
   rules: {
     '.Input': {
       padding: '10px 12px',
-      backgroundColor: '#f9fafb',
+      backgroundColor: '#ffffff',
       border: '1px solid #e5e7eb',
       boxShadow: 'none',
       fontSize: '13px',
@@ -241,8 +86,8 @@ const stripeAppearance = {
     },
     '.Input:focus': {
       backgroundColor: '#ffffff',
-      border: '1px solid #3b82f6',
-      boxShadow: '0 0 0 3px rgba(59,130,246,0.12)',
+      border: '1px solid #2563eb',
+      boxShadow: '0 0 0 3px rgba(37,99,235,0.1)',
       outline: 'none',
     },
     '.Input--invalid': {
@@ -281,11 +126,115 @@ const stripeAppearance = {
       color: '#ef4444',
     },
     '.Block': {
-      backgroundColor: '#f9fafb',
+      backgroundColor: '#ffffff',
       boxShadow: 'none',
       border: '1px solid #e5e7eb',
     },
   }
+}
+
+// Component for handling free product checkouts (no payment required)
+function FreeProductCheckout({
+  session,
+  onSuccess,
+  onHeightChange
+}: {
+  session: CheckoutSessionDetails
+  onSuccess: (subscription?: CheckoutSubscription) => void
+  onHeightChange: (height: number) => void
+}) {
+  const [isActivating, setIsActivating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!formRef.current) return
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        onHeightChange(entry.contentRect.height + 100)
+      }
+    })
+    resizeObserver.observe(formRef.current)
+    return () => resizeObserver.disconnect()
+  }, [onHeightChange])
+
+  const handleActivate = async () => {
+    setIsActivating(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-free`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to activate subscription')
+      }
+
+      const subscription = await response.json()
+      setTimeout(() => onSuccess(subscription), 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to activate subscription')
+      setIsActivating(false)
+    }
+  }
+
+  return (
+    <div ref={formRef} className="space-y-4">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
+      <button
+        onClick={handleActivate}
+        disabled={isActivating}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
+          isActivating ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'
+        }`}
+      >
+        {isActivating ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Activating...
+          </span>
+        ) : (
+          'Get Started — It\'s Free'
+        )}
+      </button>
+
+      <TrustSignals />
+    </div>
+  )
+}
+
+function TrustSignals() {
+  return (
+    <>
+      <div className="flex items-center justify-center gap-3 text-[11px] text-gray-400 mt-3">
+        <span className="flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M9.661 2.237a.531.531 0 01.678 0 11.947 11.947 0 007.078 2.749.5.5 0 01.479.425c.069.52.103 1.05.103 1.589 0 5.162-3.26 9.563-7.842 11.08a.518.518 0 01-.316 0C5.26 16.564 2 12.163 2 7c0-.538.034-1.069.103-1.589a.5.5 0 01.48-.425 11.947 11.947 0 007.077-2.749z" clipRule="evenodd" />
+          </svg>
+          Secure checkout
+        </span>
+        <span className="text-gray-200">|</span>
+        <span className="flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+          </svg>
+          SSL encrypted
+        </span>
+      </div>
+      <p className="text-center text-[11px] text-gray-400 mt-1.5">Powered by BillingOS</p>
+    </>
+  )
 }
 
 export function CheckoutForm({
@@ -295,26 +244,21 @@ export function CheckoutForm({
   onProcessing,
   onHeightChange,
   onTotalChange,
+  skipProvider,
 }: CheckoutFormProps) {
-  // Check if this is a free product (no payment required)
-  // Trial products have amount=0 but are NOT free — they use SetupIntent
   const isFreeProduct =
     session.checkoutMode === 'free' ||
     (!session.clientSecret && session.checkoutMode !== 'trial')
 
-  // Initialize Stripe (only used for paid products, but hooks must be unconditional)
   const stripePromise = useMemo(() => {
     if (isFreeProduct) return null
-
     const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-
     if (session.stripeAccountId) {
       return loadStripe(publishableKey, { stripeAccount: session.stripeAccountId })
     }
     return loadStripe(publishableKey)
   }, [session.stripeAccountId, isFreeProduct])
 
-  // For free products, render a simple success message
   if (isFreeProduct) {
     return (
       <FreeProductCheckout
@@ -325,8 +269,20 @@ export function CheckoutForm({
     )
   }
 
-  // Adaptive pricing path: use CheckoutProvider with CurrencySelectorElement
   if (session.checkoutMode === 'adaptive') {
+    // If skipProvider=true, the CheckoutProvider is already created in CheckoutContent
+    if (skipProvider) {
+      return (
+        <CheckoutFormAdaptive
+          session={session}
+          onSuccess={onSuccess}
+          onError={onError}
+          onProcessing={onProcessing}
+          onHeightChange={onHeightChange}
+          onTotalChange={onTotalChange}
+        />
+      )
+    }
     return (
       <CheckoutProvider
         stripe={stripePromise}
@@ -348,13 +304,11 @@ export function CheckoutForm({
     )
   }
 
-  // Trial path: use Elements with SetupIntent client_secret
   if (session.checkoutMode === 'trial') {
     const trialOptions: StripeElementsOptions = {
       clientSecret: session.clientSecret,
       appearance: stripeAppearance,
     }
-
     return (
       <Elements stripe={stripePromise} options={trialOptions}>
         <CheckoutFormTrial
@@ -368,7 +322,6 @@ export function CheckoutForm({
     )
   }
 
-  // Standard path: use Elements with PaymentIntent client_secret
   const options: StripeElementsOptions = {
     clientSecret: session.clientSecret,
     appearance: stripeAppearance,
@@ -415,7 +368,6 @@ function CheckoutFormAdaptive({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(checkout as any)?.total?.total?.minorUnitsAmount, (checkout as any)?.currency, onTotalChange])
 
-  // Monitor height changes
   useEffect(() => {
     if (!formRef.current) return
     const resizeObserver = new ResizeObserver((entries) => {
@@ -446,7 +398,6 @@ function CheckoutFormAdaptive({
         return
       }
 
-      // Poll for subscription (same as standard flow)
       let attempts = 0
       const maxAttempts = 20
       const pollForSubscription = async () => {
@@ -475,6 +426,15 @@ function CheckoutFormAdaptive({
     }
   }
 
+  const checkoutTotal = (checkout as any)?.total?.total?.minorUnitsAmount
+  const checkoutCurrency = (checkout as any)?.currency
+  const ctaAmount = checkoutTotal ?? session.totalAmount
+  const ctaCurrency = checkoutCurrency ?? session.currency
+  const ctaFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: ctaCurrency.toUpperCase() }).format(ctaAmount / 100)
+  const intervalLabels: Record<string, string> = { day: 'day', week: 'wk', month: 'month', year: 'year' }
+  const intervalShort = intervalLabels[session.product?.interval || ''] || 'mo'
+  const ctaLabel = ctaAmount === 0 ? `Pay ${ctaFormatted} today` : `Pay ${ctaFormatted}/${intervalShort}`
+
   if (checkoutResult.type === 'loading') {
     return <div className="flex justify-center py-8"><div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" /></div>
   }
@@ -485,7 +445,6 @@ function CheckoutFormAdaptive({
 
   return (
     <form ref={formRef as any} onSubmit={handleSubmit} className="space-y-3">
-      {/* Name */}
       <div>
         <label htmlFor="adaptive-name" className="block text-xs font-medium text-gray-600 mb-1">
           Name
@@ -496,12 +455,11 @@ function CheckoutFormAdaptive({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
 
-      {/* Email */}
       <div>
         <label htmlFor="adaptive-email" className="block text-xs font-medium text-gray-600 mb-1">
           Email
@@ -512,21 +470,12 @@ function CheckoutFormAdaptive({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
       </div>
 
-      {/* Currency selector — required for adaptive pricing */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Currency
-        </label>
-        <CurrencySelectorElement />
-      </div>
-
-      {/* Payment Element (checkout-scoped) */}
       <div>
         <CheckoutPaymentElement
           options={{
@@ -548,43 +497,38 @@ function CheckoutFormAdaptive({
         />
       </div>
 
-      {/* Error Message */}
       {errorMessage && (
         <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-xs text-red-600">{errorMessage}</p>
         </div>
       )}
 
-      {/* Submit Button */}
       <button
         type="submit"
         disabled={isProcessing}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-colors ${isProcessing
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-500 text-white hover:bg-blue-600'
-          }`}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
+          isProcessing ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'
+        }`}
       >
         {isProcessing ? (
-          <span className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             Processing...
           </span>
         ) : (
-          `Continue with ${session.product?.name || 'Plan'}`
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+            </svg>
+            {ctaLabel}
+          </span>
         )}
       </button>
 
-      <p className="text-xs text-gray-400 text-center">
-        <span className="inline-flex items-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          Powered by BillingOS
-        </span>
-      </p>
+      <TrustSignals />
     </form>
   )
 }
@@ -607,12 +551,8 @@ function CheckoutFormTrial({
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
-    if (session?.customer?.email) {
-      setEmail(session.customer.email)
-    }
-    if (session?.customer?.name) {
-      setName(session.customer.name)
-    }
+    if (session?.customer?.email) setEmail(session.customer.email)
+    if (session?.customer?.name) setName(session.customer.name)
   }, [session?.customer])
 
   useEffect(() => {
@@ -642,12 +582,9 @@ function CheckoutFormTrial({
         return
       }
 
-      // Confirm SetupIntent (saves card, no charge)
       const { error: confirmError } = await stripe.confirmSetup({
         elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/embed/checkout/success`,
-        },
+        confirmParams: { return_url: `${window.location.origin}/embed/checkout/success` },
         redirect: 'if_required',
       })
 
@@ -658,10 +595,8 @@ function CheckoutFormTrial({
         return
       }
 
-      // Poll for subscription creation (webhook creates it)
       let attempts = 0
       const maxAttempts = 20
-
       const pollForSubscription = async () => {
         try {
           const response = await fetch(`/api/v1/checkout/${session.id}/status`)
@@ -689,10 +624,12 @@ function CheckoutFormTrial({
   }
 
   const trialDays = session.trialDays || 0
+  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: session.currency.toUpperCase() }).format(session.totalAmount / 100)
+  const intervalLabels: Record<string, string> = { day: 'day', week: 'wk', month: 'month', year: 'year' }
+  const intervalShort = intervalLabels[session.product?.interval || ''] || 'mo'
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-      {/* Name */}
       <div>
         <label htmlFor="trial-name" className="block text-xs font-medium text-gray-600 mb-1">
           Name
@@ -703,12 +640,11 @@ function CheckoutFormTrial({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
 
-      {/* Email */}
       <div>
         <label htmlFor="trial-email" className="block text-xs font-medium text-gray-600 mb-1">
           Email
@@ -719,7 +655,7 @@ function CheckoutFormTrial({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -743,33 +679,31 @@ function CheckoutFormTrial({
       <button
         type="submit"
         disabled={isProcessing || !stripe || !elements}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-colors ${
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
           isProcessing
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
             : 'bg-blue-500 text-white hover:bg-blue-600'
         }`}
       >
         {isProcessing ? (
-          <span className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             Setting up...
           </span>
         ) : (
-          `Start ${trialDays}-day free trial`
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+            </svg>
+            Start {trialDays}-day free trial · then Pay {formattedTotal}/{intervalShort}
+          </span>
         )}
       </button>
 
-      <p className="text-xs text-gray-400 text-center">
-        <span className="inline-flex items-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          No charge today &middot; Powered by BillingOS
-        </span>
-      </p>
+      <TrustSignals />
     </form>
   )
 }
@@ -791,56 +725,38 @@ function CheckoutFormInner({
   const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLFormElement>(null)
 
-  // Update state when session customer data changes
   useEffect(() => {
-    if (session?.customer?.email) {
-      setEmail(session.customer.email)
-    }
-    if (session?.customer?.name) {
-      setName(session.customer.name)
-    }
+    if (session?.customer?.email) setEmail(session.customer.email)
+    if (session?.customer?.name) setName(session.customer.name)
   }, [session?.customer])
 
-  // Monitor height changes
   useEffect(() => {
     if (!formRef.current) return
-
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const height = entry.contentRect.height
-        onHeightChange(height + 100) // Add some padding
+        onHeightChange(entry.contentRect.height + 100)
       }
     })
-
     resizeObserver.observe(formRef.current)
-
-    return () => {
-      resizeObserver.disconnect()
-    }
+    return () => resizeObserver.disconnect()
   }, [onHeightChange])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!stripe || !elements) {
-      return
-    }
+    if (!stripe || !elements) return
 
     setIsProcessing(true)
     setErrorMessage(null)
     onProcessing()
 
     try {
-      // Confirm the payment
       const { error: submitError } = await elements.submit()
-
       if (submitError) {
         setErrorMessage(submitError.message || 'An error occurred')
         setIsProcessing(false)
         return
       }
 
-      // Confirm with Stripe
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -858,45 +774,25 @@ function CheckoutFormInner({
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        console.log('[CheckoutForm] Payment SUCCEEDED! Starting subscription polling...')
-
-        // Payment successful - poll for subscription data
-        // The webhook creates subscription asynchronously, so we need to poll for it
-        let attempts = 0;
-        const maxAttempts = 20; // Poll for up to 10 seconds (20 * 500ms)
-
+        let attempts = 0
+        const maxAttempts = 20
         const pollForSubscription = async () => {
           try {
-            console.log(`[CheckoutForm] Polling attempt ${attempts + 1}/${maxAttempts}`)
             const response = await fetch(`/api/v1/checkout/${session.id}/status`)
             const data = await response.json()
-
             if (data.subscription) {
-              console.log('[CheckoutForm] Subscription found!', data.subscription)
-              // Subscription created, notify parent with real data
               onSuccess(data.subscription)
             } else if (attempts < maxAttempts) {
-              // Subscription not created yet, keep polling
               attempts++
-              console.log('[CheckoutForm] No subscription yet, polling again...')
-              setTimeout(pollForSubscription, 500) // Poll every 500ms
+              setTimeout(pollForSubscription, 500)
             } else {
-              console.log('[CheckoutForm] Polling timeout, sending success without subscription')
-              // Timeout - send success without subscription data
-              // The parent can still show success and refetch products
               onSuccess(undefined)
             }
-          } catch (error) {
-            console.error('[CheckoutForm] Error polling for subscription:', error)
-            // On error, still notify success so payment isn't lost
+          } catch {
             onSuccess(undefined)
           }
         }
-
-        // Start polling immediately
         pollForSubscription()
-      } else {
-        console.log('[CheckoutForm] Payment intent status:', paymentIntent?.status)
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Payment failed')
@@ -907,9 +803,12 @@ function CheckoutFormInner({
     }
   }
 
+  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: session.currency.toUpperCase() }).format(session.totalAmount / 100)
+  const intervalLabels: Record<string, string> = { day: 'day', week: 'wk', month: 'month', year: 'year' }
+  const intervalShort = intervalLabels[session.product?.interval || ''] || 'mo'
+
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-      {/* Name */}
       <div>
         <label htmlFor="name" className="block text-xs font-medium text-gray-600 mb-1">
           Name
@@ -920,12 +819,11 @@ function CheckoutFormInner({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
 
-      {/* Email */}
       <div>
         <label htmlFor="email" className="block text-xs font-medium text-gray-600 mb-1">
           Email
@@ -936,13 +834,12 @@ function CheckoutFormInner({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
       </div>
 
-      {/* Payment Element */}
       <div>
         <PaymentElement
           options={{
@@ -964,56 +861,40 @@ function CheckoutFormInner({
         />
       </div>
 
-      {/* Error Message */}
       {errorMessage && (
         <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-xs text-red-600">{errorMessage}</p>
         </div>
       )}
 
-      {/* Submit Button */}
       <button
         type="submit"
         disabled={!stripe || isProcessing}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-colors ${isProcessing || !stripe
-          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-          : 'bg-blue-500 text-white hover:bg-blue-600'
-          }`}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
+          isProcessing || !stripe
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            : 'bg-blue-500 text-white hover:bg-blue-600'
+        }`}
       >
         {isProcessing ? (
-          <span className="flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             Processing...
           </span>
         ) : (
-          `Continue with ${session.product?.name || 'Plan'}`
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+            </svg>
+            Pay {formattedTotal}/{intervalShort}
+          </span>
         )}
       </button>
 
-      {/* Footer */}
-      <p className="text-xs text-gray-400 text-center">
-        <span className="inline-flex items-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          Powered by BillingOS
-        </span>
-      </p>
+      <TrustSignals />
     </form>
   )
-}
-
-function _formatAmount(amount: number | undefined, currency: string): string {
-  // Handle undefined or invalid amounts
-  if (amount === undefined || amount === null || isNaN(amount)) {
-    return 'Loading...'
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency.toUpperCase()
-  }).format(amount / 100)
 }

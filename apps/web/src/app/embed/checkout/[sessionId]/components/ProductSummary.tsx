@@ -51,25 +51,19 @@ export function ProductSummary({
 
   return (
     <div className="space-y-3">
-      {/* Plan selector card — selected state */}
-      <div className="flex items-center gap-2.5 border-2 border-blue-500 rounded-xl px-3.5 py-2.5">
-        <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <span className="font-semibold text-sm text-gray-900">{getIntervalLabel(product.interval)}</span>
-        <span className="text-gray-400 text-sm ml-0.5">
-          {displayCurrency
-            ? `${formatAmount(totalAmount, displayCurrency)}/${getIntervalShort(product.interval)}`
-            : `${formatAmount(amount)}/${getIntervalShort(product.interval)}`}
-        </span>
-      </div>
+      {/* Billing interval pill */}
+      <span className="inline-flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-2.5 py-1 text-xs font-medium text-gray-600 mb-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+        {getIntervalLabel(product.interval)}
+      </span>
 
-      {/* Price summary box */}
-      <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+      {/* Price summary box — white card elevated on grey panel */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2.5">
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-extrabold text-gray-900">{formatAmount(totalAmount, displayCurrency)}</span>
+          {/* For trial products, show the recurring amount (not 0 = today's charge) */}
+          <span className="text-3xl font-extrabold text-gray-900">
+            {(trialDays && trialDays > 0) ? formatAmount(amount) : formatAmount(totalAmount, displayCurrency)}
+          </span>
           <span className="text-gray-400 text-xs">/{getIntervalShort(product.interval)}</span>
         </div>
 
@@ -118,6 +112,32 @@ export function ProductSummary({
         </div>
       </div>
 
+      {/* What's Included — features list */}
+      {product.features && product.features.length > 0 && (
+        <div className="pt-1">
+          <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mb-3">
+            What&apos;s Included
+          </p>
+          <ul className="space-y-2">
+            {product.features.map((feature, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 text-sm text-gray-700"
+                style={{
+                  animation: `checkoutSlideUp 200ms ease-out ${i * 20 + 100}ms forwards`,
+                  opacity: 0,
+                }}
+              >
+                <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                {feature}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Trial period badge */}
       {trialDays !== undefined && trialDays > 0 && (
         <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
@@ -125,7 +145,7 @@ export function ProductSummary({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-xs font-medium text-blue-700">
-            {trialDays}-day free trial &middot; then {formatAmount(totalAmount, displayCurrency)}/{getIntervalShort(product.interval)}
+            {trialDays}-day free trial &middot; then {formatAmount(amount)}/{getIntervalShort(product.interval)}
           </span>
         </div>
       )}
