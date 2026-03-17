@@ -74,30 +74,29 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
     const supabase = ctx.module.get(SupabaseService).getClient();
     const piId = randomUUID();
 
-    const { error: piError } = await supabase
-      .from('payment_intents')
-      .insert({
-        id: piId,
-        organization_id: org.id,
-        customer_id: customer.id,
-        stripe_payment_intent_id: stripePiId,
-        stripe_customer_id: customer.stripe_customer_id,
-        stripe_account_id: org.stripe_account_id,
-        stripe_subscription_id: stripeSubId,
-        client_secret: `${stripePiId}_secret_test`,
-        amount: 2999,
-        currency: 'usd',
-        application_fee_amount: 150,
-        status: 'requires_payment_method',
-        product_id: product.id,
-        price_id: price.id,
-        metadata: {
-          subscriptionCreatedDuringCheckout: true,
-          stripeSubscriptionId: stripeSubId,
-        },
-      });
+    const { error: piError } = await supabase.from('payment_intents').insert({
+      id: piId,
+      organization_id: org.id,
+      customer_id: customer.id,
+      stripe_payment_intent_id: stripePiId,
+      stripe_customer_id: customer.stripe_customer_id,
+      stripe_account_id: org.stripe_account_id,
+      stripe_subscription_id: stripeSubId,
+      client_secret: `${stripePiId}_secret_test`,
+      amount: 2999,
+      currency: 'usd',
+      application_fee_amount: 150,
+      status: 'requires_payment_method',
+      product_id: product.id,
+      price_id: price.id,
+      metadata: {
+        subscriptionCreatedDuringCheckout: true,
+        stripeSubscriptionId: stripeSubId,
+      },
+    });
 
-    if (piError) throw new Error(`Failed to seed payment_intent: ${piError.message}`);
+    if (piError)
+      throw new Error(`Failed to seed payment_intent: ${piError.message}`);
 
     // Seed checkout session
     const expiresAt = new Date();
@@ -119,7 +118,8 @@ describe('C4: Webhook Idempotency Integration Tests', () => {
       },
     });
 
-    if (csError) throw new Error(`Failed to seed checkout_session: ${csError.message}`);
+    if (csError)
+      throw new Error(`Failed to seed checkout_session: ${csError.message}`);
 
     return {
       org,

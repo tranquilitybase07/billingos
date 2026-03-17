@@ -8,7 +8,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Redirect,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { MigrationService } from './migration.service';
@@ -41,10 +40,7 @@ export class MigrationController {
    */
   @Get('oauth/url')
   @UseGuards(JwtAuthGuard)
-  getOAuthUrl(
-    @Query('organization_id') organizationId: string,
-    @CurrentUser() user: User,
-  ) {
+  getOAuthUrl(@Query('organization_id') organizationId: string) {
     const clientId = this.configService.get<string>('STRIPE_CLIENT_ID');
     if (!clientId) {
       return { error: 'Stripe Connect OAuth is not configured' };
@@ -63,7 +59,9 @@ export class MigrationController {
       state: organizationId,
     });
 
-    return { url: `https://connect.stripe.com/oauth/authorize?${params.toString()}` };
+    return {
+      url: `https://connect.stripe.com/oauth/authorize?${params.toString()}`,
+    };
   }
 
   /**
@@ -73,10 +71,7 @@ export class MigrationController {
   @Post('oauth/exchange')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  exchangeOAuthCode(
-    @CurrentUser() user: User,
-    @Body() dto: OAuthCallbackDto,
-  ) {
+  exchangeOAuthCode(@CurrentUser() user: User, @Body() dto: OAuthCallbackDto) {
     return this.migrationService.handleOAuthCallback(
       dto.code,
       dto.organization_id,
@@ -90,10 +85,7 @@ export class MigrationController {
   @Post('start')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  startMigration(
-    @CurrentUser() user: User,
-    @Body() dto: StartMigrationDto,
-  ) {
+  startMigration(@CurrentUser() user: User, @Body() dto: StartMigrationDto) {
     return this.migrationService.startMigration(user.id, dto);
   }
 
@@ -102,10 +94,7 @@ export class MigrationController {
    */
   @Get(':id/status')
   @UseGuards(JwtAuthGuard)
-  getMigrationStatus(
-    @Param('id') id: string,
-    @CurrentUser() user: User,
-  ) {
+  getMigrationStatus(@Param('id') id: string, @CurrentUser() user: User) {
     return this.migrationService.getMigrationStatus(id, user.id);
   }
 

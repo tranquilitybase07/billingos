@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useStartMigration, useMigrationStatus } from '@/hooks/queries/migration'
 import { Card } from '@/components/ui/card'
@@ -16,14 +15,12 @@ export default function StripeConnectSuccessPage() {
   const migrationId = searchParams.get('migration_id')
   const organizationId = searchParams.get('organization_id')
 
-  const { data: migration, isLoading } = useMigrationStatus(
+  const { data: migration } = useMigrationStatus(
     migrationId,
     // Poll every 2 seconds while in progress
     migrationId ? 2000 : undefined,
   )
 
-  const isComplete = migration?.status === 'completed' || migration?.status === 'partial'
-  const isFailed = migration?.status === 'failed'
   const isRunning = migration?.status === 'in_progress'
 
   const handleStartImport = (includeArchived = false) => {

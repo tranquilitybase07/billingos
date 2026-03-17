@@ -14,10 +14,9 @@ import { StartMigrationDto } from './dto/start-migration.dto';
 
 interface ImportMaps {
   products: Map<string, string>; // stripe_product_id → billingos product.id
-  prices: Map<string, string>;   // stripe_price_id → billingos product_prices.id
+  prices: Map<string, string>; // stripe_price_id → billingos product_prices.id
   customers: Map<string, string>; // stripe_customer_id → billingos customers.id
 }
-
 
 @Injectable()
 export class MigrationService {
@@ -34,7 +33,7 @@ export class MigrationService {
    * but haven't been added to the generated TypeScript types yet
    * (e.g. stripe_migrations, accounts.connect_type).
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private getDb(): any {
     return this.supabaseService.getClient();
   }
@@ -168,7 +167,9 @@ export class MigrationService {
     if (orgUpdateError) {
       // Rollback account creation
       await supabase.from('accounts').delete().eq('id', account.id);
-      throw new BadRequestException('Failed to link Stripe account to organization');
+      throw new BadRequestException(
+        'Failed to link Stripe account to organization',
+      );
     }
 
     // Create a pending migration record
@@ -244,7 +245,7 @@ export class MigrationService {
       throw new BadRequestException('Stripe account not found');
     }
 
-    if ((account as any).connect_type !== 'standard') {
+    if (account.connect_type !== 'standard') {
       throw new BadRequestException(
         'Migration is only available for Standard (OAuth-connected) Stripe accounts',
       );
@@ -398,16 +399,40 @@ export class MigrationService {
       };
 
       // 1. Import products
-      await this.importProducts(migration, stripeAccountId, organizationId, maps, errors);
+      await this.importProducts(
+        migration,
+        stripeAccountId,
+        organizationId,
+        maps,
+        errors,
+      );
 
       // 2. Import prices (uses product map built above)
-      await this.importPrices(migration, stripeAccountId, organizationId, maps, errors);
+      await this.importPrices(
+        migration,
+        stripeAccountId,
+        organizationId,
+        maps,
+        errors,
+      );
 
       // 3. Import customers
-      await this.importCustomers(migration, stripeAccountId, organizationId, maps, errors);
+      await this.importCustomers(
+        migration,
+        stripeAccountId,
+        organizationId,
+        maps,
+        errors,
+      );
 
       // 4. Import subscriptions
-      await this.importSubscriptions(migration, stripeAccountId, organizationId, maps, errors);
+      await this.importSubscriptions(
+        migration,
+        stripeAccountId,
+        organizationId,
+        maps,
+        errors,
+      );
 
       // Mark as completed or partial
       const finalStatus = errors.length > 0 ? 'partial' : 'completed';
@@ -464,7 +489,10 @@ export class MigrationService {
 
     await supabase
       .from('stripe_migrations')
-      .update({ products_total: products.length, updated_at: new Date().toISOString() })
+      .update({
+        products_total: products.length,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', migration.id);
 
     let imported = 0;
@@ -535,7 +563,10 @@ export class MigrationService {
       // Update progress counter
       await supabase
         .from('stripe_migrations')
-        .update({ products_imported: imported, updated_at: new Date().toISOString() })
+        .update({
+          products_imported: imported,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', migration.id);
     }
 
@@ -571,7 +602,10 @@ export class MigrationService {
 
     await supabase
       .from('stripe_migrations')
-      .update({ prices_total: allPrices.length, updated_at: new Date().toISOString() })
+      .update({
+        prices_total: allPrices.length,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', migration.id);
 
     let imported = 0;
@@ -648,7 +682,10 @@ export class MigrationService {
 
       await supabase
         .from('stripe_migrations')
-        .update({ prices_imported: imported, updated_at: new Date().toISOString() })
+        .update({
+          prices_imported: imported,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', migration.id);
     }
 
@@ -707,7 +744,7 @@ export class MigrationService {
       { stripeAccount: stripeAccountId },
     )) {
       if (customer.deleted) continue;
-      customers.push(customer as Stripe.Customer);
+      customers.push(customer);
     }
 
     await supabase
@@ -721,7 +758,7 @@ export class MigrationService {
     let imported = 0;
     for (const customer of customers) {
       try {
-        const stripeCustomer = customer as Stripe.Customer;
+        const stripeCustomer = customer;
 
         // Check if already exists
         const { data: existing } = await supabase
@@ -737,16 +774,17 @@ export class MigrationService {
           imported++;
           await supabase
             .from('stripe_migrations')
-            .update({ customers_imported: imported, updated_at: new Date().toISOString() })
+            .update({
+              customers_imported: imported,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', migration.id);
           continue;
         }
 
         if (!stripeCustomer.email) {
           // Customers without email can't be imported (email is required)
-          this.logger.warn(
-            `Skipping customer ${stripeCustomer.id} (no email)`,
-          );
+          this.logger.warn(`Skipping customer ${stripeCustomer.id} (no email)`);
           continue;
         }
 
@@ -814,7 +852,10 @@ export class MigrationService {
 
       await supabase
         .from('stripe_migrations')
-        .update({ customers_imported: imported, updated_at: new Date().toISOString() })
+        .update({
+          customers_imported: imported,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', migration.id);
     }
 
@@ -874,7 +915,10 @@ export class MigrationService {
           imported++;
           await supabase
             .from('stripe_migrations')
-            .update({ subscriptions_imported: imported, updated_at: new Date().toISOString() })
+            .update({
+              subscriptions_imported: imported,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', migration.id);
           continue;
         }

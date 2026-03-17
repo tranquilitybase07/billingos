@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useExchangeOAuthCode } from '@/hooks/queries/migration'
 import { Card } from '@/components/ui/card'
-import { Loading03Icon, AlertCircleIcon, CheckmarkCircle01Icon } from 'hugeicons-react'
+import { Loading03Icon, AlertCircleIcon } from 'hugeicons-react'
 
 export default function StripeConnectCallbackPage() {
   const searchParams = useSearchParams()
