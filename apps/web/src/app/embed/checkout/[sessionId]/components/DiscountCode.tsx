@@ -54,7 +54,7 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
   if (status === 'success') {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-2 bg-white dark:bg-[#1e2230] border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 bg-white dark:bg-[#1c1c1e] border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
           <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
@@ -101,11 +101,11 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
           disabled={status === 'loading'}
           placeholder="Enter code"
           className={[
-            'flex-1 text-sm px-3 py-2 rounded-lg border bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
+            'flex-1 text-sm px-3 py-2 rounded-lg border bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             'uppercase tracking-wide',
-            status === 'error' ? 'border-red-400' : 'border-gray-200 dark:border-[#33384a]',
+            status === 'error' ? 'border-red-400' : 'border-gray-200 dark:border-[#2e2e30]',
           ].join(' ')}
           autoFocus
         />
@@ -116,8 +116,8 @@ export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
             'px-3 py-2 text-sm font-medium rounded-lg transition-colors',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             code.trim() && status !== 'loading'
-              ? 'bg-gray-200 dark:bg-[#262a38] hover:bg-blue-500 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white text-gray-700 dark:text-gray-200'
-              : 'bg-gray-100 dark:bg-[#1e2230] text-gray-400 dark:text-gray-600 border border-gray-200 dark:border-[#33384a]',
+              ? 'bg-gray-200 dark:bg-[#242426] hover:bg-blue-500 dark:hover:bg-[var(--checkout-accent,#3b82f6)] hover:text-white dark:hover:text-white text-gray-700 dark:text-gray-200'
+              : 'bg-gray-100 dark:bg-[#1c1c1e] text-gray-400 dark:text-gray-600 border border-gray-200 dark:border-[#2e2e30]',
           ].join(' ')}
         >
           {status === 'loading' ? (

@@ -16,9 +16,10 @@ import { api } from '@/lib/api/client'
 interface CheckoutContentProps {
   sessionId: string
   theme?: 'light' | 'dark' | 'auto'
+  accentColor?: string
 }
 
-export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
+export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutContentProps) {
   const hasSentReadyMessageRef = useRef(false)
   const [discountAmount, setDiscountAmount] = useState(0)
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
@@ -108,7 +109,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[400px] bg-amber-700">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
@@ -126,7 +127,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
         <p className="text-gray-500 dark:text-gray-400 mb-4">{error.message}</p>
         <button
           onClick={handleClose}
-          className="px-4 py-2 bg-gray-100 dark:bg-[#262a38] rounded-lg hover:bg-gray-200 dark:hover:bg-[#33384a] text-sm font-medium dark:text-gray-200"
+          className="px-4 py-2 bg-gray-100 dark:bg-[#242426] rounded-lg hover:bg-gray-200 dark:hover:bg-[#2e2e30] text-sm font-medium dark:text-gray-200"
         >
           Close
         </button>
@@ -140,7 +141,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
 
   const leftPanel = (
     <div
-      className="w-[50%] flex-shrink-0 bg-[#f3f4f6] dark:bg-[#1e2230] flex flex-col p-8 overflow-y-auto checkout-enter"
+      className="w-[50%] flex-shrink-0 bg-[#f3f4f6] dark:bg-[#1c1c1e] flex flex-col p-8 overflow-y-auto checkout-enter"
       style={{ animationFillMode: 'forwards' }}
     >
       <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 dark:text-gray-500 uppercase mb-2">
@@ -182,7 +183,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
 
   const rightPanel = (
     <div
-      className="flex-1 bg-white dark:bg-[#181b28] flex flex-col p-8 relative overflow-y-auto checkout-enter-delayed"
+      className="flex-1 bg-white dark:bg-[#141415] flex flex-col p-8 relative overflow-y-auto checkout-enter-delayed"
       style={{ animationFillMode: 'forwards' }}
     >
       {/* Close button — top right of right panel */}
@@ -206,6 +207,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
         session={clientSecretOverride ? { ...session, clientSecret: clientSecretOverride } : session}
         skipProvider={isAdaptive}
         theme={theme}
+        accentColor={accentColor}
         onSuccess={(subscription) => {
           sendMessage({
             type: 'CHECKOUT_SUCCESS',
@@ -250,7 +252,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
           animation: checkoutSlideUp 200ms ease-out 50ms forwards;
         }
       `}</style>
-      <div className="bg-white dark:bg-[#181b28] h-screen flex overflow-hidden rounded-2xl">
+      <div className="bg-white dark:bg-[#141415] h-screen flex overflow-hidden rounded-2xl">
         {leftPanel}
         {rightPanel}
       </div>
@@ -264,7 +266,7 @@ export function CheckoutContent({ sessionId, theme }: CheckoutContentProps) {
         stripe={stripePromise}
         options={{
           clientSecret: clientSecretOverride ?? session.clientSecret,
-          elementsOptions: { appearance: getStripeAppearance(theme) },
+          elementsOptions: { appearance: getStripeAppearance(theme, accentColor) },
           adaptivePricing: { allowed: true },
         } as any}
       >

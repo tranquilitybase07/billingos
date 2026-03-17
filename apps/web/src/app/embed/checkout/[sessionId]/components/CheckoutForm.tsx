@@ -58,6 +58,7 @@ interface CheckoutFormProps {
   /** When true (adaptive mode), the CheckoutProvider is already created outside — skip wrapping */
   skipProvider?: boolean
   theme?: 'light' | 'dark' | 'auto'
+  accentColor?: string
 }
 
 export const stripeAppearance = {
@@ -134,31 +135,31 @@ export const stripeAppearance = {
   }
 }
 
-export const stripeAppearanceDark = {
+export const stripeAppearanceDark = (accentColor = '#3b82f6') => ({
   theme: 'flat' as const,
   variables: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     fontSizeBase: '13px', borderRadius: '10px',
-    colorBackground: '#141722', colorText: '#f3f4f6',
-    colorTextSecondary: '#9ca3be', colorTextPlaceholder: '#5d647f',
-    colorPrimary: '#3b82f6', colorDanger: '#f87171',
+    colorBackground: '#0f0f11', colorText: '#f4f4f5',
+    colorTextSecondary: '#a1a1aa', colorTextPlaceholder: '#52525b',
+    colorPrimary: accentColor, colorDanger: '#f87171',
     spacingUnit: '4px', spacingGridRow: '14px',
   },
   rules: {
-    '.Input': { backgroundColor: '#141722', border: '1px solid #33384a', color: '#f3f4f6', padding: '10px 12px', boxShadow: 'none' },
-    '.Input:focus': { backgroundColor: '#141722', border: '1px solid #3b82f6', boxShadow: '0 0 0 3px rgba(59,130,246,0.15)' },
+    '.Input': { backgroundColor: '#0f0f11', border: '1px solid #2e2e30', color: '#f4f4f5', padding: '10px 12px', boxShadow: 'none' },
+    '.Input:focus': { backgroundColor: '#0f0f11', border: `1px solid ${accentColor}`, boxShadow: `0 0 0 3px ${accentColor}26` },
     '.Input--invalid': { border: '1px solid #f87171', boxShadow: 'none' },
-    '.Tab': { backgroundColor: '#1e2230', border: '1px solid #33384a', color: '#9ca3be', padding: '8px 10px 7px' },
-    '.Tab:hover': { backgroundColor: '#262a38', border: '1px solid #4a5068', color: '#f3f4f6' },
-    '.Tab--selected, .Tab--selected:focus, .Tab--selected:hover': { backgroundColor: '#141722', border: '1.5px solid #f3f4f6', color: '#f3f4f6' },
-    '.Label': { color: '#9ca3be', fontSize: '12px', fontWeight: '500' },
+    '.Tab': { backgroundColor: '#1c1c1e', border: '1px solid #2e2e30', color: '#a1a1aa', padding: '8px 10px 7px' },
+    '.Tab:hover': { backgroundColor: '#242426', border: '1px solid #3f3f46', color: '#f4f4f5' },
+    '.Tab--selected, .Tab--selected:focus, .Tab--selected:hover': { backgroundColor: '#0f0f11', border: '1.5px solid #f4f4f5', color: '#f4f4f5' },
+    '.Label': { color: '#a1a1aa', fontSize: '12px', fontWeight: '500' },
     '.Error': { color: '#f87171', fontSize: '11px' },
-    '.Block': { backgroundColor: '#1e2230', border: '1px solid #33384a' },
+    '.Block': { backgroundColor: '#1c1c1e', border: '1px solid #2e2e30' },
   }
-}
+})
 
-export const getStripeAppearance = (theme?: string) =>
-  theme === 'dark' ? stripeAppearanceDark : stripeAppearance
+export const getStripeAppearance = (theme?: string, accentColor?: string) =>
+  theme === 'dark' ? stripeAppearanceDark(accentColor) : stripeAppearance
 
 // Component for handling free product checkouts (no payment required)
 function FreeProductCheckout({
@@ -220,7 +221,7 @@ function FreeProductCheckout({
         onClick={handleActivate}
         disabled={isActivating}
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isActivating ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'
+          isActivating ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
         }`}
       >
         {isActivating ? (
@@ -273,6 +274,7 @@ export function CheckoutForm({
   onTotalChange,
   skipProvider,
   theme,
+  accentColor,
 }: CheckoutFormProps) {
   const isFreeProduct =
     session.checkoutMode === 'free' ||
@@ -309,6 +311,7 @@ export function CheckoutForm({
           onHeightChange={onHeightChange}
           onTotalChange={onTotalChange}
           theme={theme}
+          accentColor={accentColor}
         />
       )
     }
@@ -318,7 +321,7 @@ export function CheckoutForm({
         stripe={stripePromise}
         options={{
           clientSecret: session.clientSecret,
-          elementsOptions: { appearance: getStripeAppearance(theme) },
+          elementsOptions: { appearance: getStripeAppearance(theme, accentColor) },
           adaptivePricing: { allowed: true },
         } as any}
       >
@@ -330,6 +333,7 @@ export function CheckoutForm({
           onHeightChange={onHeightChange}
           onTotalChange={onTotalChange}
           theme={theme}
+          accentColor={accentColor}
         />
       </CheckoutProvider>
     )
@@ -338,7 +342,7 @@ export function CheckoutForm({
   if (session.checkoutMode === 'trial') {
     const trialOptions: StripeElementsOptions = {
       clientSecret: session.clientSecret,
-      appearance: getStripeAppearance(theme),
+      appearance: getStripeAppearance(theme, accentColor),
     }
     return (
       <Elements key={`${session.clientSecret}-${theme ?? 'light'}`} stripe={stripePromise} options={trialOptions}>
@@ -356,7 +360,7 @@ export function CheckoutForm({
 
   const options: StripeElementsOptions = {
     clientSecret: session.clientSecret,
-    appearance: getStripeAppearance(theme),
+    appearance: getStripeAppearance(theme, accentColor),
   }
 
   return (
@@ -489,7 +493,7 @@ function CheckoutFormAdaptive({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -504,7 +508,7 @@ function CheckoutFormAdaptive({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -541,7 +545,7 @@ function CheckoutFormAdaptive({
         type="submit"
         disabled={isProcessing}
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isProcessing ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'
+          isProcessing ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
         }`}
       >
         {isProcessing ? (
@@ -674,7 +678,7 @@ function CheckoutFormTrial({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -689,7 +693,7 @@ function CheckoutFormTrial({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -716,7 +720,7 @@ function CheckoutFormTrial({
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
           isProcessing
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-500 text-white hover:bg-blue-600'
+            : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
         }`}
       >
         {isProcessing ? (
@@ -853,7 +857,7 @@ function CheckoutFormInner({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           disabled={isProcessing || namePrefilled}
         />
       </div>
@@ -868,7 +872,7 @@ function CheckoutFormInner({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-gray-200 dark:border-[#33384a] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#141722] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1e2230] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
+          className="w-full px-3 py-2 border border-gray-200 dark:border-[#2e2e30] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#0f0f11] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 disabled:bg-gray-50 disabled:dark:bg-[#1c1c1e] disabled:text-gray-500 disabled:dark:text-gray-500 disabled:cursor-default"
           required
           disabled={isProcessing || emailPrefilled}
         />
@@ -907,7 +911,7 @@ function CheckoutFormInner({
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
           isProcessing || !stripe
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-500 text-white hover:bg-blue-600'
+            : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
         }`}
       >
         {isProcessing ? (

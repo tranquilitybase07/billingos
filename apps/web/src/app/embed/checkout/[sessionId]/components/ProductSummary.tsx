@@ -52,13 +52,13 @@ export function ProductSummary({
   return (
     <div className="space-y-3">
       {/* Billing interval pill */}
-      <span className="inline-flex items-center gap-1.5 bg-white dark:bg-[#262a38] border border-gray-200 dark:border-[#33384a] rounded-full px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+      <span className="inline-flex items-center gap-1.5 bg-white dark:bg-[#242426] border border-gray-200 dark:border-[#2e2e30] rounded-full px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
         {getIntervalLabel(product.interval)}
       </span>
 
       {/* Price summary box — white card elevated on grey panel */}
-      <div className="bg-white dark:bg-[#141722] rounded-xl border border-gray-200 dark:border-[#33384a] p-4 space-y-2.5">
+      <div className="bg-white dark:bg-[#0f0f11] rounded-xl border border-gray-200 dark:border-[#2e2e30] p-4 space-y-2.5">
         <div className="flex items-baseline gap-1">
           {/* For trial products, show the recurring amount (not 0 = today's charge) */}
           <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
@@ -105,7 +105,7 @@ export function ProductSummary({
             )}
           </div>
 
-          <div className="flex justify-between font-bold text-xs border-t border-gray-200 dark:border-[#33384a] pt-2 mt-0.5">
+          <div className="flex justify-between font-bold text-xs border-t border-gray-200 dark:border-[#2e2e30] pt-2 mt-0.5">
             <span className="text-gray-900 dark:text-gray-100">Total</span>
             <span className="text-gray-900 dark:text-gray-100">{formatAmount(totalAmount, displayCurrency)}</span>
           </div>

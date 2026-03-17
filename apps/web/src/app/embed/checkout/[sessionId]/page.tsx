@@ -6,22 +6,25 @@ export default async function CheckoutEmbedPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>
-  searchParams: Promise<{ theme?: string }>
+  searchParams: Promise<{ theme?: string; accent?: string }>
 }) {
-  const [{ sessionId }, { theme: rawTheme }] = await Promise.all([params, searchParams])
+  const [{ sessionId }, { theme: rawTheme, accent }] = await Promise.all([params, searchParams])
   const theme = (rawTheme === 'dark' || rawTheme === 'light' || rawTheme === 'auto') ? rawTheme : 'light'
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#181b28]">
-      <script dangerouslySetInnerHTML={{ __html: `
+    <div className="min-h-screen bg-white dark:bg-[#141415]">
+      <script dangerouslySetInnerHTML={{
+        __html: `
         (function(){
           var t='${theme}';
           if(t==='auto') t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
           if(t==='dark') document.documentElement.classList.add('dark');
+          var a='${accent || '3b82f6'}';
+          document.documentElement.style.setProperty('--checkout-accent','#'+a);
         })()
       `}} />
       <Suspense fallback={<CheckoutSkeleton />}>
-        <CheckoutContent sessionId={sessionId} theme={theme} />
+        <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + (accent || '3b82f6')} />
       </Suspense>
     </div>
   )
