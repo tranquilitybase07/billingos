@@ -1,30 +1,51 @@
 import { Suspense } from 'react'
 import { CheckoutContent } from './components/CheckoutContent'
 
+const HEX_RE = /^[0-9a-fA-F]{3,8}$/
+const LENGTH_RE = /^[\d.]+(px|rem|em)$/
+const FONT_RE = /^[a-zA-Z0-9\s,\-'"]+$/
+
+function safeHex(v?: string, fallback = '3b82f6'): string {
+  return v && HEX_RE.test(v) ? v : fallback
+}
+
 export default async function CheckoutEmbedPage({
   params,
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>
-  searchParams: Promise<{ theme?: string; accent?: string }>
+  searchParams: Promise<{
+    theme?: string; accent?: string
+    primary?: string; bg?: string; text?: string; radius?: string; font?: string
+  }>
 }) {
-  const [{ sessionId }, { theme: rawTheme, accent }] = await Promise.all([params, searchParams])
-  const theme = (rawTheme === 'dark' || rawTheme === 'light' || rawTheme === 'auto') ? rawTheme : 'light'
+  const [{ sessionId }, sp] = await Promise.all([params, searchParams])
+  const theme = (sp.theme === 'dark' || sp.theme === 'light' || sp.theme === 'auto') ? sp.theme : 'light'
+  // Backward compat: accent treated as alias for primary
+  const primary = safeHex(sp.primary || sp.accent)
+  const bg = sp.bg && HEX_RE.test(sp.bg) ? sp.bg : undefined
+  const text = sp.text && HEX_RE.test(sp.text) ? sp.text : undefined
+  const radius = sp.radius && LENGTH_RE.test(sp.radius) ? sp.radius : undefined
+  const font = sp.font && FONT_RE.test(sp.font) ? sp.font : undefined
+
+  const varsScript = [
+    `var t='${theme}';`,
+    `if(t==='auto')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';`,
+    `if(t==='dark')document.documentElement.classList.add('dark');`,
+    `var s=document.documentElement.style;`,
+    `s.setProperty('--checkout-accent','#${primary}');`,
+    `s.setProperty('--bos-primary','#${primary}');`,
+    bg ? `s.setProperty('--bos-bg','#${bg}');` : '',
+    text ? `s.setProperty('--bos-text','#${text}');` : '',
+    radius ? `s.setProperty('--bos-radius','${radius}');` : '',
+    font ? `s.setProperty('--bos-font','${font}');` : '',
+  ].join('')
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#141415]">
-      <script dangerouslySetInnerHTML={{
-        __html: `
-        (function(){
-          var t='${theme}';
-          if(t==='auto') t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
-          if(t==='dark') document.documentElement.classList.add('dark');
-          var a='${accent || '3b82f6'}';
-          document.documentElement.style.setProperty('--checkout-accent','#'+a);
-        })()
-      `}} />
+      <script dangerouslySetInnerHTML={{ __html: `(function(){${varsScript}})()` }} />
       <Suspense fallback={<CheckoutSkeleton />}>
-        <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + (accent || '3b82f6')} />
+        <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + primary} />
       </Suspense>
     </div>
   )

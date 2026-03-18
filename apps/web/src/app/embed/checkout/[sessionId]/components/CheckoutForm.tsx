@@ -158,8 +158,27 @@ export const stripeAppearanceDark = (accentColor = '#3b82f6') => ({
   }
 })
 
-export const getStripeAppearance = (theme?: string, accentColor?: string) =>
-  theme === 'dark' ? stripeAppearanceDark(accentColor) : stripeAppearance
+export const getStripeAppearance = (theme?: string, accentColor?: string) => {
+  const base = theme === 'dark' ? stripeAppearanceDark(accentColor) : { ...stripeAppearance }
+
+  // Apply --bos-* overrides from URL params (read from <html> style)
+  if (typeof document !== 'undefined') {
+    const s = document.documentElement.style
+    const primary = s.getPropertyValue('--bos-primary').trim()
+    const bg = s.getPropertyValue('--bos-bg').trim()
+    const text = s.getPropertyValue('--bos-text').trim()
+    const radius = s.getPropertyValue('--bos-radius').trim()
+    const font = s.getPropertyValue('--bos-font').trim()
+
+    if (primary) base.variables = { ...base.variables, colorPrimary: primary }
+    if (bg) base.variables = { ...base.variables, colorBackground: bg }
+    if (text) base.variables = { ...base.variables, colorText: text }
+    if (radius) base.variables = { ...base.variables, borderRadius: radius }
+    if (font) base.variables = { ...base.variables, fontFamily: font }
+  }
+
+  return base
+}
 
 // Component for handling free product checkouts (no payment required)
 function FreeProductCheckout({

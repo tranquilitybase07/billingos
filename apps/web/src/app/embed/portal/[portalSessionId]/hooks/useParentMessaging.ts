@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect } from 'react'
 
+interface AppearanceVariables {
+  colorPrimary?: string
+  colorBackground?: string
+  colorText?: string
+  borderRadius?: string
+  fontFamily?: string
+}
+
 interface ParentMessage {
   type: 'INIT_PORTAL' | 'UPDATE_CONFIG' | 'CLOSE_PORTAL'
   sessionId?: string
@@ -9,6 +17,7 @@ interface ParentMessage {
     theme?: 'light' | 'dark' | 'auto'
     locale?: string
     defaultTab?: string
+    variables?: AppearanceVariables
   }
   payload?: any
 }
@@ -72,6 +81,9 @@ export function useParentMessaging(): UseParentMessagingReturn {
           if (message.config?.theme) {
             applyTheme(message.config.theme)
           }
+          if (message.config?.variables) {
+            applyAppearanceVariables(message.config.variables)
+          }
           if (message.config?.locale) {
             // Handle locale change if needed
           }
@@ -82,6 +94,9 @@ export function useParentMessaging(): UseParentMessagingReturn {
           if (message.config) {
             if (message.config.theme) {
               applyTheme(message.config.theme)
+            }
+            if (message.config.variables) {
+              applyAppearanceVariables(message.config.variables)
             }
           }
           break
@@ -155,7 +170,6 @@ function _validateOrigin(origin: string): boolean {
  */
 function applyTheme(theme: 'light' | 'dark' | 'auto') {
   if (theme === 'auto') {
-    // Check system preference
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     theme = prefersDark ? 'dark' : 'light'
   }
@@ -164,5 +178,30 @@ function applyTheme(theme: 'light' | 'dark' | 'auto') {
     document.documentElement.classList.add('dark')
   } else {
     document.documentElement.classList.remove('dark')
+  }
+}
+
+const HEX_RE = /^#?[0-9a-fA-F]{3,8}$/
+const LENGTH_RE = /^[\d.]+(px|rem|em)$/
+const FONT_RE = /^[a-zA-Z0-9\s,\-'"]+$/
+
+function applyAppearanceVariables(vars: AppearanceVariables) {
+  const s = document.documentElement.style
+  if (vars.colorPrimary && HEX_RE.test(vars.colorPrimary)) {
+    const v = vars.colorPrimary.startsWith('#') ? vars.colorPrimary : `#${vars.colorPrimary}`
+    s.setProperty('--bos-primary', v)
+    s.setProperty('--portal-accent', v)
+  }
+  if (vars.colorBackground && HEX_RE.test(vars.colorBackground)) {
+    s.setProperty('--bos-bg', vars.colorBackground.startsWith('#') ? vars.colorBackground : `#${vars.colorBackground}`)
+  }
+  if (vars.colorText && HEX_RE.test(vars.colorText)) {
+    s.setProperty('--bos-text', vars.colorText.startsWith('#') ? vars.colorText : `#${vars.colorText}`)
+  }
+  if (vars.borderRadius && LENGTH_RE.test(vars.borderRadius)) {
+    s.setProperty('--bos-radius', vars.borderRadius)
+  }
+  if (vars.fontFamily && FONT_RE.test(vars.fontFamily)) {
+    s.setProperty('--bos-font', vars.fontFamily)
   }
 }
