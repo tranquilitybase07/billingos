@@ -6,37 +6,28 @@ export default async function PortalEmbedPage({
   searchParams,
 }: {
   params: Promise<{ portalSessionId: string }>
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; theme?: string; accent?: string }>
 }) {
-  const { portalSessionId } = await params
-  const { tab } = await searchParams
+  const [{ portalSessionId }, { tab, theme: rawTheme, accent: rawAccent }] = await Promise.all([params, searchParams])
+  const theme = (rawTheme === 'dark' || rawTheme === 'light' || rawTheme === 'auto') ? rawTheme : 'light'
+  const safeAccent = /^[0-9a-fA-F]{3,6}$/.test(rawAccent || '') ? rawAccent! : '3b82f6'
 
   return (
-    <Suspense fallback={<PortalSkeleton />}>
-      <PortalContent sessionId={portalSessionId} defaultTab={tab} />
-    </Suspense>
+    <div className="min-h-screen bg-white dark:bg-[#141415]">
+      <script dangerouslySetInnerHTML={{
+        __html: `(function(){var t='${theme}';if(t==='auto')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';if(t==='dark')document.documentElement.classList.add('dark');document.documentElement.style.setProperty('--portal-accent','#${safeAccent}');})()`
+      }} />
+      <Suspense fallback={<PortalSkeleton dark={theme === 'dark'} />}>
+        <PortalContent sessionId={portalSessionId} defaultTab={tab} theme={theme} accentColor={'#' + safeAccent} />
+      </Suspense>
+    </div>
   )
 }
 
-function PortalSkeleton() {
+function PortalSkeleton({ dark }: { dark?: boolean }) {
   return (
-    <div className="p-6">
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-        <div className="mt-6">
-          <div className="flex gap-2 mb-4">
-            <div className="h-10 bg-gray-200 rounded w-24"></div>
-            <div className="h-10 bg-gray-200 rounded w-24"></div>
-            <div className="h-10 bg-gray-200 rounded w-24"></div>
-            <div className="h-10 bg-gray-200 rounded w-24"></div>
-          </div>
-          <div className="space-y-3">
-            <div className="h-32 bg-gray-200 rounded"></div>
-            <div className="h-32 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
+    <div className={`flex items-center justify-center min-h-screen ${dark ? 'bg-[#141415]' : 'bg-white'}`}>
+      <div className={`w-7 h-7 rounded-full border-[3px] animate-spin ${dark ? 'border-neutral-700 border-t-neutral-300' : 'border-neutral-200 border-t-neutral-600'}`} />
     </div>
   )
 }

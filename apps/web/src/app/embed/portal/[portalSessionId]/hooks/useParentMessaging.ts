@@ -40,16 +40,13 @@ export function useParentMessaging(): UseParentMessagingReturn {
    * Send message to parent window
    */
   const sendMessage = useCallback((message: IframeMessage) => {
-    console.log('[useParentMessaging] 📤 Sending message to parent:', message.type, message)
-
     // This embed page can be loaded by any merchant domain, so we use '*' for outgoing messages.
     // Outgoing messages are UI events (PORTAL_READY, HEIGHT_CHANGED, etc.) and contain no secrets.
     // Security is enforced on the incoming side by validating origins.
     try {
       window.parent.postMessage(message, '*')
-      console.log('[useParentMessaging] ✅ Message sent to parent')
     } catch (error) {
-      console.error('[useParentMessaging] ❌ Failed to send message to parent:', error)
+      console.error('[useParentMessaging] Failed to send message to parent:', error)
     }
   }, [])
 
