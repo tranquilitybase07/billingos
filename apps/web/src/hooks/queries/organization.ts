@@ -10,6 +10,7 @@ import type {
   PaymentStatus,
   OrganizationMember,
   InviteMemberDTO,
+  OnboardingStatusResponse,
 } from "@/lib/api/types";
 
 // Query Keys
@@ -22,6 +23,8 @@ export const organizationKeys = {
   paymentStatus: (id: string) =>
     [...organizationKeys.detail(id), "payment-status"] as const,
   members: (id: string) => [...organizationKeys.detail(id), "members"] as const,
+  onboardingStatus: (id: string, env: string) =>
+    [...organizationKeys.detail(id), "onboarding-status", env] as const,
 };
 
 // List Organizations
@@ -158,6 +161,21 @@ export function useRemoveMember(organizationId: string) {
         queryKey: organizationKeys.members(organizationId),
       });
     },
+  });
+}
+
+// Get Onboarding Status
+export function useOnboardingStatus(
+  organizationId: string,
+  environment: "sandbox" | "production" = "sandbox",
+) {
+  return useQuery({
+    queryKey: organizationKeys.onboardingStatus(organizationId, environment),
+    queryFn: () =>
+      api.get<OnboardingStatusResponse>(
+        `/organizations/${organizationId}/onboarding-status?environment=${environment}`,
+      ),
+    enabled: !!organizationId,
   });
 }
 

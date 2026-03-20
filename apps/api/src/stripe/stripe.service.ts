@@ -1087,6 +1087,47 @@ export class StripeService {
   }
 
   // ================================================
+  // INVOICE METHODS
+  // ================================================
+
+  /**
+   * List invoices for a Stripe Connect account with auto-pagination.
+   * Fetches all matching invoices across pages.
+   */
+  async listInvoices(
+    stripeAccountId: string,
+    params: {
+      status?: string;
+      created?: { gte?: number; lte?: number };
+      limit?: number;
+      starting_after?: string;
+    },
+  ): Promise<Stripe.Invoice[]> {
+    const invoices: Stripe.Invoice[] = [];
+    let hasMore = true;
+    let startingAfter = params.starting_after;
+
+    while (hasMore) {
+      const response = await this.stripe.invoices.list(
+        {
+          status: params.status as Stripe.InvoiceListParams.Status,
+          created: params.created,
+          limit: params.limit || 100,
+          ...(startingAfter && { starting_after: startingAfter }),
+        },
+        { stripeAccount: stripeAccountId },
+      );
+      invoices.push(...response.data);
+      hasMore = response.has_more;
+      if (response.data.length > 0) {
+        startingAfter = response.data[response.data.length - 1].id;
+      }
+    }
+
+    return invoices;
+  }
+
+  // ================================================
   // SUBSCRIPTION UPGRADE/DOWNGRADE METHODS
   // ================================================
 

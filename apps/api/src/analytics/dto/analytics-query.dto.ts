@@ -40,6 +40,14 @@ export class TopCustomersQueryDto {
   organization_id: string;
 
   @IsOptional()
+  @IsDateString()
+  start_date?: string;
+
+  @IsOptional()
+  @IsDateString()
+  end_date?: string;
+
+  @IsOptional()
   @IsInt()
   @Type(() => Number)
   @Min(1)

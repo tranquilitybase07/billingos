@@ -436,3 +436,84 @@ export interface AvailablePlansResponse {
   available_downgrades: AvailablePlan[]
   restrictions: string[]
 }
+
+// Dashboard Overview Types
+export interface DashboardMetric {
+  current: number
+  previous: number
+  change_percent: number
+  sparkline: number[]
+}
+
+export interface DashboardOverviewResponse {
+  mrr: DashboardMetric
+  active_subscriptions: DashboardMetric
+  new_customers: DashboardMetric
+  churn_rate: DashboardMetric
+  currency: string
+}
+
+// Activity Feed Types
+export interface ActivityFeedItem {
+  id: string
+  type:
+    | 'new_subscription'
+    | 'payment_succeeded'
+    | 'subscription_canceled'
+    | 'refund'
+    | 'trial_started'
+    | 'trial_converted'
+    | 'subscription_upgraded'
+    | 'subscription_downgraded'
+  customer_name: string | null
+  customer_email: string
+  product_name: string
+  amount: number | null
+  currency: string
+  occurred_at: string
+}
+
+export interface ActivityFeedResponse {
+  data: ActivityFeedItem[]
+  total: number
+}
+
+// Onboarding Status Types
+export interface OnboardingChecklistStep {
+  id: string
+  label: string
+  description: string
+  completed: boolean
+  href: string
+}
+
+export interface OnboardingStatusResponse {
+  phase: 'sandbox' | 'production'
+  steps: OnboardingChecklistStep[]
+  completed_count: number
+  total_count: number
+  all_complete: boolean
+}
+
+// Top Customers Types (frontend mirror of backend DTO)
+export interface TopCustomerData {
+  customer_id: string
+  email: string
+  name: string | null
+  total_revenue: number
+  transaction_count: number
+  rank: number
+}
+
+export interface TopCustomersResponse {
+  data: TopCustomerData[]
+  summary: {
+    total_customers: number
+    top_n_revenue: number
+    top_n_percentage: number
+  }
+  period: {
+    start: string
+    end: string
+  }
+}

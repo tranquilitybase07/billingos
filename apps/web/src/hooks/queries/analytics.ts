@@ -13,11 +13,17 @@ import type {
   AtRiskCustomersResponse,
   UsageTrendsResponse,
   ConversionFunnelResponse,
+  DashboardOverviewResponse,
+  ActivityFeedResponse,
+  TopCustomersResponse,
 } from '@/lib/api/types'
 
 export const analyticsKeys = {
   all: ['analytics'] as const,
   mrr: (orgId: string) => [...analyticsKeys.all, 'mrr', orgId] as const,
+  dashboardOverview: (orgId: string) => [...analyticsKeys.all, 'dashboard-overview', orgId] as const,
+  activityFeed: (orgId: string, limit: number) => [...analyticsKeys.all, 'activity-feed', orgId, limit] as const,
+  topCustomers: (orgId: string) => [...analyticsKeys.all, 'top-customers', orgId] as const,
   revenueTrend: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'revenue-trend', params] as const,
   subscriptionGrowth: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'subscription-growth', params] as const,
   churnRate: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'churn-rate', params] as const,
@@ -116,6 +122,35 @@ export function useConversionFunnel(organizationId: string) {
   return useQuery({
     queryKey: [...analyticsKeys.all, 'conversion-funnel', organizationId] as const,
     queryFn: () => api.get<ConversionFunnelResponse>(`/analytics/conversion-funnel?organization_id=${organizationId}`),
+    enabled: !!organizationId,
+  })
+}
+
+export function useDashboardOverview(organizationId: string) {
+  return useQuery({
+    queryKey: analyticsKeys.dashboardOverview(organizationId),
+    queryFn: () => api.get<DashboardOverviewResponse>(`/analytics/dashboard-overview?organization_id=${organizationId}`),
+    enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useActivityFeed(organizationId: string, limit: number = 10) {
+  return useQuery({
+    queryKey: analyticsKeys.activityFeed(organizationId, limit),
+    queryFn: () => api.get<ActivityFeedResponse>(`/analytics/activity-feed?organization_id=${organizationId}&limit=${limit}`),
+    enabled: !!organizationId,
+    refetchInterval: 2 * 60 * 1000,
+  })
+}
+
+export function useTopCustomers(organizationId: string, limit: number = 5) {
+  const endDate = new Date().toISOString().split('T')[0]
+  const startDate = new Date('2020-01-01').toISOString().split('T')[0]
+
+  return useQuery({
+    queryKey: analyticsKeys.topCustomers(organizationId),
+    queryFn: () => api.get<TopCustomersResponse>(`/analytics/customers/top-revenue?organization_id=${organizationId}&start_date=${startDate}&end_date=${endDate}&limit=${limit}`),
     enabled: !!organizationId,
   })
 }

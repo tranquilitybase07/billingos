@@ -668,6 +668,160 @@ export class OrganizationService {
   }
 
   /**
+   * Get onboarding status for an organization
+   */
+  async getOnboardingStatus(
+    organizationId: string,
+    userId: string,
+    environment: 'sandbox' | 'production' = 'sandbox',
+  ) {
+    const supabase = this.supabaseService.getClient();
+
+    await this.checkMembership(organizationId, userId);
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('*, accounts(*)')
+      .eq('id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const account = Array.isArray(org.accounts)
+      ? org.accounts[0]
+      : org.accounts;
+
+    if (environment === 'sandbox') {
+      // Sandbox steps
+      const { count: productCount } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('is_archived', false)
+        .neq('version_status', 'superseded');
+
+      const { data: testKeys } = await supabase
+        .from('api_keys')
+        .select('id, last_used_at')
+        .eq('organization_id', organizationId)
+        .eq('environment', 'test')
+        .is('revoked_at', null);
+
+      const hasTestKeys = (testKeys?.length || 0) > 0;
+      const sdkUsed = testKeys?.some((k) => k.last_used_at !== null) || false;
+
+      const { count: paymentCount } = await supabase
+        .from('payment_intents')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('status', 'succeeded');
+
+      const steps = [
+        {
+          id: 'create_org',
+          label: 'Create organization',
+          description: 'Set up your BillingOS organization',
+          completed: true,
+          href: `/dashboard/${org.slug}/settings`,
+        },
+        {
+          id: 'create_product',
+          label: 'Create a product',
+          description: 'Define your first product with pricing',
+          completed: (productCount || 0) > 0,
+          href: `/dashboard/${org.slug}/products`,
+        },
+        {
+          id: 'generate_test_keys',
+          label: 'Generate test API keys',
+          description: 'Create API keys for SDK integration',
+          completed: hasTestKeys,
+          href: `/dashboard/${org.slug}/settings/api-keys`,
+        },
+        {
+          id: 'integrate_sdk',
+          label: 'Integrate SDK',
+          description: 'Make your first API call with the SDK',
+          completed: sdkUsed,
+          href: `/dashboard/${org.slug}/settings/api-keys`,
+        },
+        {
+          id: 'test_payment',
+          label: 'Make a test payment',
+          description: 'Complete a test checkout flow',
+          completed: (paymentCount || 0) > 0,
+          href: `/dashboard/${org.slug}/finance`,
+        },
+      ];
+
+      const completedCount = steps.filter((s) => s.completed).length;
+
+      return {
+        phase: 'sandbox' as const,
+        steps,
+        completed_count: completedCount,
+        total_count: steps.length,
+        all_complete: completedCount === steps.length,
+      };
+    }
+
+    // Production steps
+    const paymentReady =
+      account?.is_charges_enabled && account?.is_payouts_enabled;
+
+    const { count: productCount } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('is_archived', false)
+      .neq('version_status', 'superseded');
+
+    const { data: liveKeys } = await supabase
+      .from('api_keys')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('environment', 'live')
+      .is('revoked_at', null);
+
+    const steps = [
+      {
+        id: 'verify_stripe',
+        label: 'Verify Stripe account',
+        description: 'Complete Stripe identity verification',
+        completed: !!paymentReady,
+        href: `/dashboard/${org.slug}/finance/account`,
+      },
+      {
+        id: 'create_products',
+        label: 'Create products',
+        description: 'Set up your product catalog',
+        completed: (productCount || 0) > 0,
+        href: `/dashboard/${org.slug}/products`,
+      },
+      {
+        id: 'generate_live_keys',
+        label: 'Generate production API keys',
+        description: 'Create live API keys for production',
+        completed: (liveKeys?.length || 0) > 0,
+        href: `/dashboard/${org.slug}/settings/api-keys`,
+      },
+    ];
+
+    const completedCount = steps.filter((s) => s.completed).length;
+
+    return {
+      phase: 'production' as const,
+      steps,
+      completed_count: completedCount,
+      total_count: steps.length,
+      all_complete: completedCount === steps.length,
+    };
+  }
+
+  /**
    * Remove organization avatar from storage and clear avatar_url
    */
   async removeAvatar(orgId: string, userId: string): Promise<void> {
