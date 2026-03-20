@@ -27,6 +27,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { BillingModule } from './billing/billing.module';
+import { MigrationModule } from './migration/migration.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import {
   getClientIp,
@@ -98,6 +99,7 @@ import {
     DiscountsModule,
     SandboxModule,
     BillingModule,
+    MigrationModule,
   ],
   controllers: [AppController],
   providers: [
