@@ -1386,9 +1386,8 @@ export class AnalyticsService {
         : 0;
     const churnPrevious =
       activeSubsPrevious > 0
-        ? Math.round(
-            ((canceledPrevious || 0) / activeSubsPrevious) * 10000,
-          ) / 100
+        ? Math.round(((canceledPrevious || 0) / activeSubsPrevious) * 10000) /
+          100
         : 0;
 
     const { data: canceledRaw } = await supabase
@@ -1633,10 +1632,7 @@ export class AnalyticsService {
     }
 
     // Aggregate by product_id
-    const productMap = new Map<
-      string,
-      { name: string; count: number }
-    >();
+    const productMap = new Map<string, { name: string; count: number }>();
 
     (subscriptions || []).forEach((sub: any) => {
       const productId = sub.product_id;
