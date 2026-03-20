@@ -746,7 +746,7 @@ export class OrganizationService {
           label: 'Integrate SDK',
           description: 'Make your first API call with the SDK',
           completed: sdkUsed,
-          href: `/dashboard/${org.slug}/settings/api-keys`,
+          href: 'https://docs.billingos.dev/quickstart',
         },
         {
           id: 'test_payment',

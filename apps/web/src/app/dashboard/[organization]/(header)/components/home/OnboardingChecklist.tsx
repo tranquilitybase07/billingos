@@ -6,7 +6,7 @@ import { CheckmarkCircle01Icon } from 'hugeicons-react'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
 import { useOnboardingStatus } from '@/hooks/queries/organization'
-import { Card } from '@/components/ui/card'
+import { CardFlat } from '@/components/ui/card'
 
 export function OnboardingChecklist() {
   const { organization } = useOrganization()
@@ -26,7 +26,7 @@ export function OnboardingChecklist() {
         exit={{ opacity: 0, height: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className="p-4">
+        <CardFlat className="p-4">
           <div className="flex items-center gap-3 mb-3">
             <h3 className="text-sm font-semibold whitespace-nowrap">
               {env === 'sandbox' ? 'Sandbox Setup' : 'Go Live'}
@@ -62,6 +62,7 @@ export function OnboardingChecklist() {
                 <Link
                   key={step.id}
                   href={step.href}
+                  {...(step.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors"
                 >
                   <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 shrink-0" />
@@ -70,7 +71,7 @@ export function OnboardingChecklist() {
               )
             )}
           </div>
-        </Card>
+        </CardFlat>
       </motion.div>
     </AnimatePresence>
   )
