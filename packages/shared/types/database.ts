@@ -1190,7 +1190,7 @@ export type Database = {
           },
         ]
       }
-      reconciliation_queue: {
+      reconciliation_queue_legacy: {
         Row: {
           created_at: string | null
           details: Json | null
@@ -1881,6 +1881,8 @@ export type Database = {
           identity_verification_status: string
           is_admin: boolean
           meta: Json
+          onboarding_answers: Json
+          onboarding_step: string
           stripe_customer_id: string | null
           updated_at: string
         }
@@ -1899,6 +1901,8 @@ export type Database = {
           identity_verification_status?: string
           is_admin?: boolean
           meta?: Json
+          onboarding_answers?: Json
+          onboarding_step?: string
           stripe_customer_id?: string | null
           updated_at?: string
         }
@@ -1917,6 +1921,8 @@ export type Database = {
           identity_verification_status?: string
           is_admin?: boolean
           meta?: Json
+          onboarding_answers?: Json
+          onboarding_step?: string
           stripe_customer_id?: string | null
           updated_at?: string
         }
@@ -2197,6 +2203,70 @@ export type Database = {
       mark_trial_converted: {
         Args: { p_customer_id: string; p_product_id: string }
         Returns: undefined
+      }
+      pgmq_archive: {
+        Args: { p_msg_id: number; p_queue_name: string }
+        Returns: boolean
+      }
+      pgmq_delete: {
+        Args: { p_msg_id: number; p_queue_name: string }
+        Returns: boolean
+      }
+      pgmq_list_archived: {
+        Args: { p_limit?: number; p_queue_name: string }
+        Returns: {
+          archived_at: string
+          enqueued_at: string
+          message: Json
+          msg_id: number
+          read_ct: number
+        }[]
+      }
+      pgmq_list_messages: {
+        Args: { p_limit?: number; p_queue_name: string }
+        Returns: {
+          enqueued_at: string
+          message: Json
+          msg_id: number
+          read_ct: number
+          vt: string
+        }[]
+      }
+      pgmq_metrics: {
+        Args: { p_queue_name: string }
+        Returns: {
+          newest_msg_age_sec: number
+          oldest_msg_age_sec: number
+          queue_length: number
+          queue_name: string
+          scrape_time: string
+          total_messages: number
+        }[]
+      }
+      pgmq_metrics_all: {
+        Args: never
+        Returns: {
+          newest_msg_age_sec: number
+          oldest_msg_age_sec: number
+          queue_length: number
+          queue_name: string
+          scrape_time: string
+          total_messages: number
+        }[]
+      }
+      pgmq_read: {
+        Args: { p_qty: number; p_queue_name: string; p_vt: number }
+        Returns: {
+          enqueued_at: string
+          message: Json
+          msg_id: number
+          read_ct: number
+          vt: string
+        }[]
+      }
+      pgmq_send: {
+        Args: { p_delay?: number; p_message: Json; p_queue_name: string }
+        Returns: number
       }
       process_reconciliation_queue: {
         Args: { p_limit?: number }

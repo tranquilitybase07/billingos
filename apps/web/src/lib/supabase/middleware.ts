@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const LAST_VISITED_ORG_COOKIE = "billingos_last_org";
 const ENVIRONMENT_COOKIE = "billingos-environment";
-const ONBOARDING_COOKIE = "billingos_onboarded";
+const ONBOARDING_STEP_COOKIE = "billingos_onboarding_step";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -47,7 +47,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/auth");
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
   const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
-  const hasOnboarded = !!request.cookies.get(ONBOARDING_COOKIE)?.value;
+  const onboardingStep = request.cookies.get(ONBOARDING_STEP_COOKIE)?.value;
+  const hasOnboarded = onboardingStep === 'complete';
 
   if (!user && isDashboard) {
     // Redirect to login if accessing dashboard without auth

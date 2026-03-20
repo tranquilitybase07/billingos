@@ -13,6 +13,8 @@ export interface UserFactoryParams {
   is_admin: boolean;
   accepted_terms_of_service: boolean;
   meta: Record<string, any>;
+  onboarding_step: string;
+  onboarding_answers: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +31,8 @@ export const userFactory = Factory.define<UserFactoryParams>(
       is_admin: params?.is_admin ?? false,
       accepted_terms_of_service: params?.accepted_terms_of_service ?? true,
       meta: params?.meta || {},
+      onboarding_step: params?.onboarding_step || 'questions',
+      onboarding_answers: params?.onboarding_answers || {},
       created_at: params?.created_at || mockData.date.past(),
       updated_at: params?.updated_at || now,
     };

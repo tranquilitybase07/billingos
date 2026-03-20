@@ -136,6 +136,13 @@ export interface PaymentStatus {
   is_payouts_enabled?: boolean
 }
 
+// Onboarding Types
+export type OnboardingStep = 'questions' | 'create_org' | 'complete'
+export interface OnboardingState {
+  onboarding_step: OnboardingStep
+  onboarding_answers: Record<string, string>
+}
+
 // User Types
 export interface User {
   id: string
@@ -148,6 +155,8 @@ export interface User {
   accepted_terms_at: string | null
   blocked_at: string | null
   meta: any
+  onboarding_step: string
+  onboarding_answers: Record<string, unknown>
   created_at: string
   updated_at: string
   deleted_at: string | null

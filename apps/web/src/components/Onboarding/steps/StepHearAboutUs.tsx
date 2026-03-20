@@ -1,6 +1,12 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { OptionButton } from '../OptionButton';
+import {
+  optionContainerVariants,
+  optionItemVariants,
+  optionItemTransition,
+} from '../motion';
 
 interface StepHearAboutUsProps {
   selected?: string;
@@ -46,16 +52,22 @@ export function StepHearAboutUs({ selected, onSelect }: StepHearAboutUsProps) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
             Social Media
           </p>
-          <div className="flex flex-col gap-2">
+          <motion.div
+            className="grid grid-cols-3 gap-2"
+            variants={optionContainerVariants}
+            initial="initial"
+            animate="animate"
+          >
             {SOCIAL_MEDIA.map((opt) => (
-              <OptionButton
-                key={opt.value}
-                label={opt.label}
-                selected={selected === opt.value}
-                onClick={() => onSelect(opt.value)}
-              />
+              <motion.div key={opt.value} variants={optionItemVariants} transition={optionItemTransition}>
+                <OptionButton
+                  label={opt.label}
+                  selected={selected === opt.value}
+                  onClick={() => onSelect(opt.value)}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
         {/* AI */}
@@ -63,16 +75,22 @@ export function StepHearAboutUs({ selected, onSelect }: StepHearAboutUsProps) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
             AI
           </p>
-          <div className="flex flex-col gap-2">
+          <motion.div
+            className="grid grid-cols-4 gap-2"
+            variants={optionContainerVariants}
+            initial="initial"
+            animate="animate"
+          >
             {AI_TOOLS.map((opt) => (
-              <OptionButton
-                key={opt.value}
-                label={opt.label}
-                selected={selected === opt.value}
-                onClick={() => onSelect(opt.value)}
-              />
+              <motion.div key={opt.value} variants={optionItemVariants} transition={optionItemTransition}>
+                <OptionButton
+                  label={opt.label}
+                  selected={selected === opt.value}
+                  onClick={() => onSelect(opt.value)}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
         {/* Other */}
@@ -80,16 +98,22 @@ export function StepHearAboutUs({ selected, onSelect }: StepHearAboutUsProps) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
             Other
           </p>
-          <div className="flex flex-col gap-2">
+          <motion.div
+            className="grid grid-cols-3 gap-2"
+            variants={optionContainerVariants}
+            initial="initial"
+            animate="animate"
+          >
             {OTHER.map((opt) => (
-              <OptionButton
-                key={opt.value}
-                label={opt.label}
-                selected={selected === opt.value}
-                onClick={() => onSelect(opt.value)}
-              />
+              <motion.div key={opt.value} variants={optionItemVariants} transition={optionItemTransition}>
+                <OptionButton
+                  label={opt.label}
+                  selected={selected === opt.value}
+                  onClick={() => onSelect(opt.value)}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>

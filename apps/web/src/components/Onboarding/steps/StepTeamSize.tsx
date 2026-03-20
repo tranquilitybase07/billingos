@@ -1,6 +1,12 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { OptionButton } from '../OptionButton';
+import {
+  optionContainerVariants,
+  optionItemVariants,
+  optionItemTransition,
+} from '../motion';
 
 interface StepTeamSizeProps {
   selected?: string;
@@ -33,16 +39,22 @@ export function StepTeamSize({ selected, onSelect }: StepTeamSizeProps) {
       </div>
 
       {/* Options */}
-      <div className="w-full flex flex-col gap-2">
+      <motion.div
+        className="w-full flex flex-col gap-2"
+        variants={optionContainerVariants}
+        initial="initial"
+        animate="animate"
+      >
         {OPTIONS.map((opt) => (
-          <OptionButton
-            key={opt.value}
-            label={opt.label}
-            selected={selected === opt.value}
-            onClick={() => onSelect(opt.value)}
-          />
+          <motion.div key={opt.value} variants={optionItemVariants} transition={optionItemTransition}>
+            <OptionButton
+              label={opt.label}
+              selected={selected === opt.value}
+              onClick={() => onSelect(opt.value)}
+            />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }
