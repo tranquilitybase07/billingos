@@ -4,10 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { StepHearAboutUs } from './steps/StepHearAboutUs';
-import { StepTeamSize } from './steps/StepTeamSize';
-import { StepFirstProduct } from './steps/StepFirstProduct';
-import { StepStripeComplexity } from './steps/StepStripeComplexity';
-import { StepGoals } from './steps/StepGoals';
+import { QuestionStep, type QuestionOption } from './steps/QuestionStep';
 import { StepCreateOrg } from './steps/StepCreateOrg';
 import { stepVariants, AUTO_ADVANCE_DELAY_MS } from './motion';
 import { setOnboardingCookie } from './utils';
@@ -21,7 +18,103 @@ export type OnboardingAnswers = {
   goals?: string;
 };
 
-const TOTAL_STEPS = 6;
+type QuestionStepConfig = {
+  type: 'question';
+  answerKey: keyof OnboardingAnswers;
+  icon: string;
+  iconLabel: string;
+  title: string;
+  subtitle?: string;
+  options: QuestionOption[];
+  insight?: string;
+  advanceMode: 'auto' | 'manual';
+};
+
+type CustomStepConfig = {
+  type: 'custom';
+};
+
+type StepConfig = QuestionStepConfig | CustomStepConfig;
+
+const STEP_CONFIGS: StepConfig[] = [
+  // Step 1: How did you hear about us (grouped grid layout — custom component)
+  { type: 'custom' },
+
+  // Step 2: Team size
+  {
+    type: 'question',
+    answerKey: 'teamSize',
+    icon: '👥',
+    iconLabel: 'Team',
+    title: 'How big is your team right now?',
+    subtitle: 'This helps us tailor your setup to match your pace.',
+    options: [
+      { value: 'solo', label: 'Just me, solo founder 🧍' },
+      { value: '2-5', label: '2–5 people' },
+      { value: '6-20', label: '6–20 people' },
+      { value: '20+', label: '20+ people' },
+    ],
+    advanceMode: 'auto',
+  },
+
+  // Step 3: First SaaS product
+  {
+    type: 'question',
+    answerKey: 'firstProduct',
+    icon: '🚀',
+    iconLabel: 'Rocket',
+    title: 'Is this your first SaaS product?',
+    subtitle: "No wrong answer — we've got you either way.",
+    options: [
+      { value: 'first', label: 'Yep, first one! Super excited' },
+      { value: 'built-before', label: "I've built one before" },
+      { value: 'few-already', label: 'I have a few products already' },
+    ],
+    advanceMode: 'auto',
+  },
+
+  // Step 4: Stripe complexity
+  {
+    type: 'question',
+    answerKey: 'stripeComplexity',
+    icon: '⏳',
+    iconLabel: 'Hourglass',
+    title: 'Real talk — how long do you think it takes to set up subscriptions, upgrades, downgrades, and cancel flows on Stripe from scratch?',
+    options: [
+      { value: 'few-hours', label: "A few hours, can't be that hard" },
+      { value: 'couple-days', label: 'A couple of days maybe?' },
+      { value: 'week-or-more', label: 'A week... or more 😅' },
+      { value: 'nightmare', label: "I've done it before. It's a nightmare 💀" },
+    ],
+    insight:
+      "Most founders spend 2–4 weeks wiring up Stripe, handling webhooks, edge cases, proration, and cancel flows. That's a month of not getting paid. BillingOS gets you live in under a day.",
+    advanceMode: 'manual',
+  },
+
+  // Step 5: Goals
+  {
+    type: 'question',
+    answerKey: 'goals',
+    icon: '💸',
+    iconLabel: 'Money',
+    title: 'What matters most to you right now?',
+    options: [
+      { value: 'first-customer', label: 'Get my first paying customer ASAP' },
+      { value: 'upgrade-flows', label: 'Set up upgrades, downgrades & cancel flows' },
+      { value: 'taxes', label: 'Handle taxes without losing my mind' },
+      { value: 'all', label: 'All of the above, honestly' },
+    ],
+    insight:
+      "Perfect. That's exactly what BillingOS is built for. Let's get your billing live today. 👇",
+    advanceMode: 'manual',
+  },
+
+  // Step 6: Create organization (form — custom component)
+  { type: 'custom' },
+];
+
+const TOTAL_STEPS = STEP_CONFIGS.length;
+const LAST_QUESTION_INDEX = 4; // Step 5 (goals) is the last question before org creation
 
 export function OnboardingFlow() {
   const router = useRouter();
@@ -124,6 +217,52 @@ export function OnboardingFlow() {
     );
   }
 
+  const stepIndex = currentStep - 1; // 0-based index into STEP_CONFIGS
+  const config = STEP_CONFIGS[stepIndex];
+
+  const renderStep = () => {
+    if (config.type === 'question') {
+      const isLastQuestion = stepIndex === LAST_QUESTION_INDEX;
+      return (
+        <QuestionStep
+          icon={config.icon}
+          iconLabel={config.iconLabel}
+          title={config.title}
+          subtitle={config.subtitle}
+          options={config.options}
+          selected={answers[config.answerKey]}
+          onSelect={(v: string) => {
+            if (config.advanceMode === 'auto') {
+              handleAutoAdvanceSelect(config.answerKey, v);
+            } else {
+              setAnswers((prev) => ({ ...prev, [config.answerKey]: v }));
+            }
+          }}
+          insight={config.insight}
+          onContinue={
+            config.advanceMode === 'manual'
+              ? isLastQuestion
+                ? handleQuestionsComplete
+                : handleStepNext
+              : undefined
+          }
+        />
+      );
+    }
+
+    // Custom steps
+    if (stepIndex === 0) {
+      return (
+        <StepHearAboutUs
+          selected={answers.hearAboutUs}
+          onSelect={(v: string) => handleAutoAdvanceSelect('hearAboutUs', v)}
+        />
+      );
+    }
+
+    return <StepCreateOrg onOrgCreated={handleOrgCreated} />;
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -173,41 +312,7 @@ export function OnboardingFlow() {
                 animate="animate"
                 exit="exit"
               >
-                {currentStep === 1 && (
-                  <StepHearAboutUs
-                    selected={answers.hearAboutUs}
-                    onSelect={(v: string) => handleAutoAdvanceSelect('hearAboutUs', v)}
-                  />
-                )}
-                {currentStep === 2 && (
-                  <StepTeamSize
-                    selected={answers.teamSize}
-                    onSelect={(v: string) => handleAutoAdvanceSelect('teamSize', v)}
-                  />
-                )}
-                {currentStep === 3 && (
-                  <StepFirstProduct
-                    selected={answers.firstProduct}
-                    onSelect={(v: string) => handleAutoAdvanceSelect('firstProduct', v)}
-                  />
-                )}
-                {currentStep === 4 && (
-                  <StepStripeComplexity
-                    selected={answers.stripeComplexity}
-                    onSelect={(v: string) => setAnswers((prev) => ({ ...prev, stripeComplexity: v }))}
-                    onContinue={handleStepNext}
-                  />
-                )}
-                {currentStep === 5 && (
-                  <StepGoals
-                    selected={answers.goals}
-                    onSelect={(v: string) => setAnswers((prev) => ({ ...prev, goals: v }))}
-                    onContinue={handleQuestionsComplete}
-                  />
-                )}
-                {currentStep === 6 && (
-                  <StepCreateOrg onOrgCreated={handleOrgCreated} />
-                )}
+                {renderStep()}
               </motion.div>
             </AnimatePresence>
           </div>
