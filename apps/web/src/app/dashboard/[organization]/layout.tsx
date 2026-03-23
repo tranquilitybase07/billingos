@@ -48,7 +48,12 @@ export default async function OrganizationLayout({
         {children}
       </OrganizationProvider>
     )
-  } catch (error) {
+  } catch (error: unknown) {
+    // Re-throw Next.js internal errors (notFound, redirect, etc.)
+    // These have a 'digest' property and must propagate to Next.js
+    if (error && typeof error === 'object' && 'digest' in error) {
+      throw error
+    }
     console.error('[Organization Layout] Error:', error)
     redirect('/dashboard')
   }

@@ -100,6 +100,21 @@ async function request<T>(
   }
 }
 
+/**
+ * Upload a file directly to a Supabase Storage signed URL.
+ */
+export async function uploadToSignedUrl(signedUrl: string, file: File): Promise<void> {
+  const response = await fetch(signedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  })
+
+  if (!response.ok) {
+    throw new APIError('Failed to upload file', response.status)
+  }
+}
+
 export const api = {
   get: <T>(endpoint: string, options?: RequestInit) =>
     request<T>(endpoint, { ...options, method: 'GET' }),

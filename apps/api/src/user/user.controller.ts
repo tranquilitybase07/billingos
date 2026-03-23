@@ -1,9 +1,9 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Patch, Body, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserService } from './user.service';
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdateOnboardingDto, UpdateUserDto } from './dto/user.dto';
 import { User } from './entities/user.entity';
 
 @ApiTags('Users')
@@ -28,5 +28,18 @@ export class UserController {
   @Put('me/accept-terms')
   async acceptTerms(@CurrentUser() user: User): Promise<User> {
     return this.userService.acceptTerms(user.id);
+  }
+
+  @Get('me/onboarding')
+  async getOnboarding(@CurrentUser() user: User) {
+    return this.userService.getOnboarding(user.id);
+  }
+
+  @Patch('me/onboarding')
+  async updateOnboarding(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateOnboardingDto,
+  ) {
+    return this.userService.updateOnboarding(user.id, dto);
   }
 }

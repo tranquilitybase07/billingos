@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useUpdateOrganization, useDeleteOrganization } from '@/hooks/queries/organization'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
@@ -10,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Separator } from '@/components/ui/separator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,18 +21,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import {
-  Loading03Icon,
-  Delete02Icon,
-  Settings01Icon,
-  UserMultiple02Icon,
-  Key01Icon,
-} from 'hugeicons-react'
+import { Loading03Icon, Delete02Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
+import { SettingsTabNav } from './_components/SettingsTabNav'
+import { OrgAvatarUpload } from './_components/OrgAvatarUpload'
 
 export default function SettingsPage() {
   const { organization } = useOrganization()
-  const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
   const [formData, setFormData] = useState({
@@ -85,85 +79,60 @@ export default function SettingsPage() {
 
   return (
     <DashboardBody className="gap-6">
-      {/* Settings Navigation */}
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your organization settings
-          </p>
-        </div>
+      <SettingsTabNav activeTab="general" />
 
-        <Tabs value="general" className="w-full">
-          <TabsList>
-            <TabsTrigger value="general" asChild>
-              <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings01Icon size={16} className="mr-2" />
-                General
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="members" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <UserMultiple02Icon size={16} className="mr-2" />
-                Members
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="api-keys" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key01Icon size={16} className="mr-2" />
-                API Keys
-              </Link>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      {/* General Settings */}
+      {/* Organization Profile */}
       <Card>
         <CardHeader>
-          <CardTitle>General Settings</CardTitle>
+          <CardTitle>Organization Profile</CardTitle>
           <CardDescription>
-            Update your organization's basic information
+            Your organization's public information
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Organization Name</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
+        <CardContent className="space-y-6">
+          <OrgAvatarUpload />
 
-          <div className="space-y-2">
-            <Label htmlFor="slug">Slug</Label>
-            <Input id="slug" value={organization.slug} disabled />
-            <p className="text-xs text-muted-foreground">
-              The slug cannot be changed after creation
-            </p>
-          </div>
+          <Separator />
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="organization@example.com"
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="name">Organization Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="website">Website</Label>
-            <Input
-              id="website"
-              type="url"
-              value={formData.website}
-              onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              placeholder="https://example.com"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="slug">Slug</Label>
+              <Input id="slug" value={organization.slug} disabled />
+              <p className="text-xs text-muted-foreground">
+                Cannot be changed after creation
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="organization@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                type="url"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                placeholder="https://example.com"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">
@@ -193,40 +162,48 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Delete02Icon size={16} className="mr-2" />
-                Delete Organization
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the
-                  organization "{organization.name}" and remove all associated data.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={deleteOrganization.isPending}
-                >
-                  {deleteOrganization.isPending ? (
-                    <>
-                      <Loading03Icon size={16} className="mr-2 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete Organization'
-                  )}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Delete this organization</p>
+              <p className="text-sm text-muted-foreground">
+                Permanently delete "{organization.name}" and all its data.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Delete02Icon size={16} className="mr-2" />
+                  Delete Organization
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the
+                    organization "{organization.name}" and remove all associated data.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={deleteOrganization.isPending}
+                  >
+                    {deleteOrganization.isPending ? (
+                      <>
+                        <Loading03Icon size={16} className="mr-2 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete Organization'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
     </DashboardBody>

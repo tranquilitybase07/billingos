@@ -9,6 +9,8 @@ export class User {
   accepted_terms_at?: string | Date;
   blocked_at?: string | Date;
   meta!: Record<string, any>;
+  onboarding_step!: string;
+  onboarding_answers!: Record<string, unknown>;
   created_at!: string | Date;
   updated_at!: string | Date;
   deleted_at?: string | Date | null;
