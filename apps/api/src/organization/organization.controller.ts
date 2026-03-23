@@ -16,6 +16,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { SubmitBusinessDetailsDto } from './dto/submit-business-details.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { GenerateUploadUrlDto } from './dto/upload-avatar.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -137,5 +138,31 @@ export class OrganizationController {
   @Get(':id/payment-status')
   getPaymentStatus(@Param('id') id: string, @CurrentUser() user: User) {
     return this.organizationService.getPaymentStatus(id, user.id);
+  }
+
+  /**
+   * Generate signed upload URL for organization avatar
+   */
+  @Post(':id/avatar/upload-url')
+  generateAvatarUploadUrl(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: GenerateUploadUrlDto,
+  ) {
+    return this.organizationService.generateAvatarUploadUrl(
+      id,
+      user.id,
+      dto.fileName,
+      dto.contentType,
+    );
+  }
+
+  /**
+   * Remove organization avatar
+   */
+  @Delete(':id/avatar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeAvatar(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.organizationService.removeAvatar(id, user.id);
   }
 }

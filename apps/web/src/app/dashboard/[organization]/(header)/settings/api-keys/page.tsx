@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import {
   useListApiKeys,
@@ -48,7 +46,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import {
   Key01Icon,
@@ -59,15 +56,13 @@ import {
   ViewIcon,
   ViewOffIcon,
   Alert01Icon,
-  Settings01Icon,
-  UserMultiple02Icon,
 } from 'hugeicons-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { ApiKey, ApiKeyPairCreated, CreateApiKeyDTO } from '@/lib/api/types'
+import { SettingsTabNav } from '../_components/SettingsTabNav'
 
 export default function ApiKeysPage() {
   const { organization } = useOrganization()
-  const params = useParams()
   const { toast } = useToast()
 
   // State
@@ -208,38 +203,7 @@ export default function ApiKeysPage() {
 
   return (
     <DashboardBody className="space-y-6">
-      {/* Settings Navigation */}
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your organization settings
-          </p>
-        </div>
-
-        <Tabs value="api-keys" className="w-full">
-          <TabsList>
-            <TabsTrigger value="general" asChild>
-              <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings01Icon size={16} className="mr-2" />
-                General
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="members" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <UserMultiple02Icon size={16} className="mr-2" />
-                Members
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="api-keys" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key01Icon size={16} className="mr-2" />
-                API Keys
-              </Link>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <SettingsTabNav activeTab="api-keys" />
 
       <div className="flex items-center justify-between">
         <div>

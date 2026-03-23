@@ -13,13 +13,6 @@ const _getOrganizationBySlug = async (
   try {
     const organizations = await apiServer.get<Organization[]>(
       '/organizations',
-      {
-        // Cache for 10 minutes (600 seconds)
-        next: {
-          tags: [`organizations:${slug}`],
-          revalidate: 600,
-        },
-      },
     )
 
     // Find organization by slug

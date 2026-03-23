@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useAuth } from '@/providers/AuthProvider'
 import {
@@ -15,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Table,
   TableBody,
@@ -49,16 +47,14 @@ import {
   PlusSignIcon,
   Delete02Icon,
   CrownIcon,
-  Settings01Icon,
   UserMultiple02Icon,
-  Key01Icon,
 } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
+import { SettingsTabNav } from '../_components/SettingsTabNav'
 
 export default function MembersPage() {
   const { organization } = useOrganization()
   const { user } = useAuth()
-  const params = useParams()
   const { toast } = useToast()
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -119,38 +115,7 @@ export default function MembersPage() {
 
   return (
     <DashboardBody className="gap-6">
-      {/* Settings Navigation */}
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your organization settings
-          </p>
-        </div>
-
-        <Tabs value="members" className="w-full">
-          <TabsList>
-            <TabsTrigger value="general" asChild>
-              <Link href={`/dashboard/${params.organization}/settings`}>
-                <Settings01Icon size={16} className="mr-2" />
-                General
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="members" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/members`}>
-                <UserMultiple02Icon size={16} className="mr-2" />
-                Members
-              </Link>
-            </TabsTrigger>
-            <TabsTrigger value="api-keys" asChild>
-              <Link href={`/dashboard/${params.organization}/settings/api-keys`}>
-                <Key01Icon size={16} className="mr-2" />
-                API Keys
-              </Link>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <SettingsTabNav activeTab="members" />
 
       {/* Members Table */}
       <Card>
@@ -210,69 +175,98 @@ export default function MembersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => {
-                const isCurrentUser = member.user_id === user?.id
-                const isAdmin = member.is_admin ?? false
+          {members.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <UserMultiple02Icon size={48} className="text-muted-foreground mb-4" />
+              <h3 className="text-sm font-medium">No team members yet</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Invite team members to collaborate on this organization.
+              </p>
+              {isCurrentUserAdmin && (
+                <Button
+                  className="mt-4"
+                  variant="outline"
+                  onClick={() => setInviteOpen(true)}
+                >
+                  <PlusSignIcon size={16} className="mr-2" />
+                  Invite Member
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Joined</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((member) => {
+                  const isCurrentUser = member.user_id === user?.id
+                  const isAdmin = member.is_admin ?? false
+                  const initial = member.email?.charAt(0).toUpperCase() || '?'
 
-                return (
-                  <TableRow key={member.user_id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                          {member.email?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {member.email}
-                            </span>
-                            {isCurrentUser && (
-                              <Badge variant="outline" className="text-xs">
-                                You
-                              </Badge>
-                            )}
+                  return (
+                    <TableRow key={member.user_id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={member.avatar_url || undefined} />
+                            <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {member.email}
+                              </span>
+                              {isCurrentUser && (
+                                <Badge variant="outline" className="text-xs">
+                                  You
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={isAdmin ? 'default' : 'secondary'}
-                        className="gap-1"
-                      >
-                        {isAdmin && <CrownIcon size={12} />}
-                        {isAdmin ? 'Admin' : 'Member'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(member.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isCurrentUserAdmin && !isCurrentUser && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setMemberToRemove(member.user_id)}
-                        >
-                          <Delete02Icon size={16} className="text-destructive" />
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <Badge
+                            variant={isAdmin ? 'default' : 'secondary'}
+                            className="gap-1"
+                          >
+                            {isAdmin && <CrownIcon size={12} />}
+                            {isAdmin ? 'Admin' : 'Member'}
+                          </Badge>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {isAdmin
+                              ? 'Full access to all settings and billing'
+                              : 'Can manage products and customers'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(member.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isCurrentUserAdmin && !isCurrentUser && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMemberToRemove(member.user_id)}
+                          >
+                            <Delete02Icon size={16} className="text-destructive" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

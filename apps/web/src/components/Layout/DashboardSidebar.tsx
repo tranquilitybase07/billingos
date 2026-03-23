@@ -37,6 +37,7 @@ import {
   ReloadIcon,
   Settings01Icon,
 } from 'hugeicons-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
@@ -274,9 +275,12 @@ export const DashboardSidebar = () => {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 w-full outline-none group/org text-left rounded-md px-2 py-1.5 hover:bg-sidebar-accent transition-colors mt-1">
               <div className="relative shrink-0">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground h-7 w-7 rounded-full flex items-center justify-center font-bold text-xs">
-                  {organization.name.charAt(0).toUpperCase()}
-                </div>
+                <Avatar className="h-7 w-7 text-xs">
+                  <AvatarImage src={organization.avatar_url || undefined} alt={organization.name} />
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-bold text-xs">
+                    {organization.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <div className={cn(
                   "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-sidebar",
                   environment === 'sandbox' ? "bg-orange-500" : "bg-green-500"
@@ -321,7 +325,12 @@ export const DashboardSidebar = () => {
                   org.id === organization.id && "bg-accent/50 text-sidebar-primary"
                 )}
               >
-                <Building02Icon size={16} className="mr-2" />
+                <Avatar className="h-5 w-5 mr-2 text-[10px]">
+                  <AvatarImage src={org.avatar_url || undefined} alt={org.name} />
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-bold text-[10px]">
+                    {org.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="flex flex-col">
                   <span className="font-medium">{org.name}</span>
                   <span className="text-muted-foreground text-xs">{org.slug}</span>
@@ -329,7 +338,10 @@ export const DashboardSidebar = () => {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem className="focus:bg-accent focus:text-accent-foreground cursor-pointer">
+            <DropdownMenuItem
+              onClick={() => router.push('/dashboard/create')}
+              className="focus:bg-accent focus:text-accent-foreground cursor-pointer"
+            >
               <PlusSignIcon size={16} className="mr-2" />
               <span>Create Organization</span>
             </DropdownMenuItem>

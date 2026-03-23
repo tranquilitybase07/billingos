@@ -592,7 +592,7 @@ export class OrganizationService {
       title: 'Setup Payouts',
       description: 'Connect your bank account with Stripe',
       completed: account?.is_payouts_enabled || false,
-      href: `/dashboard/${org.slug}/finance/account`,
+      href: `/dashboard/${org.slug}/settings/billing`,
     });
 
     // Step 3: Identity verification
@@ -607,7 +607,7 @@ export class OrganizationService {
       title: 'Identity Verification',
       description: 'Verify your identity',
       completed: admin?.identity_verification_status === 'verified',
-      href: `/dashboard/${org.slug}/finance/account`,
+      href: `/dashboard/${org.slug}/settings/billing`,
     });
 
     const paymentReady = steps.every((step) => step.completed);
@@ -624,6 +624,79 @@ export class OrganizationService {
       is_charges_enabled: account?.is_charges_enabled,
       is_payouts_enabled: account?.is_payouts_enabled,
     };
+  }
+
+  /**
+   * Generate a signed upload URL for organization avatar
+   */
+  async generateAvatarUploadUrl(
+    orgId: string,
+    userId: string,
+    fileName: string,
+    contentType: string,
+  ): Promise<{ signedUrl: string; publicUrl: string; path: string }> {
+    const supabase = this.supabaseService.getClient();
+
+    // Check membership
+    await this.checkMembership(orgId, userId);
+
+    // Build storage path
+    const timestamp = Date.now();
+    const sanitizedName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `avatars/${orgId}/${timestamp}-${sanitizedName}`;
+
+    // Create signed upload URL (valid 5 min)
+    const { data, error } = await supabase.storage
+      .from('org-assets')
+      .createSignedUploadUrl(path);
+
+    if (error || !data) {
+      this.logger.error('Failed to generate upload URL:', error);
+      throw new Error('Failed to generate upload URL');
+    }
+
+    // Compute public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('org-assets')
+      .getPublicUrl(path);
+
+    return {
+      signedUrl: data.signedUrl,
+      publicUrl: publicUrlData.publicUrl,
+      path,
+    };
+  }
+
+  /**
+   * Remove organization avatar from storage and clear avatar_url
+   */
+  async removeAvatar(orgId: string, userId: string): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    await this.checkMembership(orgId, userId);
+
+    // Get current avatar URL to extract path
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('avatar_url')
+      .eq('id', orgId)
+      .single();
+
+    if (org?.avatar_url) {
+      // Extract path from public URL — path is after /object/public/org-assets/
+      const match = org.avatar_url.match(/\/org-assets\/(.+)$/);
+      if (match) {
+        await supabase.storage.from('org-assets').remove([match[1]]);
+      }
+    }
+
+    // Clear avatar_url on org
+    await supabase
+      .from('organizations')
+      .update({ avatar_url: null })
+      .eq('id', orgId);
+
+    this.logger.log(`Avatar removed for organization: ${orgId}`);
   }
 
   /**

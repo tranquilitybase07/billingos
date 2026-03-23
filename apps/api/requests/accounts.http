@@ -50,8 +50,8 @@ Authorization: Bearer {{authToken}}
 Content-Type: {{contentType}}
 
 {
-  "return_url": "{{frontendUrl}}/dashboard/{{organizationId}}/finance/account?onboarding=success",
-  "refresh_url": "{{frontendUrl}}/dashboard/{{organizationId}}/finance/account?onboarding=refresh"
+  "return_url": "{{frontendUrl}}/dashboard/{{organizationId}}/settings/billing?onboarding=success",
+  "refresh_url": "{{frontendUrl}}/dashboard/{{organizationId}}/settings/billing?onboarding=refresh"
 }
 
 ###

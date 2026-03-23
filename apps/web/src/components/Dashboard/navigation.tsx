@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation'
 import {
   Home01Icon,
-  Dollar01Icon,
   Settings01Icon,
   User03Icon,
   CubeIcon,
@@ -133,19 +132,6 @@ const organizationRoutesList = (org?: Organization): Route[] => [
     if: true,
   },
   {
-    id: "finance",
-    title: "Finance",
-    link: `/dashboard/${org?.slug}/finance`,
-    icon: <Dollar01Icon size={16} />,
-    if: true,
-    subs: [
-      {
-        title: "Account",
-        link: `/dashboard/${org?.slug}/finance/account`,
-      },
-    ],
-  },
-  {
     id: "settings",
     title: "Settings",
     link: `/dashboard/${org?.slug}/settings`,
@@ -159,6 +145,14 @@ const organizationRoutesList = (org?: Organization): Route[] => [
       {
         title: "Members",
         link: `/dashboard/${org?.slug}/settings/members`,
+      },
+      {
+        title: "Billing",
+        link: `/dashboard/${org?.slug}/settings/billing`,
+      },
+      {
+        title: "API Keys",
+        link: `/dashboard/${org?.slug}/settings/api-keys`,
       },
     ],
   },

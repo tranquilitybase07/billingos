@@ -29,7 +29,7 @@ export default function DashboardHomePage() {
           </AlertTitle>
           <AlertDescription className="text-amber-800 dark:text-amber-200">
             Set up your Stripe Connect account to start accepting payments.
-            <Link href={orgPath(organization.slug, '/finance/account')}>
+            <Link href={orgPath(organization.slug, '/settings/billing')}>
               <Button variant="link" className="h-auto p-0 ml-1 text-amber-900 dark:text-amber-100">
                 Get started <ArrowRight01Icon size={12} className="ml-1" />
               </Button>
@@ -65,7 +65,7 @@ export default function DashboardHomePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href={orgPath(organization.slug, '/finance/account')}>
+            <Link href={orgPath(organization.slug, '/settings/billing')}>
               <Button variant={isPaymentSetup ? 'outline' : 'default'} className="w-full">
                 {isPaymentSetup ? 'Manage Account' : 'Setup Payments'}
               </Button>

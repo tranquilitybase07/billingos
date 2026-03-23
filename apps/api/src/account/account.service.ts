@@ -284,11 +284,11 @@ export class AccountService {
       .single();
 
     const defaultReturnUrl = org
-      ? `${appUrl}/dashboard/${org.slug}/finance/account`
+      ? `${appUrl}/dashboard/${org.slug}/settings/billing`
       : `${appUrl}/dashboard`;
 
     const defaultRefreshUrl = org
-      ? `${appUrl}/dashboard/${org.slug}/finance/account`
+      ? `${appUrl}/dashboard/${org.slug}/settings/billing`
       : `${appUrl}/dashboard`;
 
     try {
