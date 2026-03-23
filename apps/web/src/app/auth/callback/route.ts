@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
           if (syncResponse.ok) {
             const redirectUrl = new URL(returnTo, origin);
             const response = NextResponse.redirect(redirectUrl);
+            response.cookies.delete('billingos_onboarding_step');
             // Set environment preference via cookie so SSR can read it
             response.cookies.set(ENVIRONMENT_COOKIE, 'sandbox', {
               httpOnly: false,
@@ -57,5 +58,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}${returnTo}`);
+  const response = NextResponse.redirect(`${origin}${returnTo}`);
+  response.cookies.delete('billingos_onboarding_step');
+  return response;
 }

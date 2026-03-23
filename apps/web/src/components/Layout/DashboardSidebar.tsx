@@ -43,6 +43,7 @@ import { useOrganization } from '@/providers/OrganizationProvider'
 import { useEnvironment } from '@/providers/EnvironmentProvider'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { clearOnboardingCookie } from '@/components/Onboarding/utils'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { EnvironmentSwitcher } from '@/components/EnvironmentSwitcher'
 
@@ -68,6 +69,7 @@ export const DashboardSidebar = () => {
   const [_logoError, _setLogoError] = useState(false)
 
   const handleLogout = async () => {
+    clearOnboardingCookie()
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

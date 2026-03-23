@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { clearOnboardingCookie } from '@/components/Onboarding/utils';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, router]);
 
   const signOut = async () => {
+    clearOnboardingCookie();
     await supabase.auth.signOut();
     router.push('/login');
   };
