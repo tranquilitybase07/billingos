@@ -179,6 +179,25 @@ export function useOnboardingStatus(
   });
 }
 
+// Update Organization Currency
+export function useUpdateOrgCurrency(organizationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (currency: string) =>
+      api.patch<{ default_currency: string }>(
+        `/organizations/${organizationId}/currency`,
+        { currency },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: organizationKeys.detail(organizationId),
+      });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
+    },
+  });
+}
+
 // Leave Organization
 export function useLeaveOrganization(organizationId: string) {
   const queryClient = useQueryClient();

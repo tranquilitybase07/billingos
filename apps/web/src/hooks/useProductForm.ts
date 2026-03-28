@@ -47,12 +47,13 @@ function productToFormState(product: Product) {
   return { prices, features, currency, trialDays };
 }
 
-export function useProductForm(organizationId: string, initialProduct?: Product) {
+export function useProductForm(organizationId: string, initialProduct?: Product, defaultCurrency: string = 'usd') {
   const initial = initialProduct ? productToFormState(initialProduct) : null;
 
+  const orgCurrency = defaultCurrency;
   const [name, setName] = useState(initialProduct?.name ?? "");
   const [description, setDescription] = useState(initialProduct?.description ?? "");
-  const [currency, setCurrency] = useState(initial?.currency ?? "usd");
+  const [currency, setCurrency] = useState(initial?.currency ?? orgCurrency);
   const [trialDays, setTrialDays] = useState(initial?.trialDays ?? 0);
 
   const [prices, setPrices] = useState<PriceConfig[]>(
@@ -60,7 +61,7 @@ export function useProductForm(organizationId: string, initialProduct?: Product)
       {
         amount_type: "fixed",
         price_amount: undefined,
-        price_currency: "usd",
+        price_currency: orgCurrency,
         recurring_interval: "month",
       },
     ],

@@ -66,7 +66,7 @@ export function KPICardsRow() {
     >
       {cards.map((card) => (
         <motion.div key={card.label} variants={item}>
-          <KPICard {...card} isLoading={isLoading} />
+          <KPICard {...card} isLoading={isLoading} currencyCode={data?.currency || organization.default_currency || 'usd'} />
         </motion.div>
       ))}
     </motion.div>

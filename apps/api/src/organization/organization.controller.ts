@@ -18,9 +18,11 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { SubmitBusinessDetailsDto } from './dto/submit-business-details.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { GenerateUploadUrlDto } from './dto/upload-avatar.dto';
+import { UpdateCurrencyDto } from './dto/update-currency.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
+import { SUPPORTED_CURRENCIES } from '../common/constants/currencies';
 
 @ApiTags('Organizations')
 @Controller('organizations')
@@ -165,6 +167,26 @@ export class OrganizationController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeAvatar(@Param('id') id: string, @CurrentUser() user: User) {
     return this.organizationService.removeAvatar(id, user.id);
+  }
+
+  /**
+   * Get supported currencies list
+   */
+  @Get('currencies/supported')
+  getSupportedCurrencies() {
+    return SUPPORTED_CURRENCIES;
+  }
+
+  /**
+   * Update organization's default currency
+   */
+  @Patch(':id/currency')
+  updateCurrency(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: UpdateCurrencyDto,
+  ) {
+    return this.organizationService.updateCurrency(id, user.id, dto);
   }
 
   /**

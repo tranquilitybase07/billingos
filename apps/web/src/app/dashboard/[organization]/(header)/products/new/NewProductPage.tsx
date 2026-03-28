@@ -36,7 +36,7 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
   const { organization } = useOrganization()
 
   // Form state management
-  const form = useProductForm(organization.id)
+  const form = useProductForm(organization.id, undefined, organization.default_currency || 'usd')
 
   // Visibility state (separate from form)
   const [visibleInPricingTable, setVisibleInPricingTable] = useState(true)
@@ -196,7 +196,6 @@ export default function NewProductPage({ organizationSlug }: NewProductPageProps
                 trialDays={form.trialDays}
                 onTrialDaysChange={form.setTrialDays}
                 currency={form.currency}
-                onCurrencyChange={form.setCurrency}
               />
             </CardContent>
           </CardFlat>

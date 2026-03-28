@@ -5,14 +5,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { getCurrencySymbol } from '@/utils/currency'
 
 export type RecurringInterval = 'month' | 'year' | 'week' | 'day'
 
@@ -29,7 +23,6 @@ interface PricingEngineSectionProps {
   trialDays: number
   onTrialDaysChange: (days: number) => void
   currency: string
-  onCurrencyChange: (currency: string) => void
 }
 
 export function PricingEngineSection({
@@ -38,7 +31,6 @@ export function PricingEngineSection({
   trialDays,
   onTrialDaysChange,
   currency,
-  onCurrencyChange,
 }: PricingEngineSectionProps) {
   const [isFreeProduct, setIsFreeProduct] = useState(false)
   const [isRecurring, setIsRecurring] = useState(true)
@@ -304,22 +296,13 @@ export function PricingEngineSection({
         </div>
       )}
 
-      {/* Currency Selection */}
+      {/* Currency Display */}
       <div className="space-y-2">
-        <Label htmlFor="currency">Currency</Label>
-        <Select value={currency} onValueChange={onCurrencyChange}>
-          <SelectTrigger id="currency" className="w-full sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="usd">USD - US Dollar</SelectItem>
-            <SelectItem value="eur">EUR - Euro</SelectItem>
-            <SelectItem value="gbp">GBP - British Pound</SelectItem>
-            <SelectItem value="cad">CAD - Canadian Dollar</SelectItem>
-            <SelectItem value="aud">AUD - Australian Dollar</SelectItem>
-            <SelectItem value="inr">INR - Indian Rupee</SelectItem>
-          </SelectContent>
-        </Select>
+        <Label>Currency</Label>
+        <p className="text-sm text-muted-foreground">
+          {getCurrencySymbol(currency)} {currency.toUpperCase()}
+          <span className="ml-2 text-xs">(Set in Settings &gt; Billing)</span>
+        </p>
       </div>
 
       {/* Price Inputs - Only show for paid products */}
@@ -343,7 +326,7 @@ export function PricingEngineSection({
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {currency.toUpperCase()}
+                    {getCurrencySymbol(currency)}
                   </span>
                   <Input
                     id={`price-${interval}`}

@@ -16,6 +16,7 @@ interface KPICardProps {
   format: 'currency' | 'integer' | 'percent'
   isLoading: boolean
   color: string
+  currencyCode?: string
 }
 
 export function KPICard({
@@ -26,6 +27,7 @@ export function KPICard({
   format,
   isLoading,
   color,
+  currencyCode = 'USD',
 }: KPICardProps) {
   const valueRef = useRef<HTMLSpanElement>(null)
   const hasAnimated = useRef(false)
@@ -35,7 +37,7 @@ export function KPICard({
       case 'currency':
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
-          currency: 'USD',
+          currency: currencyCode,
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         }).format(v / 100)

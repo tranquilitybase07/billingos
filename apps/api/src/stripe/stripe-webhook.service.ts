@@ -10,6 +10,7 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RedisService } from '../redis/redis.service';
 import { RefundService } from './refund.service';
 import { QueueService } from '../queue/queue.service';
+import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
 export class StripeWebhookService {
@@ -316,6 +317,36 @@ export class StripeWebhookService {
             'onboarding_started',
             false,
           );
+        }
+
+        // Sync default_currency from Stripe country if org has no products yet
+        if (account.country) {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('id')
+            .eq('account_id', data.id)
+            .single();
+
+          if (org) {
+            const { count } = await supabase
+              .from('products')
+              .select('id', { count: 'exact', head: true })
+              .eq('organization_id', org.id)
+              .is('is_archived', false);
+
+            if (count === 0) {
+              await supabase
+                .from('organizations')
+                .update({
+                  default_currency: getCurrencyForCountry(account.country),
+                })
+                .eq('id', org.id);
+
+              this.logger.log(
+                `Updated org ${org.id} default_currency to ${getCurrencyForCountry(account.country)} from Stripe country ${account.country}`,
+              );
+            }
+          }
         }
       }
     } catch (error) {

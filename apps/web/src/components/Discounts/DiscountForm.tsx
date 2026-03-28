@@ -28,6 +28,8 @@ import { format } from 'date-fns'
 import { useState } from 'react'
 import { Discount } from '@/utils/discount'
 import { useProducts } from '@/hooks/queries/products'
+import { useOrganization } from '@/providers/OrganizationProvider'
+import { getCurrencySymbol } from '@/utils/currency'
 
 interface DiscountFormData {
   name: string
@@ -66,6 +68,9 @@ export function DiscountForm({
   isUpdate = false,
   isSubmitting = false,
 }: DiscountFormProps) {
+  const { organization } = useOrganization()
+  const orgCurrency = organization.default_currency || 'usd'
+
   const [name, setName] = useState(initialData?.name || '')
   const [code, setCode] = useState(initialData?.code || '')
   const [type, setType] = useState<'percentage' | 'fixed'>(
@@ -77,7 +82,7 @@ export function DiscountForm({
   const [basisPoints, setBasisPoints] = useState(
     initialData?.basis_points?.toString() || '',
   )
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency] = useState(initialData?.currency || orgCurrency)
   const [duration, setDuration] = useState<'once' | 'forever' | 'repeating'>(
     initialData?.duration || 'once',
   )
@@ -259,36 +264,23 @@ export function DiscountForm({
         ) : (
           <div className="space-y-2">
             <Label htmlFor="amount">
-              Amount <span className="text-destructive">*</span>
+              Amount ({currency.toUpperCase()}) <span className="text-destructive">*</span>
             </Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="10.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  min="0.01"
-                  step="0.01"
-                  className="pl-7"
-                  required
-                />
-              </div>
-              <Select value={currency} onValueChange={setCurrency}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="usd">USD</SelectItem>
-                  <SelectItem value="eur">EUR</SelectItem>
-                  <SelectItem value="gbp">GBP</SelectItem>
-                  <SelectItem value="cad">CAD</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {getCurrencySymbol(currency)}
+              </span>
+              <Input
+                id="amount"
+                type="number"
+                placeholder="10.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                min="0.01"
+                step="0.01"
+                className="pl-7"
+                required
+              />
             </div>
           </div>
         )}

@@ -131,12 +131,14 @@ export class SubscriptionSchedulerService {
       throw new Error('Failed to lock change for processing');
     }
 
-    // Get organization's Stripe account
-    const { data: org } = await supabase
+    // Get organization's Stripe account and currency
+    const { data: orgRaw } = await supabase
       .from('organizations')
-      .select('account_id')
+      .select('account_id, default_currency')
       .eq('id', subscription.customer.organization_id)
       .single();
+
+    const org = orgRaw as any;
 
     const { data: account } = await supabase
       .from('accounts')
@@ -168,7 +170,7 @@ export class SubscriptionSchedulerService {
       .update({
         product_id: newPrice.product_id,
         amount: newPrice.price_amount || 0,
-        currency: newPrice.price_currency || 'usd',
+        currency: newPrice.price_currency || org?.default_currency || 'usd',
         updated_at: new Date().toISOString(),
       })
       .eq('id', subscription.id);

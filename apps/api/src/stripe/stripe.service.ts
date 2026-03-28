@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
 export class StripeService {
@@ -133,7 +134,7 @@ export class StripeService {
         external_account: {
           object: 'bank_account',
           country,
-          currency: 'usd',
+          currency: getCurrencyForCountry(country),
           account_holder_name: 'Test Merchant',
           account_holder_type: 'individual',
           routing_number: '110000000', // Stripe test routing number

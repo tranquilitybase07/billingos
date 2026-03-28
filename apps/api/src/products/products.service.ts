@@ -39,7 +39,7 @@ export class ProductsService {
     // Verify organization exists and user is a member
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, account_id')
+      .select('id, account_id, default_currency')
       .eq('id', createDto.organization_id)
       .is('deleted_at', null)
       .single();
@@ -114,7 +114,8 @@ export class ProductsService {
           const stripePrice = await this.stripeService.createPrice(
             {
               product: stripeProduct.id,
-              currency: priceDto.price_currency || 'usd',
+              currency:
+                priceDto.price_currency || org.default_currency || 'usd',
               unit_amount: priceDto.price_amount,
               recurring: {
                 interval: recurringInterval,
@@ -183,7 +184,7 @@ export class ProductsService {
             product_id: product.id,
             amount_type: dto.amount_type,
             price_amount: dto.price_amount || null,
-            price_currency: dto.price_currency || 'usd',
+            price_currency: dto.price_currency || org.default_currency || 'usd',
             recurring_interval: recurringInterval,
             recurring_interval_count: recurringIntervalCount,
             stripe_price_id: stripe_price?.id || null,
@@ -614,12 +615,14 @@ export class ProductsService {
 
     const newVersion = (latestVersionData || 1) + 1;
 
-    // Get Stripe account
+    // Get Stripe account and org currency
     const { data: org } = await supabase
       .from('organizations')
-      .select('account_id')
+      .select('account_id, default_currency')
       .eq('id', currentProduct.organization_id)
       .single();
+
+    const orgCurrency = org?.default_currency || 'usd';
 
     let stripeAccountId: string | null = null;
     if (org?.account_id) {
@@ -700,6 +703,7 @@ export class ProductsService {
       newProduct.id,
       updateDto,
       stripeAccountId,
+      orgCurrency,
     );
 
     // Copy features to new version (with modifications from updateDto)
@@ -723,6 +727,7 @@ export class ProductsService {
     productRecurringInterval: string,
     productRecurringIntervalCount: number,
     stripeAccountId: string | null,
+    orgCurrency: string = 'usd',
   ): Promise<any> {
     const supabase = this.supabaseService.getClient();
     let stripePriceId: string | null = null;
@@ -742,7 +747,7 @@ export class ProductsService {
       const stripePrice = await this.stripeService.createPrice(
         {
           product: stripeProductId,
-          currency: priceDto.price_currency || 'usd',
+          currency: priceDto.price_currency || orgCurrency,
           unit_amount: priceDto.price_amount || 0,
           recurring: {
             interval: recurringInterval as Stripe.Price.Recurring.Interval,
@@ -761,7 +766,7 @@ export class ProductsService {
         product_id: productId,
         amount_type: priceDto.amount_type,
         price_amount: priceDto.price_amount || null,
-        price_currency: priceDto.price_currency || 'usd',
+        price_currency: priceDto.price_currency || orgCurrency,
         recurring_interval: recurringInterval,
         recurring_interval_count: recurringIntervalCount,
         stripe_price_id: stripePriceId,
@@ -785,6 +790,7 @@ export class ProductsService {
     newProductId: string,
     updateDto: UpdateProductDto,
     stripeAccountId: string | null,
+    orgCurrency: string = 'usd',
   ): Promise<void> {
     const supabase = this.supabaseService.getClient();
 
@@ -842,6 +848,7 @@ export class ProductsService {
         newProduct?.recurring_interval || 'month',
         newProduct?.recurring_interval_count || 1,
         stripeAccountId,
+        orgCurrency,
       );
     }
 
@@ -856,6 +863,7 @@ export class ProductsService {
           newProduct?.recurring_interval || 'month',
           newProduct?.recurring_interval_count || 1,
           stripeAccountId,
+          orgCurrency,
         );
       }
     }
@@ -1046,12 +1054,14 @@ export class ProductsService {
       return this.findOne(newProduct.id, userId);
     }
 
-    // Get Stripe account for syncing
+    // Get Stripe account and org currency for syncing
     const { data: org } = await supabase
       .from('organizations')
-      .select('account_id')
+      .select('account_id, default_currency')
       .eq('id', product.organization_id)
       .single();
+
+    const orgCurrency = org?.default_currency || 'usd';
 
     let stripeAccountId: string | null = null;
     if (org?.account_id) {
@@ -1176,7 +1186,7 @@ export class ProductsService {
                 const stripePrice = await this.stripeService.createPrice(
                   {
                     product: product.stripe_product_id,
-                    currency: priceDto.price_currency || 'usd',
+                    currency: priceDto.price_currency || orgCurrency,
                     unit_amount: priceDto.price_amount,
                     recurring: {
                       interval:
@@ -1205,7 +1215,7 @@ export class ProductsService {
               product_id: id,
               amount_type: priceDto.amount_type,
               price_amount: priceDto.price_amount || null,
-              price_currency: priceDto.price_currency || 'usd',
+              price_currency: priceDto.price_currency || orgCurrency,
               recurring_interval: recurringInterval,
               recurring_interval_count: recurringIntervalCount,
               stripe_price_id: stripePriceId,
@@ -1901,7 +1911,7 @@ export class ProductsService {
    */
   async getRevenueMetrics(productId: string, userId: string) {
     // Verify user has access to this product
-    await this.findOne(productId, userId);
+    const product = await this.findOne(productId, userId);
 
     // Define cache keys
     const metricsCacheKey = `product-metrics:${productId}`;
@@ -1967,7 +1977,7 @@ export class ProductsService {
       revenueLastThirtyDays,
       arpu,
       activeSubscriptionCount,
-      currency: 'usd', // Default to USD, can be made dynamic based on product settings
+      currency: product.prices?.[0]?.price_currency || 'usd',
     };
 
     // Cache the result with 5 minute TTL for MRR and 15 minutes for revenue

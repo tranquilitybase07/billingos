@@ -33,7 +33,7 @@ export class CreatePriceDto {
 
   @IsString()
   @IsOptional()
-  price_currency?: string = 'usd'; // ISO currency code
+  price_currency?: string; // ISO currency code — defaults to org's default_currency
 
   // Optional: Override product-level recurring_interval for this specific price
   // Useful for offering both monthly and yearly options for the same product

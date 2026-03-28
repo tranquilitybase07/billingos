@@ -12,6 +12,7 @@ import { StripeService } from '../stripe/stripe.service';
 import { User } from '../user/entities/user.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { Account } from './entities/account.entity';
+import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
 export class AccountService {
@@ -118,13 +119,16 @@ export class AccountService {
         throw new Error('Failed to create account');
       }
 
-      // Link account to organization
+      // Link account to organization and set default currency from Stripe country
       const { error: updateError } = await supabase
         .from('organizations')
         .update({
           account_id: account.id,
           status: autoCreated ? 'active' : 'onboarding_started',
           status_updated_at: new Date().toISOString(),
+          default_currency: getCurrencyForCountry(
+            stripeAccount.country || 'US',
+          ),
         })
         .eq('id', createDto.organization_id);
 
@@ -146,6 +150,14 @@ export class AccountService {
       return account;
     } catch (error) {
       this.logger.error('Error creating Stripe Connect account:', error);
+      if (
+        error?.type === 'StripeInvalidRequestError' &&
+        error?.message?.includes('cannot be created by platforms in')
+      ) {
+        throw new BadRequestException(
+          `Stripe does not currently support creating merchant accounts in this country for our platform region. Please select a different country or contact support.`,
+        );
+      }
       throw new BadRequestException(
         error.message || 'Failed to create Stripe Connect account',
       );
