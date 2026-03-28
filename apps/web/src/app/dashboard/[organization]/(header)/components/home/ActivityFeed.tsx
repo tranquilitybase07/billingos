@@ -12,7 +12,7 @@ import {
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useActivityFeed } from '@/hooks/queries/analytics'
 import { orgPath } from '@/lib/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ActivityFeedItem } from '@/lib/api/types'
@@ -81,7 +81,7 @@ export function ActivityFeed() {
   const { data, isLoading } = useActivityFeed(organization.id, 10)
 
   return (
-    <Card className="h-full">
+    <CardFlat className="h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
         <Link href={orgPath(organization.slug, '/analytics')}>
@@ -142,6 +142,6 @@ export function ActivityFeed() {
           </motion.div>
         )}
       </CardContent>
-    </Card>
+    </CardFlat>
   )
 }

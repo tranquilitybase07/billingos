@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useTopCustomers } from '@/hooks/queries/analytics'
 import { orgPath } from '@/lib/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardFlat, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -20,7 +20,7 @@ export function TopCustomersCard() {
     }).format(cents / 100)
 
   return (
-    <Card className="h-full">
+    <CardFlat className="h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-medium">Top Customers</CardTitle>
         <Link href={orgPath(organization.slug, '/customers')}>
@@ -73,6 +73,6 @@ export function TopCustomersCard() {
           </div>
         )}
       </CardContent>
-    </Card>
+    </CardFlat>
   )
 }

@@ -3,9 +3,7 @@
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { GreetingHeader } from './components/home/GreetingHeader'
 import { OnboardingChecklist } from './components/home/OnboardingChecklist'
-import { KPICardsRow } from './components/home/KPICardsRow'
-import { RevenueChart } from './components/home/RevenueChart'
-import { QuickActionsBar } from './components/home/QuickActionsBar'
+import { DashboardCharts } from './components/home/DashboardCharts'
 import { ActivityFeed } from './components/home/ActivityFeed'
 import { TopCustomersCard } from './components/home/TopCustomersCard'
 
@@ -14,9 +12,7 @@ export default function DashboardHomePage() {
     <DashboardBody className="gap-8">
       <GreetingHeader />
       <OnboardingChecklist />
-      <KPICardsRow />
-      <RevenueChart />
-      <QuickActionsBar />
+      <DashboardCharts />
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-3">
           <ActivityFeed />
