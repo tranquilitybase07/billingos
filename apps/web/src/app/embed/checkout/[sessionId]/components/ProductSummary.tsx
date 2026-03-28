@@ -62,7 +62,7 @@ export function ProductSummary({
         <div className="flex items-baseline gap-1">
           {/* For trial products, show the recurring amount (not 0 = today's charge) */}
           <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {(trialDays && trialDays > 0) ? formatAmount(amount) : formatAmount(totalAmount, displayCurrency)}
+            {(trialDays && trialDays > 0) ? formatAmount(amount, displayCurrency) : formatAmount(totalAmount, displayCurrency)}
           </span>
           <span className="text-gray-400 dark:text-gray-500 text-xs">/{getIntervalShort(product.interval)}</span>
         </div>
@@ -145,7 +145,7 @@ export function ProductSummary({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-            {trialDays}-day free trial &middot; then {formatAmount(amount)}/{getIntervalShort(product.interval)}
+            {trialDays}-day free trial &middot; then {formatAmount(amount, displayCurrency)}/{getIntervalShort(product.interval)}
           </span>
         </div>
       )}
