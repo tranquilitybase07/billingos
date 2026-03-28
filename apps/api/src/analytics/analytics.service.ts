@@ -37,6 +37,10 @@ import {
   ActivityFeedResponseDto,
 } from './dto/activity-feed.dto';
 import { Granularity } from './dto/analytics-query.dto';
+import {
+  ProductSubscribersResponseDto,
+  ProductSubscriberDataPoint,
+} from './dto/product-subscribers-response.dto';
 import { StripeService } from '../stripe/stripe.service';
 
 @Injectable()
@@ -1598,6 +1602,76 @@ export class AnalyticsService {
       `Activity feed for organization ${organizationId}: ${trimmed.length} events`,
     );
 
+    return response;
+  }
+
+  /**
+   * Get subscriber distribution across products
+   */
+  async getProductSubscribers(
+    organizationId: string,
+  ): Promise<ProductSubscribersResponseDto> {
+    const cacheKey = `analytics:${organizationId}:product-subscribers`;
+
+    const cached =
+      await this.cacheManager.get<ProductSubscribersResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    const { data: subscriptions, error } = await supabase
+      .from('subscriptions')
+      .select('product_id, products!inner(name)')
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing']);
+
+    if (error) {
+      this.logger.error(
+        `Failed to fetch product subscribers: ${error.message}`,
+      );
+      throw new BadRequestException('Failed to fetch product subscribers');
+    }
+
+    // Aggregate by product_id
+    const productMap = new Map<
+      string,
+      { name: string; count: number }
+    >();
+
+    (subscriptions || []).forEach((sub: any) => {
+      const productId = sub.product_id;
+      const productName = sub.products?.name || 'Unknown';
+      const existing = productMap.get(productId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        productMap.set(productId, { name: productName, count: 1 });
+      }
+    });
+
+    const data: ProductSubscriberDataPoint[] = Array.from(
+      productMap.entries(),
+    ).map(([productId, info]) => ({
+      product_id: productId,
+      product_name: info.name,
+      subscriber_count: info.count,
+    }));
+
+    // Sort by subscriber_count descending
+    data.sort((a, b) => b.subscriber_count - a.subscriber_count);
+
+    const totalSubscribers = data.reduce(
+      (sum, d) => sum + d.subscriber_count,
+      0,
+    );
+
+    const response: ProductSubscribersResponseDto = {
+      data,
+      total_subscribers: totalSubscribers,
+    };
+
+    // Cache for 15 minutes
+    await this.cacheManager.set(cacheKey, response, 900000);
     return response;
   }
 

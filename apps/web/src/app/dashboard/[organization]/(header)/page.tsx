@@ -6,6 +6,7 @@ import { OnboardingChecklist } from './components/home/OnboardingChecklist'
 import { DashboardCharts } from './components/home/DashboardCharts'
 import { ActivityFeed } from './components/home/ActivityFeed'
 import { TopCustomersCard } from './components/home/TopCustomersCard'
+import { PlanDistributionCard } from './components/home/PlanDistributionCard'
 
 export default function DashboardHomePage() {
   return (
@@ -13,13 +14,10 @@ export default function DashboardHomePage() {
       <GreetingHeader />
       <OnboardingChecklist />
       <DashboardCharts />
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3">
-          <ActivityFeed />
-        </div>
-        <div className="lg:col-span-2">
-          <TopCustomersCard />
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <ActivityFeed />
+        <TopCustomersCard />
+        <PlanDistributionCard />
       </div>
     </DashboardBody>
   )

@@ -792,7 +792,7 @@ export class OrganizationService {
         label: 'Verify Stripe account',
         description: 'Complete Stripe identity verification',
         completed: !!paymentReady,
-        href: `/dashboard/${org.slug}/finance/account`,
+        href: `/dashboard/${org.slug}/settings/billing`,
       },
       {
         id: 'create_products',

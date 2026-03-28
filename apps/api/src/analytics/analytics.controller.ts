@@ -19,6 +19,7 @@ import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
 import { DashboardOverviewResponseDto } from './dto/dashboard-overview.dto';
 import { ActivityFeedResponseDto } from './dto/activity-feed.dto';
+import { ProductSubscribersResponseDto } from './dto/product-subscribers-response.dto';
 
 @ApiTags('Analytics')
 @Controller('analytics')
@@ -243,6 +244,18 @@ export class AnalyticsController {
       featureName,
       period || 30,
     );
+  }
+
+  /**
+   * Get subscriber distribution across products
+   * GET /analytics/products/subscribers?organization_id=xxx
+   */
+  @Get('products/subscribers')
+  async getProductSubscribers(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<ProductSubscribersResponseDto> {
+    return this.analyticsService.getProductSubscribers(organizationId);
   }
 
   /**

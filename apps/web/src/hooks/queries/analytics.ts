@@ -16,6 +16,7 @@ import type {
   DashboardOverviewResponse,
   ActivityFeedResponse,
   TopCustomersResponse,
+  ProductSubscribersResponse,
 } from '@/lib/api/types'
 
 export const analyticsKeys = {
@@ -24,6 +25,7 @@ export const analyticsKeys = {
   dashboardOverview: (orgId: string) => [...analyticsKeys.all, 'dashboard-overview', orgId] as const,
   activityFeed: (orgId: string, limit: number) => [...analyticsKeys.all, 'activity-feed', orgId, limit] as const,
   topCustomers: (orgId: string) => [...analyticsKeys.all, 'top-customers', orgId] as const,
+  productSubscribers: (orgId: string) => [...analyticsKeys.all, 'product-subscribers', orgId] as const,
   revenueTrend: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'revenue-trend', params] as const,
   subscriptionGrowth: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'subscription-growth', params] as const,
   churnRate: (params: AnalyticsQueryParams) => [...analyticsKeys.all, 'churn-rate', params] as const,
@@ -151,6 +153,16 @@ export function useTopCustomers(organizationId: string, limit: number = 5) {
   return useQuery({
     queryKey: analyticsKeys.topCustomers(organizationId),
     queryFn: () => api.get<TopCustomersResponse>(`/analytics/customers/top-revenue?organization_id=${organizationId}&start_date=${startDate}&end_date=${endDate}&limit=${limit}`),
+    enabled: !!organizationId,
+  })
+}
+
+export function useProductSubscribers(organizationId: string) {
+  return useQuery({
+    queryKey: analyticsKeys.productSubscribers(organizationId),
+    queryFn: () => api.get<ProductSubscribersResponse>(
+      `/analytics/products/subscribers?organization_id=${organizationId}`
+    ),
     enabled: !!organizationId,
   })
 }

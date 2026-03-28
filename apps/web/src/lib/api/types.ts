@@ -344,6 +344,18 @@ export interface ConversionFunnelResponse {
   as_of: string
 }
 
+// Product Subscribers Types
+export interface ProductSubscriberDataPoint {
+  product_id: string
+  product_name: string
+  subscriber_count: number
+}
+
+export interface ProductSubscribersResponse {
+  data: ProductSubscriberDataPoint[]
+  total_subscribers: number
+}
+
 // Subscription Upgrade/Downgrade Types
 export type ChangeEffectiveTiming = 'immediate' | 'period_end'
 export type ChangeType = 'upgrade' | 'downgrade'
