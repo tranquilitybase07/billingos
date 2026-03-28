@@ -12,10 +12,11 @@ export function TopCustomersCard() {
   const { organization } = useOrganization()
   const { data, isLoading } = useTopCustomers(organization.id, 5)
 
+  const orgCurrency = organization.default_currency || 'usd'
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: orgCurrency.toUpperCase(),
       minimumFractionDigits: 0,
     }).format(cents / 100)
 

@@ -6,6 +6,7 @@ import { CardFlat, CardContent, CardDescription, CardHeader, CardTitle } from '@
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { getCurrencySymbol } from '@/utils/currency'
 import type { Product } from '@/hooks/queries/products'
 
 interface ProductPreviewCardProps {
@@ -109,7 +110,7 @@ export function ProductPreviewCard({ product, className }: ProductPreviewCardPro
               <>
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-bold tracking-tight">
-                    {currency.toUpperCase()} {formatPrice(currentPrice?.price_amount)}
+                    {getCurrencySymbol(currency)}{formatPrice(currentPrice?.price_amount)}
                   </span>
                   {currentPrice?.recurring_interval && (
                     <span className="text-xl text-muted-foreground">

@@ -18,6 +18,7 @@ import {
   Download01Icon,
 } from 'hugeicons-react'
 import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
+import { useOrganization } from '@/providers/OrganizationProvider'
 import { useMRR } from '@/hooks/queries/analytics'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
@@ -43,12 +44,13 @@ interface SubscriptionStatsCardsProps {
   activeSubscriptions: number
   trialConversionRate: number
   nrr: number
+  currency: string
 }
 
-function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate, nrr }: SubscriptionStatsCardsProps) {
+function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate, nrr, currency }: SubscriptionStatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <MiniMetricChartBox title="MRR" value={mrr} type="currency" />
+      <MiniMetricChartBox title="MRR" value={mrr} type="currency" currency={currency} />
       <MiniMetricChartBox title="Active Subscriptions" value={activeSubscriptions} type="scalar" />
       <MiniMetricChartBox title="Trial Conversion" value={trialConversionRate} type="percentage" />
       <MiniMetricChartBox title="Net Revenue Retention" value={nrr} type="percentage" />
@@ -71,6 +73,8 @@ export default function SubscriptionsPage({
   productIdFilter,
   statusFilter,
 }: SubscriptionsPageProps) {
+  const { organization } = useOrganization()
+  const orgCurrency = organization.default_currency || 'usd'
   const [selectedStatus, setSelectedStatus] = useState<string>(
     statusFilter ?? 'active',
   )
@@ -198,6 +202,7 @@ export default function SubscriptionsPage({
           activeSubscriptions={subscriptionStats.activeCount}
           trialConversionRate={subscriptionStats.trialConversionRate}
           nrr={subscriptionStats.nrr}
+          currency={orgCurrency}
         />
 
         {/* Filters & Actions */}

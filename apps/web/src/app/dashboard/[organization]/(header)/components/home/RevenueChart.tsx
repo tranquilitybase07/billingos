@@ -57,10 +57,11 @@ export function RevenueChart() {
     }))
   }, [data])
 
+  const orgCurrency = organization.default_currency || 'usd'
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: orgCurrency.toUpperCase(),
       minimumFractionDigits: 0,
     }).format(v)
 
