@@ -1765,11 +1765,17 @@ export class StripeWebhookService {
       .eq('payment_intent_id', paymentIntentRecord.id);
 
     // Best-effort: populate customer country from card
+    const directPmRaw = paymentIntent.payment_method;
+    const directPmId =
+      typeof directPmRaw === 'string' ? directPmRaw : (directPmRaw as any)?.id;
+    this.logger.log(
+      `[CardCountry] direct-sub path — customerId=${customerId}, ` +
+        `payment_method=${JSON.stringify(directPmRaw)}, pmId=${directPmId}, ` +
+        `stripeAccountId=${stripeAccountId}`,
+    );
     await this.tryUpdateCustomerCardCountry(
       customerId,
-      typeof paymentIntent.payment_method === 'string'
-        ? paymentIntent.payment_method
-        : (paymentIntent.payment_method as any)?.id,
+      directPmId,
       stripeAccountId,
     );
 
@@ -3471,10 +3477,13 @@ export class StripeWebhookService {
 
       // Best-effort: populate customer country from card
       if (customer) {
-        const pmId =
-          typeof stripeSub?.default_payment_method === 'string'
-            ? stripeSub.default_payment_method
-            : stripeSub?.default_payment_method?.id;
+        const dpm = stripeSub?.default_payment_method;
+        const pmId = typeof dpm === 'string' ? dpm : (dpm?.id ?? null);
+        this.logger.log(
+          `[CardCountry] checkout-session path — customerId=${customerId}, ` +
+            `default_payment_method=${JSON.stringify(dpm)}, pmId=${pmId}, ` +
+            `stripeAccountId=${stripeAccountId}`,
+        );
         await this.tryUpdateCustomerCardCountry(
           customerId,
           pmId,
@@ -3497,7 +3506,12 @@ export class StripeWebhookService {
     paymentMethodId: string | null | undefined,
     stripeAccountId: string | null | undefined,
   ): Promise<void> {
-    if (!paymentMethodId || !stripeAccountId) return;
+    if (!paymentMethodId || !stripeAccountId) {
+      this.logger.log(
+        `[CardCountry] skipping — paymentMethodId=${paymentMethodId}, stripeAccountId=${stripeAccountId}`,
+      );
+      return;
+    }
 
     try {
       const supabase = this.supabaseService.getClient();
@@ -3523,6 +3537,10 @@ export class StripeWebhookService {
         });
 
       const cardCountry = paymentMethod.card?.country;
+      this.logger.log(
+        `[CardCountry] retrieved PM ${paymentMethodId} — type=${paymentMethod.type}, ` +
+          `card.country=${cardCountry}, card.brand=${paymentMethod.card?.brand}`,
+      );
       if (!cardCountry) return;
 
       // Merge country into existing billing_address
