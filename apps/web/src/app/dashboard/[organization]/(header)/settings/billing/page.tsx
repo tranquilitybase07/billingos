@@ -250,11 +250,10 @@ export default function BillingPage() {
           {/* Step 1: Business Details */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                hasBusinessDetails
+              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${hasBusinessDetails
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                   : 'bg-primary/10 text-primary'
-              }`}>
+                }`}>
                 {hasBusinessDetails ? <CheckmarkCircle01Icon size={14} /> : '1'}
               </div>
               <h3 className="text-sm font-medium">Business Details</h3>

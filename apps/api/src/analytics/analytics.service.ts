@@ -31,7 +31,17 @@ import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
 import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
 import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
+import { DashboardOverviewResponseDto } from './dto/dashboard-overview.dto';
+import {
+  ActivityFeedItemDto,
+  ActivityFeedResponseDto,
+} from './dto/activity-feed.dto';
 import { Granularity } from './dto/analytics-query.dto';
+import {
+  ProductSubscribersResponseDto,
+  ProductSubscriberDataPoint,
+} from './dto/product-subscribers-response.dto';
+import { StripeService } from '../stripe/stripe.service';
 
 @Injectable()
 export class AnalyticsService {
@@ -39,8 +49,32 @@ export class AnalyticsService {
 
   constructor(
     private readonly supabaseService: SupabaseService,
+    private readonly stripeService: StripeService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  /**
+   * Resolve the Stripe Connect account ID for an organization.
+   * Returns null if the org hasn't connected Stripe yet.
+   */
+  private async getStripeAccountId(
+    organizationId: string,
+  ): Promise<string | null> {
+    const supabase = this.supabaseService.getClient();
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', organizationId)
+      .is('deleted_at', null)
+      .single();
+    if (!org?.account_id) return null;
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('stripe_id')
+      .eq('id', org.account_id)
+      .single();
+    return account?.stripe_id || null;
+  }
 
   /**
    * Get Monthly Recurring Revenue (MRR)
@@ -213,25 +247,8 @@ export class AnalyticsService {
       `Revenue trend cache MISS for organization ${organizationId}`,
     );
 
-    const supabase = this.supabaseService.getClient();
-
-    // Fetch all successful payments in date range
-    const { data: payments, error } = await supabase
-      .from('payment_intents')
-      .select('amount, created_at')
-      .eq('organization_id', organizationId)
-      .eq('status', 'succeeded')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      this.logger.error(
-        `Failed to fetch revenue trend: ${error.message}`,
-        error,
-      );
-      throw new BadRequestException('Failed to fetch revenue trend');
-    }
+    // Resolve Stripe Connect account for this org
+    const stripeAccountId = await this.getStripeAccountId(organizationId);
 
     // Group by date based on granularity
     const grouped: Record<
@@ -239,20 +256,24 @@ export class AnalyticsService {
       { revenue: number; transaction_count: number }
     > = {};
 
-    if (payments && payments.length > 0) {
-      payments.forEach((payment) => {
-        if (!payment.created_at) return; // Skip if no created_at
+    if (stripeAccountId) {
+      const startDateUnix = Math.floor(new Date(startDate).getTime() / 1000);
+      const endDateUnix = Math.floor(new Date(endDate).getTime() / 1000);
 
-        const date = this.formatDateByGranularity(
-          payment.created_at,
-          granularity,
-        );
+      const invoices = await this.stripeService.listInvoices(stripeAccountId, {
+        status: 'paid',
+        created: { gte: startDateUnix, lte: endDateUnix },
+      });
+
+      invoices.forEach((invoice) => {
+        const createdAt = new Date(invoice.created * 1000).toISOString();
+        const date = this.formatDateByGranularity(createdAt, granularity);
 
         if (!grouped[date]) {
           grouped[date] = { revenue: 0, transaction_count: 0 };
         }
 
-        grouped[date].revenue += payment.amount || 0;
+        grouped[date].revenue += invoice.amount_paid || 0;
         grouped[date].transaction_count += 1;
       });
     }
@@ -641,23 +662,8 @@ export class AnalyticsService {
 
     const supabase = this.supabaseService.getClient();
 
-    // Aggregate revenue by customer
-    const { data: payments, error } = await supabase
-      .from('payment_intents')
-      .select('customer_id, amount, customers!inner(email, name)')
-      .eq('organization_id', organizationId)
-      .eq('status', 'succeeded')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .not('customer_id', 'is', null);
-
-    if (error) {
-      this.logger.error(
-        `Failed to fetch top customers: ${error.message}`,
-        error,
-      );
-      throw new BadRequestException('Failed to fetch top customers');
-    }
+    // Resolve Stripe Connect account for this org
+    const stripeAccountId = await this.getStripeAccountId(organizationId);
 
     // Group by customer
     const customerRevenue: Map<
@@ -670,21 +676,46 @@ export class AnalyticsService {
       }
     > = new Map();
 
-    if (payments && payments.length > 0) {
-      payments.forEach((payment) => {
-        if (!payment.customer_id) return;
+    if (stripeAccountId) {
+      const startDateUnix = Math.floor(new Date(startDate).getTime() / 1000);
+      const endDateUnix = Math.floor(new Date(endDate).getTime() / 1000);
 
-        const customer = payment.customers as any;
-        const existing = customerRevenue.get(payment.customer_id);
+      // Fetch paid invoices from Stripe
+      const invoices = await this.stripeService.listInvoices(stripeAccountId, {
+        status: 'paid',
+        created: { gte: startDateUnix, lte: endDateUnix },
+      });
+
+      // Batch-fetch BOS customers for this org to resolve Stripe customer IDs
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, stripe_customer_id, email, name')
+        .eq('organization_id', organizationId);
+
+      const customerMap = new Map(
+        customers?.map((c) => [c.stripe_customer_id, c]) || [],
+      );
+
+      invoices.forEach((invoice) => {
+        const stripeCustomerId =
+          typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id;
+        if (!stripeCustomerId) return;
+
+        const bosCustomer = customerMap.get(stripeCustomerId);
+        if (!bosCustomer) return;
+
+        const existing = customerRevenue.get(bosCustomer.id);
 
         if (existing) {
-          existing.revenue += payment.amount || 0;
+          existing.revenue += invoice.amount_paid || 0;
           existing.count += 1;
         } else {
-          customerRevenue.set(payment.customer_id, {
-            email: customer.email || '',
-            name: customer.name || null,
-            revenue: payment.amount || 0,
+          customerRevenue.set(bosCustomer.id, {
+            email: bosCustomer.email || '',
+            name: bosCustomer.name || null,
+            revenue: invoice.amount_paid || 0,
             count: 1,
           });
         }
@@ -1172,6 +1203,474 @@ export class AnalyticsService {
       period: periodDays,
     };
 
+    await this.cacheManager.set(cacheKey, response, 900000);
+    return response;
+  }
+
+  /**
+   * Get dashboard overview — aggregated KPIs with sparklines
+   */
+  async getDashboardOverview(
+    organizationId: string,
+  ): Promise<DashboardOverviewResponseDto> {
+    const cacheKey = `analytics:${organizationId}:dashboard-overview`;
+
+    const cached =
+      await this.cacheManager.get<DashboardOverviewResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `Dashboard overview cache HIT for organization ${organizationId}`,
+      );
+      return cached;
+    }
+
+    this.logger.log(
+      `Dashboard overview cache MISS for organization ${organizationId}`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+    const now = new Date();
+    const thirtyDaysAgo = new Date(
+      now.getTime() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const sixtyDaysAgo = new Date(
+      now.getTime() - 60 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const nowISO = now.toISOString();
+
+    // --- MRR ---
+    const { data: currentSubs } = await supabase
+      .from('subscriptions')
+      .select(
+        `amount, products!inner (recurring_interval, recurring_interval_count)`,
+      )
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing'])
+      .eq('cancel_at_period_end', false);
+
+    const normalizeMRR = (subs: typeof currentSubs) => {
+      if (!subs || subs.length === 0) return 0;
+      return subs.reduce((sum, sub) => {
+        const product = sub.products as any;
+        let amt = sub.amount || 0;
+        switch (product.recurring_interval) {
+          case 'year':
+            amt = Math.round(amt / 12);
+            break;
+          case 'week':
+            amt = Math.round(amt * 4);
+            break;
+          case 'day':
+            amt = Math.round(amt * 30);
+            break;
+        }
+        return sum + amt;
+      }, 0);
+    };
+
+    const currentMRR = normalizeMRR(currentSubs);
+
+    // Previous MRR: subs active 30 days ago
+    const { data: prevSubs } = await supabase
+      .from('subscriptions')
+      .select(
+        `amount, products!inner (recurring_interval, recurring_interval_count)`,
+      )
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing'])
+      .lte('created_at', thirtyDaysAgo);
+
+    const previousMRR = normalizeMRR(prevSubs);
+
+    // MRR sparkline: daily revenue from payment_intents (last 30 days)
+    const { data: revenuePayments } = await supabase
+      .from('payment_intents')
+      .select('amount, created_at')
+      .eq('organization_id', organizationId)
+      .eq('status', 'succeeded')
+      .gte('created_at', thirtyDaysAgo)
+      .lte('created_at', nowISO)
+      .order('created_at', { ascending: true });
+
+    const mrrSparkline = this.buildDailySparkline(
+      revenuePayments || [],
+      30,
+      'sum',
+    );
+
+    // --- Active Subscriptions ---
+    const { count: currentActiveSubs } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing']);
+
+    const { count: prevActiveSubs } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing'])
+      .lte('created_at', thirtyDaysAgo);
+
+    const activeSubsCurrent = currentActiveSubs || 0;
+    const activeSubsPrevious = prevActiveSubs || 0;
+
+    // Active subs sparkline: daily count of subscriptions created
+    const { data: newSubsRaw } = await supabase
+      .from('subscriptions')
+      .select('created_at')
+      .eq('organization_id', organizationId)
+      .gte('created_at', thirtyDaysAgo)
+      .lte('created_at', nowISO);
+
+    const activeSubsSparkline = this.buildDailySparkline(
+      newSubsRaw || [],
+      30,
+      'count',
+    );
+
+    // --- New Customers ---
+    const { count: currentNewCustomers } = await supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .gte('created_at', thirtyDaysAgo)
+      .lte('created_at', nowISO);
+
+    const { count: prevNewCustomers } = await supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .gte('created_at', sixtyDaysAgo)
+      .lte('created_at', thirtyDaysAgo);
+
+    const newCustomersCurrent = currentNewCustomers || 0;
+    const newCustomersPrevious = prevNewCustomers || 0;
+
+    const { data: newCustomersRaw } = await supabase
+      .from('customers')
+      .select('created_at')
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .gte('created_at', thirtyDaysAgo)
+      .lte('created_at', nowISO);
+
+    const newCustomersSparkline = this.buildDailySparkline(
+      newCustomersRaw || [],
+      30,
+      'count',
+    );
+
+    // --- Churn Rate ---
+    const { count: canceledCurrent } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .not('canceled_at', 'is', null)
+      .gte('canceled_at', thirtyDaysAgo)
+      .lte('canceled_at', nowISO);
+
+    const { count: canceledPrevious } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .not('canceled_at', 'is', null)
+      .gte('canceled_at', sixtyDaysAgo)
+      .lte('canceled_at', thirtyDaysAgo);
+
+    const churnCurrent =
+      activeSubsCurrent > 0
+        ? Math.round(((canceledCurrent || 0) / activeSubsCurrent) * 10000) / 100
+        : 0;
+    const churnPrevious =
+      activeSubsPrevious > 0
+        ? Math.round(
+            ((canceledPrevious || 0) / activeSubsPrevious) * 10000,
+          ) / 100
+        : 0;
+
+    const { data: canceledRaw } = await supabase
+      .from('subscriptions')
+      .select('canceled_at')
+      .eq('organization_id', organizationId)
+      .not('canceled_at', 'is', null)
+      .gte('canceled_at', thirtyDaysAgo)
+      .lte('canceled_at', nowISO);
+
+    const churnSparkline = this.buildDailySparkline(
+      (canceledRaw || []).map((r) => ({
+        created_at: r.canceled_at,
+        amount: null,
+      })),
+      30,
+      'count',
+    );
+
+    const calcChange = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 10000) / 100;
+    };
+
+    const response: DashboardOverviewResponseDto = {
+      mrr: {
+        current: currentMRR,
+        previous: previousMRR,
+        change_percent: calcChange(currentMRR, previousMRR),
+        sparkline: mrrSparkline,
+      },
+      active_subscriptions: {
+        current: activeSubsCurrent,
+        previous: activeSubsPrevious,
+        change_percent: calcChange(activeSubsCurrent, activeSubsPrevious),
+        sparkline: activeSubsSparkline,
+      },
+      new_customers: {
+        current: newCustomersCurrent,
+        previous: newCustomersPrevious,
+        change_percent: calcChange(newCustomersCurrent, newCustomersPrevious),
+        sparkline: newCustomersSparkline,
+      },
+      churn_rate: {
+        current: churnCurrent,
+        previous: churnPrevious,
+        change_percent: calcChange(churnCurrent, churnPrevious),
+        sparkline: churnSparkline,
+      },
+      currency: 'usd',
+    };
+
+    await this.cacheManager.set(cacheKey, response, 300000);
+
+    this.logger.log(
+      `Dashboard overview for organization ${organizationId}: MRR=${currentMRR}`,
+    );
+
+    return response;
+  }
+
+  /**
+   * Build a daily sparkline array for the last N days
+   */
+  private buildDailySparkline(
+    records: { created_at?: string | null; amount?: number | null }[],
+    days: number,
+    mode: 'count' | 'sum',
+  ): number[] {
+    const result: number[] = new Array(days).fill(0);
+    const now = new Date();
+
+    records.forEach((r) => {
+      if (!r.created_at) return;
+      const date = new Date(r.created_at);
+      const diffDays = Math.floor(
+        (now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000),
+      );
+      const index = days - 1 - diffDays;
+      if (index >= 0 && index < days) {
+        if (mode === 'count') {
+          result[index] += 1;
+        } else {
+          result[index] += r.amount || 0;
+        }
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Get activity feed — recent financial events
+   */
+  async getActivityFeed(
+    organizationId: string,
+    limit: number = 10,
+  ): Promise<ActivityFeedResponseDto> {
+    const cacheKey = `analytics:${organizationId}:activity-feed:${limit}`;
+
+    const cached =
+      await this.cacheManager.get<ActivityFeedResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `Activity feed cache HIT for organization ${organizationId}`,
+      );
+      return cached;
+    }
+
+    this.logger.log(
+      `Activity feed cache MISS for organization ${organizationId}`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+    const events: ActivityFeedItemDto[] = [];
+
+    // New subscriptions + trials
+    const { data: newSubs } = await supabase
+      .from('subscriptions')
+      .select(
+        `id, status, amount, created_at, customers!inner(name, email), products!inner(name)`,
+      )
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (newSubs) {
+      newSubs.forEach((sub: any) => {
+        const type =
+          sub.status === 'trialing' ? 'trial_started' : 'new_subscription';
+        events.push({
+          id: `sub_${sub.id}`,
+          type,
+          customer_name: sub.customers?.name || null,
+          customer_email: sub.customers?.email || '',
+          product_name: sub.products?.name || '',
+          amount: sub.amount,
+          currency: 'usd',
+          occurred_at: sub.created_at,
+        });
+      });
+    }
+
+    // Successful payments
+    const { data: payments } = await supabase
+      .from('payment_intents')
+      .select(`id, amount, created_at, customers!inner(name, email)`)
+      .eq('organization_id', organizationId)
+      .eq('status', 'succeeded')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (payments) {
+      payments.forEach((p: any) => {
+        events.push({
+          id: `pay_${p.id}`,
+          type: 'payment_succeeded',
+          customer_name: p.customers?.name || null,
+          customer_email: p.customers?.email || '',
+          product_name: '',
+          amount: p.amount,
+          currency: 'usd',
+          occurred_at: p.created_at,
+        });
+      });
+    }
+
+    // Canceled subscriptions
+    const { data: canceledSubs } = await supabase
+      .from('subscriptions')
+      .select(
+        `id, canceled_at, customers!inner(name, email), products!inner(name)`,
+      )
+      .eq('organization_id', organizationId)
+      .not('canceled_at', 'is', null)
+      .order('canceled_at', { ascending: false })
+      .limit(limit);
+
+    if (canceledSubs) {
+      canceledSubs.forEach((sub: any) => {
+        events.push({
+          id: `cancel_${sub.id}`,
+          type: 'subscription_canceled',
+          customer_name: sub.customers?.name || null,
+          customer_email: sub.customers?.email || '',
+          product_name: sub.products?.name || '',
+          amount: null,
+          currency: 'usd',
+          occurred_at: sub.canceled_at,
+        });
+      });
+    }
+
+    // Sort all events by occurred_at DESC
+    events.sort(
+      (a, b) =>
+        new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
+    );
+
+    const trimmed = events.slice(0, limit);
+
+    const response: ActivityFeedResponseDto = {
+      data: trimmed,
+      total: trimmed.length,
+    };
+
+    // Cache for 2 minutes
+    await this.cacheManager.set(cacheKey, response, 120000);
+
+    this.logger.log(
+      `Activity feed for organization ${organizationId}: ${trimmed.length} events`,
+    );
+
+    return response;
+  }
+
+  /**
+   * Get subscriber distribution across products
+   */
+  async getProductSubscribers(
+    organizationId: string,
+  ): Promise<ProductSubscribersResponseDto> {
+    const cacheKey = `analytics:${organizationId}:product-subscribers`;
+
+    const cached =
+      await this.cacheManager.get<ProductSubscribersResponseDto>(cacheKey);
+    if (cached) return cached;
+
+    const supabase = this.supabaseService.getClient();
+
+    const { data: subscriptions, error } = await supabase
+      .from('subscriptions')
+      .select('product_id, products!inner(name)')
+      .eq('organization_id', organizationId)
+      .in('status', ['active', 'trialing']);
+
+    if (error) {
+      this.logger.error(
+        `Failed to fetch product subscribers: ${error.message}`,
+      );
+      throw new BadRequestException('Failed to fetch product subscribers');
+    }
+
+    // Aggregate by product_id
+    const productMap = new Map<
+      string,
+      { name: string; count: number }
+    >();
+
+    (subscriptions || []).forEach((sub: any) => {
+      const productId = sub.product_id;
+      const productName = sub.products?.name || 'Unknown';
+      const existing = productMap.get(productId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        productMap.set(productId, { name: productName, count: 1 });
+      }
+    });
+
+    const data: ProductSubscriberDataPoint[] = Array.from(
+      productMap.entries(),
+    ).map(([productId, info]) => ({
+      product_id: productId,
+      product_name: info.name,
+      subscriber_count: info.count,
+    }));
+
+    // Sort by subscriber_count descending
+    data.sort((a, b) => b.subscriber_count - a.subscriber_count);
+
+    const totalSubscribers = data.reduce(
+      (sum, d) => sum + d.subscriber_count,
+      0,
+    );
+
+    const response: ProductSubscribersResponseDto = {
+      data,
+      total_subscribers: totalSubscribers,
+    };
+
+    // Cache for 15 minutes
     await this.cacheManager.set(cacheKey, response, 900000);
     return response;
   }

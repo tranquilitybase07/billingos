@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -164,5 +165,21 @@ export class OrganizationController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeAvatar(@Param('id') id: string, @CurrentUser() user: User) {
     return this.organizationService.removeAvatar(id, user.id);
+  }
+
+  /**
+   * Get onboarding status
+   */
+  @Get(':id/onboarding-status')
+  getOnboardingStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Query('environment') environment?: 'sandbox' | 'production',
+  ) {
+    return this.organizationService.getOnboardingStatus(
+      id,
+      user.id,
+      environment || 'sandbox',
+    );
   }
 }

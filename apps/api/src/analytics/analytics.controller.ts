@@ -4,7 +4,7 @@ import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
-import { AnalyticsQueryDto, Granularity } from './dto/analytics-query.dto';
+import { AnalyticsQueryDto, Granularity, TopCustomersQueryDto } from './dto/analytics-query.dto';
 import { MRRResponseDto } from './dto/mrr-response.dto';
 import { ActiveSubscriptionsResponseDto } from './dto/active-subscriptions-response.dto';
 import { RevenueTrendResponseDto } from './dto/revenue-trend-response.dto';
@@ -17,12 +17,43 @@ import { UsageByFeatureResponseDto } from './dto/usage-by-feature-response.dto';
 import { AtRiskCustomersResponseDto } from './dto/at-risk-customers-response.dto';
 import { UsageTrendsResponseDto } from './dto/usage-trends-response.dto';
 import { ConversionFunnelResponseDto } from './dto/conversion-funnel-response.dto';
+import { DashboardOverviewResponseDto } from './dto/dashboard-overview.dto';
+import { ActivityFeedResponseDto } from './dto/activity-feed.dto';
+import { ProductSubscribersResponseDto } from './dto/product-subscribers-response.dto';
 
 @ApiTags('Analytics')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  /**
+   * Get dashboard overview (aggregated KPIs + sparklines)
+   * GET /analytics/dashboard-overview?organization_id=xxx
+   */
+  @Get('dashboard-overview')
+  async getDashboardOverview(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<DashboardOverviewResponseDto> {
+    return this.analyticsService.getDashboardOverview(organizationId);
+  }
+
+  /**
+   * Get activity feed (recent financial events)
+   * GET /analytics/activity-feed?organization_id=xxx&limit=10
+   */
+  @Get('activity-feed')
+  async getActivityFeed(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+    @Query('limit') limit?: number,
+  ): Promise<ActivityFeedResponseDto> {
+    return this.analyticsService.getActivityFeed(
+      organizationId,
+      limit || 10,
+    );
+  }
 
   /**
    * Get Monthly Recurring Revenue (MRR)
@@ -130,8 +161,7 @@ export class AnalyticsController {
   @Get('customers/top-revenue')
   async getTopCustomers(
     @CurrentUser() user: User,
-    @Query() query: AnalyticsQueryDto,
-    @Query('limit') limit?: number,
+    @Query() query: TopCustomersQueryDto,
   ): Promise<TopCustomersResponseDto> {
     // Default to all-time if no dates provided
     const endDate = query.end_date || new Date().toISOString().split('T')[0];
@@ -142,7 +172,7 @@ export class AnalyticsController {
       query.organization_id,
       startDate,
       endDate,
-      limit || 10,
+      query.limit || 10,
     );
   }
 
@@ -214,6 +244,18 @@ export class AnalyticsController {
       featureName,
       period || 30,
     );
+  }
+
+  /**
+   * Get subscriber distribution across products
+   * GET /analytics/products/subscribers?organization_id=xxx
+   */
+  @Get('products/subscribers')
+  async getProductSubscribers(
+    @CurrentUser() user: User,
+    @Query('organization_id') organizationId: string,
+  ): Promise<ProductSubscribersResponseDto> {
+    return this.analyticsService.getProductSubscribers(organizationId);
   }
 
   /**
