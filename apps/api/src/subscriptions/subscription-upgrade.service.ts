@@ -181,12 +181,15 @@ export class SubscriptionUpgradeService {
       );
     }
 
-    // 7. Get Stripe account for organization
-    const { data: org } = await supabase
+    // 7. Get Stripe account and org currency for organization
+    const { data: orgRaw } = await supabase
       .from('organizations')
-      .select('account_id')
+      .select('account_id, default_currency')
       .eq('id', subscription.customer.organization_id)
       .single();
+
+    const org = orgRaw as any;
+    const orgCurrency = org?.default_currency || 'usd';
 
     const { data: account } = await supabase
       .from('accounts')
@@ -231,13 +234,13 @@ export class SubscriptionUpgradeService {
       current_plan: {
         name: currentPrice.product.name,
         amount: currentPrice.price_amount || 0,
-        currency: currentPrice.price_currency || 'usd',
+        currency: currentPrice.price_currency || orgCurrency,
         interval: `${currentPrice.product.recurring_interval_count} ${currentPrice.product.recurring_interval}`,
       },
       new_plan: {
         name: newPrice.product.name,
         amount: newPrice.price_amount || 0,
-        currency: newPrice.price_currency || 'usd',
+        currency: newPrice.price_currency || orgCurrency,
         interval: `${newPrice.product.recurring_interval_count} ${newPrice.product.recurring_interval}`,
       },
       proration: {
@@ -438,6 +441,15 @@ export class SubscriptionUpgradeService {
       .eq('product_id', subscription.product_id)
       .single();
 
+    // 4a. Get org currency
+    const { data: orgDataRaw } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', subscription.customer.organization_id)
+      .single();
+
+    const orgCurrencyForPlans = (orgDataRaw as any)?.default_currency || 'usd';
+
     // 4. Get all active products from same organization with same billing interval
     const { data: products } = await supabase
       .from('products')
@@ -496,7 +508,7 @@ export class SubscriptionUpgradeService {
         description: product.description,
         price_id: price.id,
         amount: planAmount,
-        currency: price.price_currency || 'usd',
+        currency: price.price_currency || orgCurrencyForPlans,
         interval: `${product.recurring_interval_count} ${product.recurring_interval}`,
         is_free: price.amount_type === 'free',
       };
@@ -518,7 +530,7 @@ export class SubscriptionUpgradeService {
         product_name: subscription.product.name,
         price_id: currentPrice?.id,
         amount: currentAmount,
-        currency: currentPrice?.price_currency || 'usd',
+        currency: currentPrice?.price_currency || orgCurrencyForPlans,
         interval: `${subscription.product.recurring_interval_count} ${subscription.product.recurring_interval}`,
       },
       available_upgrades: upgrades,
@@ -751,6 +763,15 @@ export class SubscriptionUpgradeService {
     const supabase = this.supabaseService.getClient();
     let stripeInvoiceId: string | null = null;
 
+    // Fetch org currency for fallback
+    const { data: orgForCurrencyRaw } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', subscription.customer.organization_id)
+      .single();
+
+    const orgCurrencyFallback = (orgForCurrencyRaw as any)?.default_currency || 'usd';
+
     // Check if this is a free-to-paid upgrade (no Stripe subscription exists)
     const isFreeUpgrade =
       !subscription.stripe_subscription_id && newPrice.stripe_price_id;
@@ -798,7 +819,7 @@ export class SubscriptionUpgradeService {
             .update({
               product_id: newPrice.product_id,
               amount: newPrice.price_amount || 0,
-              currency: newPrice.price_currency || 'usd',
+              currency: newPrice.price_currency || orgCurrencyFallback,
               stripe_subscription_id: newStripeSubscription.id,
               status:
                 newStripeSubscription.status === 'trialing'
@@ -887,7 +908,7 @@ export class SubscriptionUpgradeService {
           .update({
             product_id: newPrice.product_id,
             amount: newPrice.price_amount || 0,
-            currency: newPrice.price_currency || 'usd',
+            currency: newPrice.price_currency || orgCurrencyFallback,
             updated_at: new Date().toISOString(),
           })
           .eq('id', subscription.id)
@@ -904,7 +925,7 @@ export class SubscriptionUpgradeService {
           .update({
             product_id: newPrice.product_id,
             amount: newPrice.price_amount || 0,
-            currency: newPrice.price_currency || 'usd',
+            currency: newPrice.price_currency || orgCurrencyFallback,
             updated_at: new Date().toISOString(),
           })
           .eq('id', subscription.id)

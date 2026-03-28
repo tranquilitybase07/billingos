@@ -102,9 +102,10 @@ function EditProductForm({
 }) {
   const router = useRouter()
   const { toast } = useToast()
+  const { organization } = useOrganization()
 
   const { data: product } = useProduct(productId)
-  const form = useProductForm(organizationId, product)
+  const form = useProductForm(organizationId, product, organization.default_currency || 'usd')
   const { data: features = [], isLoading: isFeaturesLoading } = useFeatures(organizationId)
   const updateProduct = useUpdateProduct()
   const { isVisible, toggleVisibility, isUpdating } = useProductVisibility(product)
@@ -337,7 +338,6 @@ function EditProductForm({
                 trialDays={form.trialDays}
                 onTrialDaysChange={form.setTrialDays}
                 currency={form.currency}
-                onCurrencyChange={form.setCurrency}
               />
             </CardContent>
           </CardFlat>

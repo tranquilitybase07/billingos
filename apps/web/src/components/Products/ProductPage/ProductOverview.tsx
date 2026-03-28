@@ -11,7 +11,7 @@ import {
   DataTableColumnHeader,
 } from '@/components/atoms/datatable'
 import Link from 'next/link'
-import { ArrowRight01Icon } from 'hugeicons-react'
+import { useOrganization } from '@/providers/OrganizationProvider'
 import { useProductDiscounts } from '@/hooks/queries/discounts'
 import { getDiscountDisplay } from '@/utils/discount'
 import { useProductSubscriptions } from '@/hooks/queries/subscriptions'
@@ -37,6 +37,8 @@ export const ProductOverview = ({
   product,
   isRecurring,
 }: ProductOverviewProps) => {
+  const { organization } = useOrganization()
+  const orgCurrency = organization.default_currency || 'usd'
   const { data: subscriptionCount, isLoading: isLoadingSubscriptionCount } =
     useProductSubscriptionCount(product.id)
 
@@ -88,6 +90,7 @@ export const ProductOverview = ({
                 title="Monthly Recurring Revenue"
                 value={revenueMetrics?.mrr ?? 0}
                 type="currency"
+                currency={orgCurrency}
                 isLoading={isLoadingRevenue}
               />
             </>
@@ -102,6 +105,7 @@ export const ProductOverview = ({
                 title="Today's Revenue"
                 value={34900}
                 type="currency"
+                currency={orgCurrency}
               />
             </>
           )}
@@ -109,6 +113,7 @@ export const ProductOverview = ({
             title="Revenue Last 30 Days"
             value={revenueMetrics?.revenueLastThirtyDays ?? 0}
             type="currency"
+            currency={orgCurrency}
             isLoading={isLoadingRevenue}
           />
         </div>
@@ -243,23 +248,6 @@ export const ProductOverview = ({
           </div>
         )}
 
-        {/* Quick Links */}
-        <div className="flex flex-row flex-wrap gap-2">
-          {isRecurring && (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/dashboard/${organizationSlug}/sales/subscriptions?product_id=${product.id}`}>
-                View All Subscriptions
-                <ArrowRight01Icon size={14} />
-              </Link>
-            </Button>
-          )}
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/dashboard/${organizationSlug}/analytics`}>
-              View Analytics
-              <ArrowRight01Icon size={14} />
-            </Link>
-          </Button>
-        </div>
       </div>
 
       {/* Right sidebar */}

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatCurrency } from '@/utils/metrics'
+import { useOrganization } from '@/providers/OrganizationProvider'
 import { Download01Icon } from 'hugeicons-react'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -153,6 +154,9 @@ export default function OrdersPage({
   organizationSlug,
   productIdFilter,
 }: OrdersPageProps) {
+  const { organization } = useOrganization()
+  const orgCurrency = organization.default_currency || 'usd'
+
   // If the product_id from the URL doesn't match any mock product, ignore it
   const validProductFilter =
     productIdFilter && MOCK_PRODUCTS.some((p) => p.id === productIdFilter)
@@ -161,10 +165,13 @@ export default function OrdersPage({
 
   const [selectedProduct, setSelectedProduct] = useState<string>(validProductFilter)
 
+  // Override mock currency with org currency
+  const ordersWithCurrency = MOCK_ORDERS.map((o) => ({ ...o, currency: orgCurrency }))
+
   const filteredOrders =
     selectedProduct === 'all'
-      ? MOCK_ORDERS
-      : MOCK_ORDERS.filter((o) => o.product.id === selectedProduct)
+      ? ordersWithCurrency
+      : ordersWithCurrency.filter((o) => o.product.id === selectedProduct)
 
   return (
     <DashboardBody>
@@ -203,6 +210,7 @@ export default function OrdersPage({
             title="Today's Revenue"
             value={9900}
             type="currency"
+            currency={orgCurrency}
           />
           <MiniMetricChartBox
             title="Cumulative Revenue"
@@ -212,6 +220,7 @@ export default function OrdersPage({
                 .reduce((sum, o) => sum + o.net_amount, 0)
             }
             type="currency"
+            currency={orgCurrency}
           />
         </div>
 

@@ -10,6 +10,7 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RedisService } from '../redis/redis.service';
 import { RefundService } from './refund.service';
 import { QueueService } from '../queue/queue.service';
+import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
 export class StripeWebhookService {
@@ -316,6 +317,36 @@ export class StripeWebhookService {
             'onboarding_started',
             false,
           );
+        }
+
+        // Sync default_currency from Stripe country if org has no products yet
+        if (account.country) {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('id')
+            .eq('account_id', data.id)
+            .single();
+
+          if (org) {
+            const { count } = await supabase
+              .from('products')
+              .select('id', { count: 'exact', head: true })
+              .eq('organization_id', org.id)
+              .is('is_archived', false);
+
+            if (count === 0) {
+              await supabase
+                .from('organizations')
+                .update({
+                  default_currency: getCurrencyForCountry(account.country),
+                })
+                .eq('id', org.id);
+
+              this.logger.log(
+                `Updated org ${org.id} default_currency to ${getCurrencyForCountry(account.country)} from Stripe country ${account.country}`,
+              );
+            }
+          }
         }
       }
     } catch (error) {
@@ -1732,6 +1763,21 @@ export class StripeWebhookService {
         updated_at: new Date().toISOString(),
       })
       .eq('payment_intent_id', paymentIntentRecord.id);
+
+    // Best-effort: populate customer country from card
+    const directPmRaw = paymentIntent.payment_method;
+    const directPmId =
+      typeof directPmRaw === 'string' ? directPmRaw : (directPmRaw as any)?.id;
+    this.logger.log(
+      `[CardCountry] direct-sub path — customerId=${customerId}, ` +
+        `payment_method=${JSON.stringify(directPmRaw)}, pmId=${directPmId}, ` +
+        `stripeAccountId=${stripeAccountId}`,
+    );
+    await this.tryUpdateCustomerCardCountry(
+      customerId,
+      directPmId,
+      stripeAccountId,
+    );
 
     this.logger.log(
       `Successfully completed direct-subscription flow for PI ${paymentIntent.id}`,
@@ -3429,9 +3475,90 @@ export class StripeWebhookService {
         }
       }
 
+      // Best-effort: populate customer country from card
+      if (customer) {
+        const dpm = stripeSub?.default_payment_method;
+        const pmId = typeof dpm === 'string' ? dpm : (dpm?.id ?? null);
+        this.logger.log(
+          `[CardCountry] checkout-session path — customerId=${customerId}, ` +
+            `default_payment_method=${JSON.stringify(dpm)}, pmId=${pmId}, ` +
+            `stripeAccountId=${stripeAccountId}`,
+        );
+        await this.tryUpdateCustomerCardCountry(
+          customerId,
+          pmId,
+          stripeAccountId,
+        );
+      }
+
       this.logger.log(`Checkout session ${session.id} processed successfully`);
     } catch (error) {
       this.logger.error('Error handling checkout.session.completed:', error);
+    }
+  }
+
+  /**
+   * Best-effort: populate customer billing_address.country from the card's issuing country.
+   * Non-critical — must never fail the parent flow.
+   */
+  private async tryUpdateCustomerCardCountry(
+    customerId: string,
+    paymentMethodId: string | null | undefined,
+    stripeAccountId: string | null | undefined,
+  ): Promise<void> {
+    if (!paymentMethodId || !stripeAccountId) {
+      this.logger.log(
+        `[CardCountry] skipping — paymentMethodId=${paymentMethodId}, stripeAccountId=${stripeAccountId}`,
+      );
+      return;
+    }
+
+    try {
+      const supabase = this.supabaseService.getClient();
+
+      // Check if customer already has a country set
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, billing_address')
+        .eq('id', customerId)
+        .single();
+
+      if (!customer) return;
+
+      const existingAddress =
+        (customer.billing_address as Record<string, unknown>) || {};
+      if (existingAddress.country) return; // Already set, don't overwrite
+
+      // Retrieve payment method from Stripe to get card country
+      const paymentMethod = await this.stripeService
+        .getClient()
+        .paymentMethods.retrieve(paymentMethodId, {
+          stripeAccount: stripeAccountId,
+        });
+
+      const cardCountry = paymentMethod.card?.country;
+      this.logger.log(
+        `[CardCountry] retrieved PM ${paymentMethodId} — type=${paymentMethod.type}, ` +
+          `card.country=${cardCountry}, card.brand=${paymentMethod.card?.brand}`,
+      );
+      if (!cardCountry) return;
+
+      // Merge country into existing billing_address
+      await supabase
+        .from('customers')
+        .update({
+          billing_address: { ...existingAddress, country: cardCountry },
+        })
+        .eq('id', customerId);
+
+      this.logger.log(
+        `Updated customer ${customerId} billing country to ${cardCountry}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Non-critical: failed to update card country for customer ${customerId}:`,
+        error,
+      );
     }
   }
 }

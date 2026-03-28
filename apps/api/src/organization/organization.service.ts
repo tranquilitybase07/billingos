@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -18,6 +19,11 @@ import {
   PaymentStatus,
   PaymentStep,
 } from './entities/organization.entity';
+import {
+  getCurrencyForCountry,
+  isSupportedCurrency,
+} from '../common/constants/currencies';
+import { UpdateCurrencyDto } from './dto/update-currency.dto';
 
 @Injectable()
 export class OrganizationService {
@@ -165,6 +171,7 @@ export class OrganizationService {
         account_id: account.id,
         status: 'active',
         status_updated_at: new Date().toISOString(),
+        default_currency: getCurrencyForCountry(stripeAccount.country || 'US'),
       })
       .eq('id', organization.id);
 
@@ -919,5 +926,67 @@ export class OrganizationService {
       .single();
 
     return data?.accounts?.admin_id === userId;
+  }
+
+  /**
+   * Update the organization's default charge currency.
+   * Locked after first product is created (except in sandbox mode).
+   */
+  async updateCurrency(
+    organizationId: string,
+    userId: string,
+    dto: UpdateCurrencyDto,
+  ): Promise<{ default_currency: string }> {
+    await this.checkMembership(organizationId, userId);
+
+    const currency = dto.currency.toLowerCase();
+    if (!isSupportedCurrency(currency)) {
+      throw new BadRequestException(`Unsupported currency: ${dto.currency}`);
+    }
+
+    const supabase = this.supabaseService.getClient();
+
+    // Lock check: prevent changes after first product (except sandbox)
+    const isSandbox = process.env.NODE_ENV === 'sandbox';
+    if (!isSandbox) {
+      const { count } = await supabase
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .is('is_archived', false);
+
+      if (count && count > 0) {
+        throw new BadRequestException(
+          'Currency cannot be changed after products have been created',
+        );
+      }
+    }
+
+    const { error } = await supabase
+      .from('organizations')
+      .update({ default_currency: currency })
+      .eq('id', organizationId);
+
+    if (error) {
+      throw new BadRequestException('Failed to update currency');
+    }
+
+    return { default_currency: currency };
+  }
+
+  /**
+   * Get the default currency for an organization.
+   * Returns 'usd' as fallback.
+   */
+  async getDefaultCurrency(organizationId: string): Promise<string> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', organizationId)
+      .single();
+
+    return data?.default_currency || 'usd';
   }
 }

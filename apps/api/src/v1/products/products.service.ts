@@ -99,7 +99,17 @@ export class V1ProductsService {
       query = query.in('id', planIds);
     }
 
-    const { data: products, error: productsError } = await query;
+    const [{ data: products, error: productsError }, { data: orgData }] =
+      await Promise.all([
+        query,
+        supabase
+          .from('organizations')
+          .select('default_currency')
+          .eq('id', organizationId)
+          .single(),
+      ]);
+
+    const orgCurrency = orgData?.default_currency || 'usd';
 
     if (productsError) {
       this.logger.error('Failed to fetch products:', productsError);
@@ -161,7 +171,7 @@ export class V1ProductsService {
           (price: any) => ({
             id: price.id,
             amount: price.price_amount || 0,
-            currency: price.price_currency || 'usd',
+            currency: price.price_currency || orgCurrency,
             interval: price.recurring_interval as
               | 'month'
               | 'year'

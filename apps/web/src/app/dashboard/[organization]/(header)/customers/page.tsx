@@ -98,12 +98,13 @@ interface StatsCardsProps {
   totalCustomers: number;
   activeCustomers: number;
   churnRate: number | null;
+  currency: string;
 }
 
-function StatsCards({ mrr, totalCustomers, activeCustomers, churnRate }: StatsCardsProps) {
+function StatsCards({ mrr, totalCustomers, activeCustomers, churnRate, currency }: StatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <MiniMetricChartBox title="Total MRR" value={mrr} type="currency" />
+      <MiniMetricChartBox title="Total MRR" value={mrr} type="currency" currency={currency} />
       <MiniMetricChartBox title="Total Customers" value={totalCustomers} type="scalar" />
       <MiniMetricChartBox title="Active Customers" value={activeCustomers} type="scalar" />
       <MiniMetricChartBox title="Churn Rate" value={churnRate ?? 0} type="percentage" />
@@ -362,6 +363,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
           totalCustomers={totalCustomers}
           activeCustomers={activeCustomers}
           churnRate={latestChurnRate}
+          currency={organization.default_currency || 'usd'}
         />
 
         {/* Filters + Add Customer */}

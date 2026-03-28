@@ -728,6 +728,7 @@ export type Database = {
           customer_invoice_next_number: number
           customer_invoice_prefix: string
           customer_portal_settings: Json
+          default_currency: string | null
           deleted_at: string | null
           details: Json
           details_submitted_at: string | null
@@ -757,6 +758,7 @@ export type Database = {
           customer_invoice_next_number?: number
           customer_invoice_prefix?: string
           customer_portal_settings?: Json
+          default_currency?: string | null
           deleted_at?: string | null
           details?: Json
           details_submitted_at?: string | null
@@ -786,6 +788,7 @@ export type Database = {
           customer_invoice_next_number?: number
           customer_invoice_prefix?: string
           customer_portal_settings?: Json
+          default_currency?: string | null
           deleted_at?: string | null
           details?: Json
           details_submitted_at?: string | null

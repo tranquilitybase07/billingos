@@ -43,10 +43,12 @@ export function DashboardCharts() {
     const { data: growthTrend, isLoading: isLoadingGrowth } = useSubscriptionGrowth(queryParams)
     const { data: churnTrend, isLoading: isLoadingChurn } = useChurnRate(queryParams)
 
+    const orgCurrency = organization.default_currency || 'usd'
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
-            currency: 'USD',
+            currency: orgCurrency.toUpperCase(),
+            minimumFractionDigits: 0,
         }).format(amount / 100)
     }
 

@@ -76,6 +76,16 @@ export class AnalyticsService {
     return account?.stripe_id || null;
   }
 
+  private async getOrgCurrency(organizationId: string): Promise<string> {
+    const supabase = this.supabaseService.getClient();
+    const { data } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', organizationId)
+      .single();
+    return data?.default_currency || 'usd';
+  }
+
   /**
    * Get Monthly Recurring Revenue (MRR)
    * Normalizes all subscription intervals to monthly amounts
@@ -152,7 +162,7 @@ export class AnalyticsService {
 
     const response: MRRResponseDto = {
       mrr,
-      currency: 'usd',
+      currency: await this.getOrgCurrency(organizationId),
       active_subscriptions: activeSubscriptionCount,
       cached_at: new Date().toISOString(),
     };
@@ -865,7 +875,7 @@ export class AnalyticsService {
       arpu,
       mrr,
       active_customers: activeCustomers,
-      currency: 'usd',
+      currency: await this.getOrgCurrency(organizationId),
       cached_at: new Date().toISOString(),
     };
 
@@ -1386,9 +1396,8 @@ export class AnalyticsService {
         : 0;
     const churnPrevious =
       activeSubsPrevious > 0
-        ? Math.round(
-            ((canceledPrevious || 0) / activeSubsPrevious) * 10000,
-          ) / 100
+        ? Math.round(((canceledPrevious || 0) / activeSubsPrevious) * 10000) /
+          100
         : 0;
 
     const { data: canceledRaw } = await supabase
@@ -1438,7 +1447,7 @@ export class AnalyticsService {
         change_percent: calcChange(churnCurrent, churnPrevious),
         sparkline: churnSparkline,
       },
-      currency: 'usd',
+      currency: await this.getOrgCurrency(organizationId),
     };
 
     await this.cacheManager.set(cacheKey, response, 300000);
@@ -1503,6 +1512,7 @@ export class AnalyticsService {
     );
 
     const supabase = this.supabaseService.getClient();
+    const orgCurrency = await this.getOrgCurrency(organizationId);
     const events: ActivityFeedItemDto[] = [];
 
     // New subscriptions + trials
@@ -1526,7 +1536,7 @@ export class AnalyticsService {
           customer_email: sub.customers?.email || '',
           product_name: sub.products?.name || '',
           amount: sub.amount,
-          currency: 'usd',
+          currency: orgCurrency,
           occurred_at: sub.created_at,
         });
       });
@@ -1550,7 +1560,7 @@ export class AnalyticsService {
           customer_email: p.customers?.email || '',
           product_name: '',
           amount: p.amount,
-          currency: 'usd',
+          currency: orgCurrency,
           occurred_at: p.created_at,
         });
       });
@@ -1576,7 +1586,7 @@ export class AnalyticsService {
           customer_email: sub.customers?.email || '',
           product_name: sub.products?.name || '',
           amount: null,
-          currency: 'usd',
+          currency: orgCurrency,
           occurred_at: sub.canceled_at,
         });
       });
@@ -1633,10 +1643,7 @@ export class AnalyticsService {
     }
 
     // Aggregate by product_id
-    const productMap = new Map<
-      string,
-      { name: string; count: number }
-    >();
+    const productMap = new Map<string, { name: string; count: number }>();
 
     (subscriptions || []).forEach((sub: any) => {
       const productId = sub.product_id;

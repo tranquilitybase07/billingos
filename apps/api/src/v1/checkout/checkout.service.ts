@@ -107,10 +107,10 @@ export class CheckoutService {
       throw new NotFoundException('Product not found or not available');
     }
 
-    // 2. First, fetch organization's Stripe Connect account ID
+    // 2. First, fetch organization's Stripe Connect account ID and default currency
     const { data: organization } = await supabase
       .from('organizations')
-      .select('accounts!inner(stripe_id)')
+      .select('default_currency, accounts!inner(stripe_id)')
       .eq('id', organizationId)
       .single();
 
@@ -121,6 +121,7 @@ export class CheckoutService {
     }
 
     const stripeAccountId = (organization.accounts as any).stripe_id;
+    const orgCurrency = organization.default_currency || 'usd';
     if (!stripeAccountId) {
       throw new BadRequestException(
         'Organization Stripe account not properly configured',
@@ -249,7 +250,7 @@ export class CheckoutService {
 
     // 5. Check if this is a free product
     const amount = price.price_amount || 0;
-    const currency = price.price_currency || 'usd';
+    const currency = price.price_currency || orgCurrency;
     const isFreeProduct = price.amount_type === 'free' || amount === 0;
 
     // Handle free products differently
@@ -264,6 +265,7 @@ export class CheckoutService {
         customerEmail,
         customerName,
         dto.metadata,
+        orgCurrency,
       );
     }
 
@@ -280,6 +282,7 @@ export class CheckoutService {
         customerEmail,
         customerName,
         dto,
+        orgCurrency,
       );
     }
 
@@ -297,6 +300,7 @@ export class CheckoutService {
         customerEmail,
         customerName,
         dto,
+        orgCurrency,
       );
     }
 
@@ -792,6 +796,14 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
+    // Fetch org currency for fallback
+    const { data: orgForCurrency } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', session.organization_id)
+      .single();
+    const orgCurrency = orgForCurrency?.default_currency || 'usd';
+
     // Handle free product sessions (no payment intent)
     const metadata = session.metadata as any;
     const sessionWithSubscription = session as any; // Type cast for new subscription_id field
@@ -838,7 +850,7 @@ export class CheckoutService {
             clientSecret: '',
             paymentIntentId: '',
             amount: 0,
-            currency: price.price_currency || 'usd',
+            currency: price.price_currency || orgCurrency,
             totalAmount: 0,
             status: session.completed_at ? 'completed' : 'pending',
             expiresAt: session.expires_at,
@@ -912,7 +924,7 @@ export class CheckoutService {
           clientSecret: '',
           paymentIntentId: '',
           amount: 0,
-          currency: price.price_currency || 'usd',
+          currency: price.price_currency || orgCurrency,
           totalAmount: 0,
           status:
             new Date(session.expires_at) < new Date() && !session.completed_at
@@ -939,12 +951,12 @@ export class CheckoutService {
 
     // Handle adaptive checkout sessions (no payment_intent row)
     if (!session.payment_intent && metadata?.checkoutMode === 'adaptive') {
-      return this.getAdaptiveCheckoutStatus(session, metadata);
+      return this.getAdaptiveCheckoutStatus(session, metadata, orgCurrency);
     }
 
     // Handle trial checkout sessions (no payment_intent row — uses SetupIntent)
     if (!session.payment_intent && metadata?.checkoutMode === 'trial') {
-      return this.getTrialCheckoutStatus(session, metadata);
+      return this.getTrialCheckoutStatus(session, metadata, orgCurrency);
     }
 
     const paymentIntent = session.payment_intent;
@@ -1674,11 +1686,12 @@ export class CheckoutService {
     customerEmail?: string,
     customerName?: string,
     dto?: any,
+    orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
     const amount = price.price_amount || 0;
-    const currency = price.price_currency || 'usd';
+    const currency = price.price_currency || orgCurrency;
 
     // Create metadata record (same as standard checkout)
     const checkoutMetadata = await this.metadataService.createMetadata({
@@ -1824,11 +1837,12 @@ export class CheckoutService {
     customerEmail?: string,
     customerName?: string,
     dto?: any,
+    orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
     const amount = price.price_amount || 0;
-    const currency = price.price_currency || 'usd';
+    const currency = price.price_currency || orgCurrency;
 
     // Create metadata record
     const checkoutMetadata = await this.metadataService.createMetadata({
@@ -2020,6 +2034,7 @@ export class CheckoutService {
   private async getTrialCheckoutStatus(
     session: any,
     metadata: any,
+    orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
     const productId = metadata.productId;
@@ -2075,7 +2090,7 @@ export class CheckoutService {
       clientSecret: metadata.clientSecret || '',
       paymentIntentId: '',
       amount: 0,
-      currency: metadata.priceCurrency || price.price_currency || 'usd',
+      currency: metadata.priceCurrency || price.price_currency || orgCurrency,
       totalAmount: 0,
       status,
       checkoutMode: 'trial',
@@ -2114,6 +2129,7 @@ export class CheckoutService {
   private async getAdaptiveCheckoutStatus(
     session: any,
     metadata: any,
+    orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
@@ -2173,7 +2189,7 @@ export class CheckoutService {
       clientSecret: metadata.clientSecret || '',
       paymentIntentId: '',
       amount: metadata.priceAmount || price.price_amount || 0,
-      currency: metadata.priceCurrency || price.price_currency || 'usd',
+      currency: metadata.priceCurrency || price.price_currency || orgCurrency,
       totalAmount: metadata.priceAmount || price.price_amount || 0,
       status,
       checkoutMode: 'adaptive',
@@ -2219,6 +2235,7 @@ export class CheckoutService {
     customerEmail?: string,
     customerName?: string,
     metadata?: any,
+    orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
@@ -2273,7 +2290,7 @@ export class CheckoutService {
       clientSecret: '', // No client secret for free products
       paymentIntentId: '', // No payment intent for free products
       amount: 0,
-      currency: price.price_currency || 'usd',
+      currency: price.price_currency || orgCurrency,
       totalAmount: 0,
       product: {
         name: product.name,
@@ -2350,6 +2367,14 @@ export class CheckoutService {
         'Missing required data in checkout session',
       );
     }
+
+    // Fetch org currency
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('default_currency')
+      .eq('id', organizationId)
+      .single();
+    const orgCurrency = orgData?.default_currency || 'usd';
 
     // 5. Fetch product and price details
     const { data: product } = await supabase
@@ -2452,7 +2477,7 @@ export class CheckoutService {
           stripe_subscription_id: null, // No Stripe subscription for free products
           status: 'active',
           amount: 0, // Free product
-          currency: price.price_currency || 'usd',
+          currency: price.price_currency || orgCurrency,
           current_period_start: new Date().toISOString(),
           current_period_end: this.calculatePeriodEnd(
             new Date(),

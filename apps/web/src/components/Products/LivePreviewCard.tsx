@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { getCurrencySymbol } from '@/utils/currency'
 import type { PriceConfig } from './PricingEngineSection'
 import type { SelectedFeature } from './FeatureSelector'
 
@@ -110,7 +111,7 @@ export function LivePreviewCard({
           <div className="space-y-2">
             <div className="flex items-baseline gap-1">
               <span className="text-4xl font-bold tracking-tight">
-                {currency.toUpperCase()} {formatPrice(currentPrice?.price_amount)}
+                {getCurrencySymbol(currency)}{formatPrice(currentPrice?.price_amount)}
               </span>
               {currentPrice?.recurring_interval && (
                 <span className="text-xl text-muted-foreground">

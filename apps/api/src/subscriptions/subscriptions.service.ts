@@ -75,12 +75,14 @@ export class SubscriptionsService {
       throw new NotFoundException('Price not found');
     }
 
-    // 5. Get Stripe account
-    const { data: org } = await supabase
+    // 5. Get Stripe account and org currency
+    const { data: orgRaw } = await supabase
       .from('organizations')
-      .select('account_id')
+      .select('account_id, default_currency')
       .eq('id', customer.organization_id)
       .single();
+
+    const org = orgRaw as any;
 
     if (!org?.account_id) {
       throw new BadRequestException('Organization account not found');
@@ -151,7 +153,7 @@ export class SubscriptionsService {
           product_id: product.id,
           status: stripeSubscription?.status || 'active',
           amount: price.price_amount || 0,
-          currency: price.price_currency || 'usd',
+          currency: price.price_currency || org?.default_currency || 'usd',
           current_period_start: stripeSubscription?.current_period_start
             ? new Date(
                 stripeSubscription.current_period_start * 1000,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import {
   usePaymentStatus,
@@ -15,6 +16,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { STRIPE_SUPPORTED_COUNTRIES } from '@/lib/constants/currencies'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -26,13 +35,14 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { SettingsTabNav } from '../_components/SettingsTabNav'
 import { InfoRow } from './_components/InfoRow'
+import { CurrencySelector } from './_components/CurrencySelector'
 
 export default function BillingPage() {
   const { organization } = useOrganization()
   const { toast } = useToast()
   const [businessDetails, setBusinessDetails] = useState({
     business_name: organization.name,
-    country: 'US',
+    country: (organization.details as Record<string, string>)?.country || 'US',
     about: '',
     product_description: '',
     intended_use: '',
@@ -42,6 +52,19 @@ export default function BillingPage() {
   const { data: account, isLoading: isLoadingAccount } = useAccountByOrganization(organization.id)
   const submitBusinessDetails = useSubmitBusinessDetails(organization.id)
   const createAccount = useCreateAccount()
+
+  // Simple products count check for currency lock
+  const { data: productCount } = useQuery({
+    queryKey: ['products-count', organization.id],
+    queryFn: async () => {
+      const { api: apiClient } = await import('@/lib/api/client')
+      const products = await apiClient.get<{ id: string }[]>(
+        `/products?organization_id=${organization.id}&limit=1`,
+      )
+      return products.length
+    },
+    enabled: !!organization.id,
+  })
 
   const hasBusinessDetails = paymentStatus?.is_details_submitted ?? false
   const hasAccount = !!account
@@ -144,7 +167,11 @@ export default function BillingPage() {
               <InfoRow label="Charges Enabled" value={<span className="text-green-600 dark:text-green-400">Enabled</span>} />
               <InfoRow label="Payouts Enabled" value={<span className="text-green-600 dark:text-green-400">Enabled</span>} />
               {account.country && <InfoRow label="Country" value={account.country.toUpperCase()} />}
-              {account.currency && <InfoRow label="Currency" value={account.currency.toUpperCase()} />}
+              {account.currency && <InfoRow label="Payout Currency" value={account.currency.toUpperCase()} />}
+              <InfoRow
+                label="Charge Currency"
+                value={<CurrencySelector hasProducts={(productCount ?? 0) > 0} />}
+              />
             </div>
           </CardContent>
         </Card>
@@ -274,13 +301,23 @@ export default function BillingPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="country">Country</Label>
-                    <Input
-                      id="country"
+                    <Select
                       value={businessDetails.country}
-                      onChange={(e) =>
-                        setBusinessDetails({ ...businessDetails, country: e.target.value })
+                      onValueChange={(value) =>
+                        setBusinessDetails({ ...businessDetails, country: value })
                       }
-                    />
+                    >
+                      <SelectTrigger id="country">
+                        <SelectValue placeholder="Select country" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STRIPE_SUPPORTED_COUNTRIES.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <Button

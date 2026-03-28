@@ -2,7 +2,6 @@
 
 import { useModal } from '@/components/Modal/useModal'
 import ProductPriceLabel from '@/components/Products/ProductPriceLabel'
-import { ProductThumbnail } from '@/components/Products/ProductThumbnail'
 import { useUpdateProduct } from '@/hooks/queries/products'
 import { useProductVisibility } from '@/hooks/useProductVisibility'
 import { Product, isMeteredPrice, isSeatBasedPrice } from '@/utils/product'
@@ -107,10 +106,9 @@ export const ProductListItem = ({
     <>
       <Link
         href={`/dashboard/${organization.slug}/products/${product.id}`}
-        className="flex flex-row items-center justify-between gap-x-6 rounded-lg border bg-card p-4 transition-colors hover:bg-accent"
+        className="flex flex-row items-center justify-between gap-x-6 rounded-lg border bg-card px-4 py-3 transition-colors hover:bg-accent"
       >
         <div className="flex min-w-0 grow flex-row items-center gap-x-4 text-sm">
-          <ProductThumbnail product={product} />
           <div className="flex min-w-0 flex-col">
             <div className="flex items-center gap-2">
               <span className="truncate font-medium">{product.name}</span>
@@ -218,15 +216,6 @@ export const ProductListItem = ({
                     })}
                   >
                     Duplicate Product
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleContextMenuCallback(() => {
-                      router.push(
-                        `/dashboard/${organization.slug}/products/checkout-links?productId=${product.id}`,
-                      )
-                    })}
-                  >
-                    Get Checkout Link
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

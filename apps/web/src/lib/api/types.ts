@@ -23,6 +23,7 @@ export interface Organization {
   customer_portal_settings: any
   feature_settings: any
   subscriptions_billing_engine: boolean
+  default_currency: string
   blocked_at: string | null
   created_at: string
   updated_at: string

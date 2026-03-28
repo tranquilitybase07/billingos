@@ -3,7 +3,6 @@
 import { useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
-import { ProductThumbnail } from '@/components/Products/ProductThumbnail'
 import { useModal } from '@/components/Modal/useModal'
 import { useUpdateProduct, Product } from '@/hooks/queries/products'
 import { useToast } from '@/hooks/use-toast'
@@ -26,7 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { MoreVerticalIcon } from 'hugeicons-react'
+import { ArrowLeft01Icon, MoreVerticalIcon } from 'hugeicons-react'
+import Link from 'next/link'
 import { ProductOverview } from './ProductOverview'
 
 export interface ProductPageProps {
@@ -97,39 +97,39 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
   )
 
   return (
-    <DashboardBody
-      title={
-        <div className="flex min-w-0 flex-row items-center gap-4">
-          <div className="flex min-w-0 flex-row items-center gap-4">
-            <ProductThumbnail product={product} />
-            <h1 className="truncate text-2xl font-semibold">{product.name}</h1>
+    <DashboardBody>
+      {/* Page header */}
+      <div className="mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Left: back button + name + description + badges */}
+          <div className="flex min-w-0 items-start gap-3">
+            <Link
+              href={`/dashboard/${organizationSlug}/products`}
+              className="mt-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft01Icon size={20} />
+            </Link>
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <h1 className="truncate text-2xl font-semibold">{product.name}</h1>
+                {product.version && product.version > 1 && (
+                  <Badge variant="outline">v{product.version}</Badge>
+                )}
+                {product.version_status === 'superseded' && (
+                  <Badge variant="secondary">Old Version</Badge>
+                )}
+                {product.is_archived && (
+                  <Badge variant="destructive">Archived</Badge>
+                )}
+              </div>
+              {product.description && (
+                <p className="text-muted-foreground">{product.description}</p>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-row items-center gap-2">
-            {product.version && product.version > 1 && (
-              <Badge variant="outline">v{product.version}</Badge>
-            )}
-            {product.version_status === 'superseded' && (
-              <Badge variant="secondary">Old Version</Badge>
-            )}
-            <Badge
-              variant="secondary"
-              className={
-                isRecurring
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400'
-              }
-            >
-              {isRecurring ? 'Subscription' : 'One-time'}
-            </Badge>
-            {product.is_archived && (
-              <Badge variant="destructive">Archived</Badge>
-            )}
-          </div>
-        </div>
-      }
-        header={
-          <div className="flex flex-row items-center gap-2">
+          {/* Right: action buttons */}
+          <div className="flex items-center gap-2">
             {!product.is_archived && (
               <Button
                 size="sm"
@@ -143,6 +143,18 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
                 Edit Product
               </Button>
             )}
+            {isRecurring && (
+              <Button size="sm" variant="secondary" asChild>
+                <Link href={`/dashboard/${organizationSlug}/sales/subscriptions?product_id=${product.id}`}>
+                  View Subscriptions
+                </Link>
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" asChild>
+              <Link href={`/dashboard/${organizationSlug}/analytics`}>
+                View Analytics
+              </Link>
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost">
@@ -165,15 +177,6 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
                 </DropdownMenuItem>
                 {!product.is_archived && (
                   <>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        router.push(
-                          `/dashboard/${organizationSlug}/products/checkout-links?productId=${product.id}`
-                        )
-                      }}
-                    >
-                      Integrate Checkout
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={showArchiveModal}
@@ -194,9 +197,10 @@ export const ProductPage = ({ organizationSlug, product }: ProductPageProps) => 
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        }
-      >
-        <ProductOverview
+        </div>
+      </div>
+
+      <ProductOverview
           organizationSlug={organizationSlug}
           product={product}
           isRecurring={isRecurring}
