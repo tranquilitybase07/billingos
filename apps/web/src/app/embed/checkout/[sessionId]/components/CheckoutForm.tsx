@@ -54,7 +54,7 @@ interface CheckoutFormProps {
   onProcessing: () => void
   onHeightChange: (height: number) => void
   /** Called when the adaptive pricing total updates (currency change) */
-  onTotalChange?: (totalAmount: number, currency: string) => void
+  onTotalChange?: (totalAmount: number, currency: string, recurringAmount?: number) => void
   /** When true (adaptive mode), the CheckoutProvider is already created outside — skip wrapping */
   skipProvider?: boolean
   theme?: 'light' | 'dark' | 'auto'
@@ -239,9 +239,8 @@ function FreeProductCheckout({
       <button
         onClick={handleActivate}
         disabled={isActivating}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isActivating ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
-        }`}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isActivating ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          }`}
       >
         {isActivating ? (
           <span className="flex items-center justify-center gap-2">
@@ -403,7 +402,6 @@ function CheckoutFormAdaptive({
   onProcessing,
   onHeightChange,
   onTotalChange,
-  theme,
 }: CheckoutFormProps) {
   const checkoutResult = useCheckout()
   const checkout = checkoutResult.type === 'success' ? checkoutResult.checkout : null
@@ -416,14 +414,17 @@ function CheckoutFormAdaptive({
   const formRef = useRef<HTMLDivElement>(null)
 
   // Propagate total changes (e.g. when customer selects a different currency)
+  // Uses recurring.total instead of lineItems[0].unitAmount because recurring.total
+  // includes discounts in the customer's selected currency
   useEffect(() => {
     const total = (checkout as any)?.total?.total
     const currency = (checkout as any)?.currency
+    const recurringTotal = (checkout as any)?.recurring?.dueNext?.total?.minorUnitsAmount
     if (total && currency && onTotalChange) {
-      onTotalChange(total.minorUnitsAmount, currency)
+      onTotalChange(total.minorUnitsAmount, currency, recurringTotal ?? undefined)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(checkout as any)?.total?.total?.minorUnitsAmount, (checkout as any)?.currency, onTotalChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(checkout as any)?.total?.total?.minorUnitsAmount, (checkout as any)?.currency, (checkout as any)?.recurring?.dueNext?.total?.minorUnitsAmount, onTotalChange])
 
   useEffect(() => {
     if (!formRef.current) return
@@ -563,9 +564,8 @@ function CheckoutFormAdaptive({
       <button
         type="submit"
         disabled={isProcessing}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isProcessing ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
-        }`}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isProcessing ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          }`}
       >
         {isProcessing ? (
           <span className="flex items-center justify-center gap-2">
@@ -736,11 +736,10 @@ function CheckoutFormTrial({
       <button
         type="submit"
         disabled={isProcessing || !stripe || !elements}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isProcessing
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isProcessing
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
             : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
-        }`}
+          }`}
       >
         {isProcessing ? (
           <span className="flex items-center justify-center gap-2">
@@ -927,11 +926,10 @@ function CheckoutFormInner({
       <button
         type="submit"
         disabled={!stripe || isProcessing}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${
-          isProcessing || !stripe
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isProcessing || !stripe
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
             : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
-        }`}
+          }`}
       >
         {isProcessing ? (
           <span className="flex items-center justify-center gap-2">

@@ -5,17 +5,19 @@ import { useState } from 'react'
 interface DiscountCodeProps {
   onApply?: (code: string) => Promise<{ success: boolean; discountLabel?: string; error?: string }>
   onRemove?: () => void
+  appliedCode?: string | null
+  appliedDiscountLabel?: string | null
 }
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 
-export function DiscountCode({ onApply, onRemove }: DiscountCodeProps) {
+export function DiscountCode({ onApply, onRemove, appliedCode: initialAppliedCode, appliedDiscountLabel }: DiscountCodeProps) {
   const [expanded, setExpanded] = useState(false)
   const [code, setCode] = useState('')
-  const [status, setStatus] = useState<Status>('idle')
+  const [status, setStatus] = useState<Status>(initialAppliedCode ? 'success' : 'idle')
   const [errorMessage, setErrorMessage] = useState('')
-  const [appliedCode, setAppliedCode] = useState('')
-  const [discountLabel, setDiscountLabel] = useState('')
+  const [appliedCode, setAppliedCode] = useState(initialAppliedCode ?? '')
+  const [discountLabel, setDiscountLabel] = useState(appliedDiscountLabel ?? '')
 
   const handleApply = async () => {
     if (!code.trim()) return

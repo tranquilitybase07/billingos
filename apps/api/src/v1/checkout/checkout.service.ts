@@ -1209,12 +1209,140 @@ export class CheckoutService {
     return { clientSecret: newPaymentIntent.client_secret };
   }
 
+  /**
+   * Expire an existing Stripe Checkout Session and recreate it with (or without) discounts.
+   * stripe.checkout.sessions.update() does NOT support the `discounts` parameter,
+   * so we must expire + recreate to apply or remove a coupon.
+   */
+  private async recreateCheckoutSessionForDiscount(
+    session: any,
+    sessionMetadata: Record<string, any>,
+    discounts: Array<{ coupon: string }> | undefined,
+    supabase: ReturnType<SupabaseService['getClient']>,
+  ): Promise<{ clientSecret: string }> {
+    const stripeClient = this.stripeService.getClient();
+
+    const stripeAccountId = sessionMetadata.stripeAccountId as string;
+    const oldStripeSessionId =
+      sessionMetadata.stripeCheckoutSessionId as string;
+    const currency = (sessionMetadata.priceCurrency as string) ?? 'usd';
+    const metadataId = sessionMetadata.metadataId as string;
+    const organizationId = session.organization_id as string;
+    const externalUserId = session.customer_external_id as string;
+    const customerId = sessionMetadata.customerId as string;
+    const priceId = sessionMetadata.priceId as string;
+    const productId = sessionMetadata.productId as string;
+
+    // Look up Stripe IDs and trial_days from DB
+    const [customerResult, priceResult, productResult] = await Promise.all([
+      supabase
+        .from('customers')
+        .select('stripe_customer_id')
+        .eq('id', customerId)
+        .single(),
+      supabase
+        .from('product_prices')
+        .select('stripe_price_id')
+        .eq('id', priceId)
+        .single(),
+      supabase
+        .from('products')
+        .select('trial_days')
+        .eq('id', productId)
+        .single(),
+    ]);
+
+    const stripeCustomerId = customerResult.data?.stripe_customer_id;
+    const stripePriceId = priceResult.data?.stripe_price_id;
+    const trialDays = productResult.data?.trial_days ?? 0;
+
+    if (!stripeCustomerId || !stripePriceId) {
+      throw new BadRequestException(
+        'Unable to recreate checkout session — missing customer or price',
+      );
+    }
+
+    // 1. Expire old Stripe Checkout Session
+    await stripeClient.checkout.sessions.expire(
+      oldStripeSessionId,
+      {},
+      { stripeAccount: stripeAccountId },
+    );
+    this.logger.log(
+      `Expired Stripe Checkout Session ${oldStripeSessionId} for discount recreation`,
+    );
+
+    // 2. Create new Stripe Checkout Session with same params + discounts
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    const newStripeSession = await stripeClient.checkout.sessions.create(
+      {
+        mode: 'subscription',
+        currency,
+        customer: stripeCustomerId,
+        line_items: [{ price: stripePriceId, quantity: 1 }],
+        ui_mode: 'custom',
+        adaptive_pricing: { enabled: true },
+        subscription_data: {
+          application_fee_percent: 5,
+          ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+          metadata: {
+            metadataId,
+            organizationId,
+            externalUserId,
+            productId,
+            priceId,
+          },
+        },
+        ...(discounts && discounts.length > 0 ? { discounts } : {}),
+        metadata: {
+          metadataId,
+          organizationId,
+          externalUserId,
+          productId,
+          priceId,
+        },
+        return_url: `${process.env.APP_URL}/embed/checkout/complete`,
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+      } as any,
+      { stripeAccount: stripeAccountId },
+    );
+
+    // 3. Update checkout_sessions metadata with new Stripe session info
+    const existingMeta = session.metadata || {};
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        metadata: {
+          ...existingMeta,
+          stripeCheckoutSessionId: newStripeSession.id,
+          clientSecret: newStripeSession.client_secret,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    // 4. Link metadata to new Stripe Checkout Session
+    await this.metadataService.linkToCheckoutSession(
+      metadataId,
+      newStripeSession.id,
+    );
+
+    this.logger.log(
+      `Recreated Stripe Checkout Session: ${oldStripeSessionId} → ${newStripeSession.id}`,
+    );
+
+    return { clientSecret: newStripeSession.client_secret! };
+  }
+
   async applyDiscount(
     sessionId: string,
     code: string,
   ): Promise<{
     discountAmount: number;
     totalAmount: number;
+    recurringAmount?: number;
     discountLabel: string;
     clientSecret?: string;
   }> {
@@ -1243,6 +1371,7 @@ export class CheckoutService {
   ): Promise<{
     discountAmount: number;
     totalAmount: number;
+    recurringAmount?: number;
     discountLabel: string;
     clientSecret?: string;
   }> {
@@ -1288,9 +1417,6 @@ export class CheckoutService {
       isAdaptiveSession || isTrialSession
         ? ((sessionMetadata.priceCurrency as string) ?? 'usd')
         : ((paymentIntent?.currency as string) ?? 'usd');
-    const stripeCheckoutSessionId = isAdaptiveSession
-      ? (sessionMetadata.stripeCheckoutSessionId as string)
-      : null;
 
     // Look up discount by code
     const { data: discount } = await supabase
@@ -1378,7 +1504,8 @@ export class CheckoutService {
         `Trial session: discount ${code} recorded in metadata (coupon applied at subscription creation)`,
       );
     } else if (isAdaptiveSession) {
-      // Adaptive path: create a Stripe coupon and apply to Checkout Session
+      // Adaptive path: create coupon, then expire + recreate checkout session
+      // (stripe.checkout.sessions.update does NOT support the `discounts` param)
       const settlementCurrency = sessionMetadata.priceCurrency ?? 'usd';
       const coupon = await this.stripeService
         .getClient()
@@ -1387,13 +1514,13 @@ export class CheckoutService {
         });
       stripeCouponId = coupon.id;
 
-      await this.stripeService
-        .getClient()
-        .checkout.sessions.update(
-          stripeCheckoutSessionId!,
-          { discounts: [{ coupon: coupon.id }] } as any,
-          { stripeAccount: stripeAccountId },
-        );
+      const result = await this.recreateCheckoutSessionForDiscount(
+        session,
+        sessionMetadata,
+        [{ coupon: coupon.id }],
+        supabase,
+      );
+      clientSecretResult = result.clientSecret;
     } else {
       // Standard path: cancel + recreate subscription with discount at creation time
       // This ensures the first invoice has the correct discounted amount.
@@ -1460,16 +1587,17 @@ export class CheckoutService {
       }
     }
 
-    // Update checkout_sessions.metadata
-    const existingMetadata = (session.metadata as any) || {};
+    // Re-fetch current metadata from DB (path-specific mutations like
+    // recreateCheckoutSessionForDiscount may have updated it since our initial query)
+    const { data: freshSession } = await supabase
+      .from('checkout_sessions')
+      .select('metadata, stripe_subscription_id')
+      .eq('id', sessionId)
+      .single();
+    const existingMetadata =
+      (freshSession?.metadata as any) || (session.metadata as any) || {};
     const newStripeSubscriptionId = clientSecretResult
-      ? (
-          await supabase
-            .from('checkout_sessions')
-            .select('stripe_subscription_id')
-            .eq('id', sessionId)
-            .single()
-        ).data?.stripe_subscription_id
+      ? freshSession?.stripe_subscription_id
       : null;
 
     await supabase
@@ -1492,12 +1620,30 @@ export class CheckoutService {
       })
       .eq('id', sessionId);
 
+    // For trial sessions, totalAmount should be 0 (today's charge) and recurringAmount is the discounted recurring
+    const isTrialProduct =
+      isTrialSession ||
+      (isAdaptiveSession && (await this.hasTrialDays(productId, supabase)));
+
     return {
       discountAmount,
-      totalAmount: newAmount,
+      totalAmount: isTrialProduct ? 0 : newAmount,
+      recurringAmount: isTrialProduct ? newAmount : undefined,
       discountLabel,
       clientSecret: clientSecretResult,
     };
+  }
+
+  private async hasTrialDays(
+    productId: string,
+    supabase: ReturnType<SupabaseService['getClient']>,
+  ): Promise<boolean> {
+    const { data } = await supabase
+      .from('products')
+      .select('trial_days')
+      .eq('id', productId)
+      .single();
+    return (data?.trial_days ?? 0) > 0;
   }
 
   async removeDiscount(
@@ -1558,17 +1704,15 @@ export class CheckoutService {
       // Trial path: nothing to update on Stripe (just clear metadata below)
       this.logger.log('Trial session: removing discount from metadata only');
     } else if (isAdaptiveSession) {
-      // Remove discount from Stripe Checkout Session
-      const stripeCheckoutSessionId =
-        metadata.stripeCheckoutSessionId as string;
-      const stripeAccountId = metadata.stripeAccountId as string;
-      await this.stripeService
-        .getClient()
-        .checkout.sessions.update(
-          stripeCheckoutSessionId,
-          { discounts: [] } as any,
-          { stripeAccount: stripeAccountId },
-        );
+      // Adaptive path: expire + recreate checkout session without discount
+      // (stripe.checkout.sessions.update does NOT support the `discounts` param)
+      const result = await this.recreateCheckoutSessionForDiscount(
+        session,
+        metadata,
+        undefined, // No discounts = remove
+        supabase,
+      );
+      clientSecretResult = result.clientSecret;
     } else {
       // Standard path: cancel + recreate subscription without discount
       const stripeSubscriptionId =
@@ -1623,8 +1767,14 @@ export class CheckoutService {
       }
     }
 
-    // Clear discount keys from metadata
-    const cleanMetadata = { ...metadata };
+    // Re-fetch metadata from DB to pick up stripeCheckoutSessionId/clientSecret
+    // written by recreateCheckoutSessionForDiscount() (same stale-metadata fix as _applyDiscountInner)
+    const { data: freshSession } = await supabase
+      .from('checkout_sessions')
+      .select('metadata')
+      .eq('id', sessionId)
+      .single();
+    const cleanMetadata = { ...((freshSession?.metadata as any) || metadata) };
     delete cleanMetadata.appliedDiscountId;
     delete cleanMetadata.appliedDiscountCode;
     delete cleanMetadata.discountAmount;

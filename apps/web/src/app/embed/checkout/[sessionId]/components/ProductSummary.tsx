@@ -19,6 +19,8 @@ interface ProductSummaryProps {
   /** Override currency for the total display (used in adaptive pricing when customer selects a currency) */
   displayCurrency?: string
   trialDays?: number
+  /** Converted recurring unit price from Stripe (used for trial products with adaptive pricing) */
+  displayRecurringAmount?: number
 }
 
 export function ProductSummary({
@@ -31,6 +33,7 @@ export function ProductSummary({
   proration,
   displayCurrency,
   trialDays,
+  displayRecurringAmount,
 }: ProductSummaryProps) {
   const formatAmount = (amt: number, overrideCurrency?: string) => {
     return new Intl.NumberFormat('en-US', {
@@ -62,7 +65,7 @@ export function ProductSummary({
         <div className="flex items-baseline gap-1">
           {/* For trial products, show the recurring amount (not 0 = today's charge) */}
           <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {(trialDays && trialDays > 0) ? formatAmount(amount, displayCurrency) : formatAmount(totalAmount, displayCurrency)}
+            {(trialDays && trialDays > 0) ? formatAmount(displayRecurringAmount ?? amount, displayCurrency) : formatAmount(totalAmount, displayCurrency)}
           </span>
           <span className="text-gray-400 dark:text-gray-500 text-xs">/{getIntervalShort(product.interval)}</span>
         </div>
@@ -145,7 +148,7 @@ export function ProductSummary({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-            {trialDays}-day free trial &middot; then {formatAmount(amount, displayCurrency)}/{getIntervalShort(product.interval)}
+            {trialDays}-day free trial &middot; then {formatAmount(displayRecurringAmount ?? amount, displayCurrency)}/{getIntervalShort(product.interval)}
           </span>
         </div>
       )}

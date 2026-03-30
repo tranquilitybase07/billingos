@@ -24,7 +24,10 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
   const [discountAmount, setDiscountAmount] = useState(0)
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<string | undefined>(undefined)
+  const [displayRecurringAmount, setDisplayRecurringAmount] = useState<number | undefined>(undefined)
   const [clientSecretOverride, setClientSecretOverride] = useState<string | null>(null)
+  const [appliedCode, setAppliedCode] = useState<string | null>(null)
+  const [appliedDiscountLabel, setAppliedDiscountLabel] = useState<string | null>(null)
   const { session, loading, error } = useCheckoutSession(sessionId)
   const { sendMessage } = useParentMessaging()
 
@@ -34,15 +37,20 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
 
   const handleApplyDiscount = async (code: string) => {
     try {
-      const result = await api.post<{ discountAmount: number; totalAmount: number; discountLabel: string; clientSecret?: string }>(
+      const result = await api.post<{ discountAmount: number; totalAmount: number; recurringAmount?: number; discountLabel: string; clientSecret?: string }>(
         `/v1/checkout/${sessionId}/apply-discount`,
         { code },
       )
       setDiscountAmount(result.discountAmount)
       setDisplayTotal(result.totalAmount)
+      if (result.recurringAmount !== undefined) {
+        setDisplayRecurringAmount(result.recurringAmount)
+      }
       if (result.clientSecret) {
         setClientSecretOverride(result.clientSecret)
       }
+      setAppliedCode(code.trim().toUpperCase())
+      setAppliedDiscountLabel(result.discountLabel)
       return { success: true, discountLabel: result.discountLabel }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Invalid or expired code'
@@ -55,6 +63,9 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       const result = await api.delete<{ totalAmount: number; clientSecret?: string }>(`/v1/checkout/${sessionId}/discount`)
       setDiscountAmount(0)
       setDisplayTotal(null)
+      setDisplayRecurringAmount(undefined)
+      setAppliedCode(null)
+      setAppliedDiscountLabel(null)
       if (result.clientSecret) {
         setClientSecretOverride(result.clientSecret)
       }
@@ -98,14 +109,15 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
   // For adaptive mode: lift CheckoutProvider to wrap both panels so
   // CurrencySelectorElement can live in the left panel
   const isAdaptive = session?.checkoutMode === 'adaptive'
+  const stripeAccountId = session?.stripeAccountId as string | undefined
   const stripePromise = useMemo(() => {
-    if (!isAdaptive || !session) return null
+    if (!isAdaptive) return null
     const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-    if (session.stripeAccountId) {
-      return loadStripe(publishableKey, { stripeAccount: session.stripeAccountId })
+    if (stripeAccountId) {
+      return loadStripe(publishableKey, { stripeAccount: stripeAccountId })
     }
     return loadStripe(publishableKey)
-  }, [isAdaptive, session?.stripeAccountId])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdaptive, stripeAccountId])
 
   if (loading) {
     return (
@@ -162,6 +174,7 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
           proration={session.proration}
           displayCurrency={displayCurrency}
           trialDays={session.trialDays}
+          displayRecurringAmount={displayRecurringAmount}
         />
       </div>
       {isAdaptive && (
@@ -176,6 +189,8 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
         <DiscountCode
           onApply={handleApplyDiscount}
           onRemove={handleRemoveDiscount}
+          appliedCode={appliedCode}
+          appliedDiscountLabel={appliedDiscountLabel}
         />
       </div>
     </div>
@@ -229,9 +244,10 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
             payload: { height }
           })
         }}
-        onTotalChange={(total, currency) => {
+        onTotalChange={(total, currency, recurringAmount) => {
           setDisplayTotal(total)
           setDisplayCurrency(currency)
+          setDisplayRecurringAmount(recurringAmount)
         }}
       />
     </div>
