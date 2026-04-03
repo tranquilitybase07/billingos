@@ -136,29 +136,10 @@ export class AdaptivePricingWebhookService {
         stripeSubItem?.price?.unit_amount ?? price.price_amount ?? 0;
 
       // ── HANDLE UPGRADE/DOWNGRADE BEFORE creating/updating subscription ──
-      // Resolve existingSubscriptionId from BOS checkout metadata or Stripe sub metadata
-      let existingSubscriptionId: string | null =
+      const existingSubscriptionId: string | null =
         (checkoutSessionMeta.existingSubscriptionId as string) ||
         (stripeSub.metadata?.existingSubscriptionId as string) ||
         null;
-
-      // Safety net: auto-detect if metadata was missing
-      if (!existingSubscriptionId) {
-        const { data: otherActiveSubs } = await supabase
-          .from('subscriptions')
-          .select('id, product_id, amount')
-          .eq('customer_id', customerId)
-          .neq('product_id', productId)
-          .in('status', ['active', 'trialing', 'past_due'])
-          .is('ended_at', null);
-
-        if (otherActiveSubs && otherActiveSubs.length > 0) {
-          existingSubscriptionId = otherActiveSubs[0].id;
-          this.logger.log(
-            `Webhook auto-detected plan change: existing sub ${existingSubscriptionId}`,
-          );
-        }
-      }
 
       if (existingSubscriptionId) {
         await this.transitionService.handleTransition(
@@ -167,7 +148,22 @@ export class AdaptivePricingWebhookService {
           actualAmount,
           checkoutSession?.id,
         );
+      } else {
+        await this.transitionService.detectAndTransition(
+          customerId,
+          productId,
+          stripeAccountId || '',
+          actualAmount,
+          checkoutSession?.id,
+        );
       }
+
+      // Dedup guard
+      await this.transitionService.cleanupDuplicateSubscriptions(
+        customerId,
+        productId,
+        stripeAccountId || '',
+      );
 
       // ── NOW create/update subscription in DB ──
       // Check for existing subscription by stripe_subscription_id first

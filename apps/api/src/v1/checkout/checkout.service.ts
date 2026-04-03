@@ -4,6 +4,8 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { StripeService } from '../../stripe/stripe.service';
@@ -13,6 +15,7 @@ import { CheckoutMetadataService } from './checkout-metadata.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueueService } from '../../queue/queue.service';
 import { AdaptivePricingService } from './adaptive-pricing.service';
+import { SubscriptionTransitionService } from '../../subscriptions/subscription-transition.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto';
 
@@ -76,6 +79,8 @@ export class CheckoutService {
     private readonly redisService: RedisService,
     private readonly queueService: QueueService,
     private readonly adaptivePricingService: AdaptivePricingService,
+    @Inject(forwardRef(() => SubscriptionTransitionService))
+    private readonly transitionService: SubscriptionTransitionService,
   ) {}
 
   async createCheckout(
@@ -252,18 +257,15 @@ export class CheckoutService {
 
     // 4b. Auto-detect plan change: customer has active sub for a DIFFERENT product
     if (!dto.existingSubscriptionId) {
-      const { data: otherProductSubs } = await supabase
-        .from('subscriptions')
-        .select('id, product_id, amount')
-        .eq('customer_id', customerId)
-        .neq('product_id', product.id)
-        .in('status', ['active', 'trialing', 'past_due'])
-        .is('ended_at', null);
-
-      if (otherProductSubs && otherProductSubs.length > 0) {
-        dto.existingSubscriptionId = otherProductSubs[0].id;
+      const subs =
+        await this.transitionService.findActiveSubsForDifferentProduct(
+          customerId,
+          product.id,
+        );
+      if (subs.length > 0) {
+        dto.existingSubscriptionId = subs[0].id;
         this.logger.log(
-          `Auto-detected plan change: existing subscription ${otherProductSubs[0].id} for customer ${customerId}`,
+          `Auto-detected plan change: existing subscription ${subs[0].id} for customer ${customerId}`,
         );
       }
     }
@@ -286,6 +288,8 @@ export class CheckoutService {
         customerName,
         dto.metadata,
         orgCurrency,
+        dto.existingSubscriptionId,
+        stripeAccountId,
       );
     }
 
@@ -1988,6 +1992,8 @@ export class CheckoutService {
     customerName?: string,
     metadata?: any,
     orgCurrency: string = 'usd',
+    existingSubscriptionId?: string,
+    stripeAccountId?: string,
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
@@ -2012,6 +2018,8 @@ export class CheckoutService {
           customerId, // Store for later confirmation
           productId: product.id,
           priceId: price.id,
+          ...(existingSubscriptionId ? { existingSubscriptionId } : {}),
+          ...(stripeAccountId ? { stripeAccountId } : {}),
         },
       })
       .select()
@@ -2119,6 +2127,37 @@ export class CheckoutService {
         'Missing required data in checkout session',
       );
     }
+
+    // --- Plan transition: cancel/transition old sub from a different product ---
+    const existingSubId = sessionMetadata.existingSubscriptionId as
+      | string
+      | undefined;
+    const stripeAccountId = (sessionMetadata.stripeAccountId as string) || '';
+
+    if (existingSubId) {
+      await this.transitionService.handleTransition(
+        existingSubId,
+        stripeAccountId,
+        0, // free product amount
+        checkoutSession.id,
+      );
+    } else {
+      // Auto-detect (backwards compat for sessions created before this fix)
+      await this.transitionService.detectAndTransition(
+        customerId,
+        productId,
+        stripeAccountId,
+        0,
+        checkoutSession.id,
+      );
+    }
+
+    // --- Dedup guard ---
+    await this.transitionService.cleanupDuplicateSubscriptions(
+      customerId,
+      productId,
+      stripeAccountId,
+    );
 
     // Fetch org currency
     const { data: orgData } = await supabase

@@ -160,15 +160,15 @@ export class StripeWebhookService {
 
       // Subscription events
       case 'customer.subscription.created':
-        await this.handleSubscriptionCreated(event.data.object);
+        await this.handleSubscriptionCreated(event.data.object, event.account);
         break;
 
       case 'customer.subscription.updated':
-        await this.handleSubscriptionUpdated(event.data.object);
+        await this.handleSubscriptionUpdated(event.data.object, event.account);
         break;
 
       case 'customer.subscription.deleted':
-        await this.handleSubscriptionDeleted(event.data.object);
+        await this.handleSubscriptionDeleted(event.data.object, event.account);
         break;
 
       // Invoice events
@@ -571,6 +571,7 @@ export class StripeWebhookService {
    */
   private async handleSubscriptionCreated(
     subscription: Stripe.Subscription,
+    stripeAccountId?: string,
   ): Promise<void> {
     try {
       const customerId =
@@ -596,7 +597,6 @@ export class StripeWebhookService {
         );
 
         // Safety net: check if this customer has other active subs for a different product
-        // that need to be canceled (plan change that wasn't caught earlier)
         const { data: dbSub } = await supabase
           .from('subscriptions')
           .select('id, customer_id, product_id, amount')
@@ -604,35 +604,34 @@ export class StripeWebhookService {
           .single();
 
         if (dbSub) {
-          const { data: otherActiveSubs } = await supabase
-            .from('subscriptions')
-            .select('id, product_id, amount')
-            .eq('customer_id', dbSub.customer_id)
-            .neq('product_id', dbSub.product_id)
-            .in('status', ['active', 'trialing', 'past_due'])
-            .is('ended_at', null);
-
-          if (otherActiveSubs && otherActiveSubs.length > 0) {
-            const stripeAccountId =
-              (subscription as any).account || null;
-            for (const oldSub of otherActiveSubs) {
-              this.logger.log(
-                `Webhook safety net: transitioning old subscription ${oldSub.id} after plan change`,
-              );
-              await this.transitionService.handleTransition(
-                oldSub.id,
-                stripeAccountId || '',
-                dbSub.amount || 0,
-              );
-            }
+          // Check transition lock — if a transition is already in progress, skip
+          const locked = await this.transitionService.isTransitionLocked(
+            dbSub.customer_id,
+          );
+          if (!locked) {
+            await this.transitionService.detectAndTransition(
+              dbSub.customer_id,
+              dbSub.product_id,
+              stripeAccountId ?? '',
+              dbSub.amount || 0,
+            );
           }
         }
 
         return;
       }
 
+      // Check if this subscription was created via our checkout flow
+      // (checkout.session.completed webhook will create the BOS record)
+      const subMetadata = subscription.metadata || {};
+      if (subMetadata.metadataId || subMetadata.organizationId) {
+        this.logger.log(
+          `Subscription ${subscription.id} created via checkout — BOS record will be created by checkout handler`,
+        );
+        return;
+      }
+
       // Subscription was created outside our API (e.g., Stripe Dashboard)
-      // For now, just log it. In production, you might want to create it in DB
       this.logger.warn(
         `Subscription ${subscription.id} was created outside the API - not automatically synced`,
       );
@@ -647,6 +646,7 @@ export class StripeWebhookService {
    */
   private async handleSubscriptionUpdated(
     subscription: Stripe.Subscription,
+    stripeAccountId?: string,
   ): Promise<void> {
     try {
       this.logger.log(
@@ -658,13 +658,41 @@ export class StripeWebhookService {
       // Get existing subscription
       const { data: existing, error: fetchError } = await supabase
         .from('subscriptions')
-        .select('id, current_period_start, current_period_end')
+        .select(
+          'id, customer_id, current_period_start, current_period_end, status, metadata',
+        )
         .eq('stripe_subscription_id', subscription.id)
         .single();
 
       if (fetchError || !existing) {
         this.logger.warn(
           `Subscription ${subscription.id} not found in database`,
+        );
+        return;
+      }
+
+      // Skip if a transition is in progress (lock prevents stale webhook from racing)
+      if (existing.customer_id) {
+        const subLocked = await this.transitionService.isTransitionLocked(
+          existing.customer_id,
+        );
+        if (subLocked) {
+          this.logger.log(
+            `Transition lock active for subscription ${subscription.id} — skipping update`,
+          );
+          return;
+        }
+      }
+
+      // Don't overwrite plan-transition cancellations
+      // If the subscription was already canceled by a plan change (at checkout creation),
+      // a stale webhook update should not resurrect it
+      if (
+        existing.status === 'canceled' &&
+        (existing.metadata as Record<string, unknown>)?.canceledReason
+      ) {
+        this.logger.log(
+          `Subscription ${subscription.id} already canceled by plan transition — skipping update`,
         );
         return;
       }
@@ -705,12 +733,12 @@ export class StripeWebhookService {
       // Another webhook may have already processed a newer state
       let authoritativeSubscription = subscription;
       try {
-        const stripeAccountId = (subscription as any).account || null;
+        const accountId = stripeAccountId || null;
         const freshSub = await this.stripeService
           .getClient()
           .subscriptions.retrieve(
             subscription.id,
-            stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
+            accountId ? { stripeAccount: accountId } : undefined,
           );
         authoritativeSubscription = freshSub;
         this.logger.debug(
@@ -814,6 +842,7 @@ export class StripeWebhookService {
    */
   private async handleSubscriptionDeleted(
     subscription: Stripe.Subscription,
+    stripeAccountId?: string,
   ): Promise<void> {
     try {
       this.logger.log(`Subscription deleted: ${subscription.id}`);

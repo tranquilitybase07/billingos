@@ -3,11 +3,15 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CheckoutMetadataService } from './checkout-metadata.service';
+import { SubscriptionsService } from '../../subscriptions/subscriptions.service';
+import { SubscriptionTransitionService } from '../../subscriptions/subscription-transition.service';
 import { CheckoutSession } from './checkout.service';
 
 @Injectable()
@@ -20,6 +24,10 @@ export class AdaptivePricingService {
     private readonly supabaseService: SupabaseService,
     private readonly metadataService: CheckoutMetadataService,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => SubscriptionsService))
+    private readonly subscriptionsService: SubscriptionsService,
+    @Inject(forwardRef(() => SubscriptionTransitionService))
+    private readonly transitionService: SubscriptionTransitionService,
   ) {
     this.enabled =
       this.configService.get<string>('ENABLE_ADAPTIVE_PRICING', 'true') !==
@@ -115,23 +123,26 @@ export class AdaptivePricingService {
       );
     }
 
-    // Auto-detect plan change: customer has active sub for a DIFFERENT product
+    // Auto-detect plan change + handle pre-checkout cancellations via transition service
     let existingSubscriptionId: string | undefined =
       dto?.existingSubscriptionId;
     if (!existingSubscriptionId) {
-      const { data: otherProductSubs } = await supabase
-        .from('subscriptions')
-        .select('id, product_id, amount')
-        .eq('customer_id', customerId)
-        .neq('product_id', product.id)
-        .in('status', ['active', 'trialing', 'past_due'])
-        .is('ended_at', null);
-
-      if (otherProductSubs && otherProductSubs.length > 0) {
-        existingSubscriptionId = otherProductSubs[0].id;
-        this.logger.log(
-          `Auto-detected plan change: existing subscription ${existingSubscriptionId} for customer ${customerId}`,
+      const preResult =
+        await this.transitionService.handlePreCheckoutTransition(
+          customerId,
+          product.id,
+          stripeAccountId,
         );
+      existingSubscriptionId = preResult.remainingSubId;
+    } else {
+      const preResult =
+        await this.transitionService.handlePreCheckoutTransition(
+          customerId,
+          product.id,
+          stripeAccountId,
+        );
+      if (preResult.canceledSubId === existingSubscriptionId) {
+        existingSubscriptionId = undefined;
       }
     }
 
@@ -149,9 +160,14 @@ export class AdaptivePricingService {
           line_items: [{ price: price.stripe_price_id, quantity: 1 }],
           ui_mode: 'custom',
           adaptive_pricing: { enabled: true },
+          // Skip card form for plan changes if customer has saved payment method
+          ...(existingSubscriptionId
+            ? { payment_method_collection: 'if_required' }
+            : {}),
           subscription_data: {
             application_fee_percent: 5,
-            ...(product.trial_days > 0
+            // Only apply trial for NEW subscriptions, not plan changes
+            ...(product.trial_days > 0 && !existingSubscriptionId
               ? { trial_period_days: product.trial_days }
               : {}),
             metadata: {
@@ -160,9 +176,7 @@ export class AdaptivePricingService {
               externalUserId,
               productId: product.id,
               priceId: price.id,
-              ...(existingSubscriptionId
-                ? { existingSubscriptionId }
-                : {}),
+              ...(existingSubscriptionId ? { existingSubscriptionId } : {}),
             },
           },
           metadata: {
@@ -171,9 +185,7 @@ export class AdaptivePricingService {
             externalUserId,
             productId: product.id,
             priceId: price.id,
-            ...(existingSubscriptionId
-              ? { existingSubscriptionId }
-              : {}),
+            ...(existingSubscriptionId ? { existingSubscriptionId } : {}),
           },
           return_url: `${process.env.APP_URL}/embed/checkout/complete`,
           expires_at: Math.floor(expiresAt.getTime() / 1000),
@@ -417,6 +429,8 @@ export class AdaptivePricingService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
+    const hasExistingSub = !!sessionMetadata.existingSubscriptionId;
+
     const newStripeSession = await stripeClient.checkout.sessions.create(
       {
         mode: 'subscription',
@@ -425,9 +439,14 @@ export class AdaptivePricingService {
         line_items: [{ price: stripePriceId, quantity: 1 }],
         ui_mode: 'custom',
         adaptive_pricing: { enabled: true },
+        // Skip card form for plan changes if customer has saved payment method
+        ...(hasExistingSub ? { payment_method_collection: 'if_required' } : {}),
         subscription_data: {
           application_fee_percent: 5,
-          ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+          // Only apply trial for NEW subscriptions, not plan changes
+          ...(trialDays > 0 && !hasExistingSub
+            ? { trial_period_days: trialDays }
+            : {}),
           metadata: {
             metadataId,
             organizationId,

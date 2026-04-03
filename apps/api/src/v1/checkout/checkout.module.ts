@@ -10,6 +10,7 @@ import { SessionTokensModule } from '../../session-tokens/session-tokens.module'
 import { CustomersModule } from '../../customers/customers.module';
 import { RedisModule } from '../../redis/redis.module';
 import { QueueModule } from '../../queue/queue.module';
+import { SubscriptionsModule } from '../../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { QueueModule } from '../../queue/queue.module';
     CustomersModule,
     RedisModule,
     QueueModule,
+    SubscriptionsModule,
   ],
   controllers: [CheckoutController],
   providers: [CheckoutService, CheckoutMetadataService, AdaptivePricingService],
