@@ -158,10 +158,13 @@ export function SubscriptionTab({
     }
   }
 
-  const openPricingTable = () =>
+  const openPricingTable = (subscriptionId?: string) =>
     sendMessage({
       type: 'OPEN_PRICING_TABLE',
-      payload: { customer: { email: customer?.email, name: customer?.name } },
+      payload: {
+        customer: { email: customer?.email, name: customer?.name },
+        existingSubscriptionId: subscriptionId,
+      },
     })
 
   return (
@@ -220,7 +223,7 @@ export function SubscriptionTab({
                   <div className="border-t border-gray-100 dark:border-[#2e2e30]" />
                   <div className="px-6 py-4 flex items-center gap-3">
                     <button
-                      onClick={openPricingTable}
+                      onClick={() => openPricingTable(subscription.id)}
                       className="px-4 py-2 text-sm font-medium rounded-xl border border-gray-200 dark:border-[#2e2e30] text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
                     >
                       Change Plan
@@ -249,13 +252,13 @@ export function SubscriptionTab({
                   {subscription.status !== 'canceled' && !subscription.cancelAtPeriodEnd && (
                     <div className="flex items-center gap-3 shrink-0">
                       <button
-                        onClick={openPricingTable}
+                        onClick={() => openPricingTable(subscription.id)}
                         className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-white transition-colors whitespace-nowrap"
                       >
                         View all plans →
                       </button>
                       <button
-                        onClick={openPricingTable}
+                        onClick={() => openPricingTable(subscription.id)}
                         className="px-4 py-2 text-sm font-semibold rounded-xl bg-[var(--portal-accent,#3b82f6)] text-white hover:opacity-90 transition-opacity flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <LightningIcon />

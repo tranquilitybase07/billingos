@@ -10,6 +10,8 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RedisService } from '../redis/redis.service';
 import { RefundService } from './refund.service';
 import { QueueService } from '../queue/queue.service';
+import { AdaptivePricingWebhookService } from './adaptive-pricing-webhook.service';
+import { SubscriptionTransitionService } from '../subscriptions/subscription-transition.service';
 import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
@@ -26,6 +28,9 @@ export class StripeWebhookService {
     private readonly redisService: RedisService,
     private readonly refundService: RefundService,
     private readonly queueService: QueueService,
+    private readonly adaptivePricingWebhookService: AdaptivePricingWebhookService,
+    @Inject(forwardRef(() => SubscriptionTransitionService))
+    private readonly transitionService: SubscriptionTransitionService,
   ) {}
 
   /**
@@ -177,7 +182,9 @@ export class StripeWebhookService {
 
       // Checkout Session events (adaptive pricing)
       case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(event.data.object);
+        await this.adaptivePricingWebhookService.handleCheckoutSessionCompleted(
+          event.data.object,
+        );
         break;
 
       // SetupIntent events (trial product checkouts)
@@ -587,6 +594,40 @@ export class StripeWebhookService {
         this.logger.log(
           `Subscription ${subscription.id} already exists in database`,
         );
+
+        // Safety net: check if this customer has other active subs for a different product
+        // that need to be canceled (plan change that wasn't caught earlier)
+        const { data: dbSub } = await supabase
+          .from('subscriptions')
+          .select('id, customer_id, product_id, amount')
+          .eq('id', existing.id)
+          .single();
+
+        if (dbSub) {
+          const { data: otherActiveSubs } = await supabase
+            .from('subscriptions')
+            .select('id, product_id, amount')
+            .eq('customer_id', dbSub.customer_id)
+            .neq('product_id', dbSub.product_id)
+            .in('status', ['active', 'trialing', 'past_due'])
+            .is('ended_at', null);
+
+          if (otherActiveSubs && otherActiveSubs.length > 0) {
+            const stripeAccountId =
+              (subscription as any).account || null;
+            for (const oldSub of otherActiveSubs) {
+              this.logger.log(
+                `Webhook safety net: transitioning old subscription ${oldSub.id} after plan change`,
+              );
+              await this.transitionService.handleTransition(
+                oldSub.id,
+                stripeAccountId || '',
+                dbSub.amount || 0,
+              );
+            }
+          }
+        }
+
         return;
       }
 
@@ -799,10 +840,10 @@ export class StripeWebhookService {
 
       const supabase = this.supabaseService.getClient();
 
-      // Get subscription ID and product_id
+      // Get subscription with metadata to detect downgrade completions
       const { data: existing, error: fetchError } = await supabase
         .from('subscriptions')
-        .select('id, product_id')
+        .select('id, product_id, metadata')
         .eq('stripe_subscription_id', subscription.id)
         .single();
 
@@ -812,6 +853,8 @@ export class StripeWebhookService {
         );
         return;
       }
+
+      const subMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
 
       // Update subscription status
       await supabase
@@ -831,12 +874,23 @@ export class StripeWebhookService {
         );
       }
 
-      // Revoke all feature grants
-      await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
-
-      this.logger.log(
-        `Subscription ${subscription.id} canceled and features revoked`,
-      );
+      // Handle downgrade completion: the old sub's period has ended,
+      // the new sub's trial should end simultaneously and Stripe will start billing.
+      if (subMetadata.canceledReason === 'downgraded') {
+        await this.transitionService.handleDowngradeCompletion(
+          existing.id,
+          subMetadata,
+        );
+        this.logger.log(
+          `Subscription ${subscription.id} downgrade completed — features revoked`,
+        );
+      } else {
+        // Normal cancellation: revoke all feature grants
+        await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
+        this.logger.log(
+          `Subscription ${subscription.id} canceled and features revoked`,
+        );
+      }
     } catch (error) {
       this.logger.error('Error handling subscription.deleted:', error);
     }
@@ -1671,6 +1725,23 @@ export class StripeWebhookService {
       activated_from: 'direct_subscription_payment_succeeded',
     };
 
+    // ── HANDLE UPGRADE/DOWNGRADE BEFORE creating/updating subscription ──
+    const existingSubId =
+      checkoutMetadata?.existingSubscriptionId ||
+      (stripeSubscription as any)?.metadata?.existingSubscriptionId ||
+      null;
+
+    if (existingSubId) {
+      const newAmount = paymentIntentRecord.amount || 0;
+      await this.transitionService.handleTransition(
+        existingSubId as string,
+        stripeAccountId,
+        newAmount,
+        checkoutSession?.id,
+      );
+    }
+
+    // ── NOW create/update subscription in DB ──
     let subscription: any;
 
     if (existingSubscription) {
@@ -1731,16 +1802,6 @@ export class StripeWebhookService {
         return;
       }
       subscription = data;
-    }
-
-    // Handle upgrade/downgrade: cancel existing subscription
-    if (checkoutMetadata?.existingSubscriptionId) {
-      await this.handleUpgradeDowngrade(
-        supabase,
-        checkoutMetadata.existingSubscriptionId,
-        stripeAccountId,
-        checkoutSession?.id,
-      );
     }
 
     // Invalidate product revenue metrics cache
@@ -2051,12 +2112,13 @@ export class StripeWebhookService {
       }
     }
 
-    // Handle upgrade/downgrade
+    // Handle upgrade/downgrade BEFORE creating new Stripe subscription
     if (checkoutMetadata.existingSubscriptionId) {
-      await this.handleUpgradeDowngrade(
-        supabase,
+      const newAmount = price.price_amount || 0;
+      await this.transitionService.handleTransition(
         checkoutMetadata.existingSubscriptionId as string,
         stripeAccountId,
+        newAmount,
         checkoutSession?.id,
       );
     }
@@ -2633,80 +2695,6 @@ export class StripeWebhookService {
   }
 
   /**
-   * Handle upgrade/downgrade by canceling the existing subscription
-   */
-  private async handleUpgradeDowngrade(
-    supabase: SupabaseClient<Database>,
-    existingSubscriptionId: string,
-    stripeAccountId: string,
-    checkoutSessionId?: string,
-  ): Promise<void> {
-    this.logger.log(
-      `Upgrade/downgrade: canceling subscription ${existingSubscriptionId}`,
-    );
-
-    try {
-      const { data: existingSubscription } = await supabase
-        .from('subscriptions')
-        .select('id, stripe_subscription_id, status, metadata')
-        .eq('id', existingSubscriptionId)
-        .single();
-
-      if (!existingSubscription) {
-        this.logger.warn(
-          `Existing subscription ${existingSubscriptionId} not found`,
-        );
-        return;
-      }
-
-      if (existingSubscription.stripe_subscription_id?.startsWith('sub_')) {
-        try {
-          await this.stripeService.cancelSubscription(
-            existingSubscription.stripe_subscription_id,
-            stripeAccountId,
-            false,
-          );
-        } catch (stripeError) {
-          this.logger.warn(
-            'Failed to cancel Stripe subscription:',
-            stripeError,
-          );
-        }
-      }
-
-      await supabase
-        .from('subscriptions')
-        .update({
-          status: 'canceled',
-          canceled_at: new Date().toISOString(),
-          cancel_at_period_end: false,
-          updated_at: new Date().toISOString(),
-          metadata: {
-            ...((existingSubscription.metadata ?? {}) as Record<
-              string,
-              unknown
-            >),
-            canceledReason: 'upgraded_or_downgraded',
-            newSubscriptionCheckoutSessionId: checkoutSessionId,
-          },
-        })
-        .eq('id', existingSubscription.id);
-
-      // Revoke features from old subscription immediately
-      // (don't wait for subscription.deleted webhook which may be delayed)
-      await this.subscriptionsService.revokeSubscriptionFeatures(
-        existingSubscription.id,
-      );
-
-      this.logger.log(
-        `Subscription ${existingSubscription.id} canceled and features revoked for upgrade/downgrade`,
-      );
-    } catch (error) {
-      this.logger.error('Error canceling existing subscription:', error);
-    }
-  }
-
-  /**
    * Grant product features to a customer for a subscription (with dedup)
    */
   private async grantProductFeatures(
@@ -3152,348 +3140,6 @@ export class StripeWebhookService {
       this.logger.log(`Payment intent ${paymentIntent.id} marked as failed`);
     } catch (error) {
       this.logger.error('Error handling payment_intent.payment_failed:', error);
-    }
-  }
-
-  /**
-   * Handle checkout.session.completed webhook
-   * Fired when an adaptive pricing Checkout Session completes.
-   * Stripe has already created the subscription — we sync it to our DB.
-   */
-  private async handleCheckoutSessionCompleted(
-    session: Stripe.Checkout.Session,
-  ): Promise<void> {
-    try {
-      this.logger.log(`Checkout session completed: ${session.id}`);
-
-      // Only handle our adaptive mode sessions; ignore others (e.g. Stripe-hosted)
-      const metadata = (session.metadata || {}) as Record<string, string>;
-      const metadataId = metadata.metadataId;
-      const organizationId = metadata.organizationId;
-      const productId = metadata.productId;
-      const priceId = metadata.priceId;
-
-      if (!organizationId || !productId || !priceId) {
-        this.logger.log(
-          `Checkout session ${session.id} missing BillingOS metadata — skipping`,
-        );
-        return;
-      }
-
-      const supabase = this.supabaseService.getClient();
-
-      // Find our checkout_sessions record by Stripe session ID (stored in metadata)
-      const { data: checkoutSession } = await supabase
-        .from('checkout_sessions')
-        .select('id, subscription_id, completed_at, organization_id, metadata')
-        .filter('metadata->>stripeCheckoutSessionId', 'eq', session.id)
-        .maybeSingle();
-
-      if (checkoutSession?.completed_at) {
-        this.logger.log(
-          `Checkout session ${session.id} already completed — skipping`,
-        );
-        return;
-      }
-
-      // Get the Stripe subscription ID created by Stripe for this checkout
-      const stripeSubscriptionId =
-        typeof session.subscription === 'string'
-          ? session.subscription
-          : (session.subscription as any)?.id;
-
-      if (!stripeSubscriptionId) {
-        this.logger.warn(
-          `No subscription in completed checkout session ${session.id}`,
-        );
-        return;
-      }
-
-      // Resolve customer
-      const stripeCustomerId =
-        typeof session.customer === 'string'
-          ? session.customer
-          : (session.customer as any)?.id;
-
-      const { data: customer, error: customerFetchError } = await supabase
-        .from('customers')
-        .select('id, organization_id')
-        .eq('stripe_customer_id', stripeCustomerId)
-        .single();
-
-      if (customerFetchError || !customer) {
-        this.logger.error(
-          `Customer not found for stripe_customer_id ${stripeCustomerId}`,
-        );
-        return;
-      }
-
-      const customerId = customer.id;
-
-      // Get price details
-      const { data: price } = await supabase
-        .from('product_prices')
-        .select(
-          'stripe_price_id, price_amount, price_currency, recurring_interval, recurring_interval_count',
-        )
-        .eq('id', priceId)
-        .single();
-
-      if (!price) {
-        this.logger.error(`Price not found for priceId ${priceId}`);
-        return;
-      }
-
-      // Get the connected Stripe account ID from our checkout session metadata
-      const checkoutSessionMeta = (checkoutSession?.metadata as any) || {};
-      const stripeAccountId = checkoutSessionMeta.stripeAccountId as
-        | string
-        | undefined;
-
-      let stripeSub: any;
-      try {
-        stripeSub = await this.stripeService
-          .getClient()
-          .subscriptions.retrieve(stripeSubscriptionId, {
-            stripeAccount: stripeAccountId,
-          });
-      } catch (err) {
-        this.logger.error(
-          `Failed to retrieve Stripe subscription ${stripeSubscriptionId}:`,
-          err,
-        );
-        return;
-      }
-
-      // Check for existing subscription by stripe_subscription_id first
-      const { data: existingByStripeId } = await supabase
-        .from('subscriptions')
-        .select('id, status')
-        .eq('stripe_subscription_id', stripeSubscriptionId)
-        .maybeSingle();
-
-      if (existingByStripeId) {
-        this.logger.log(
-          `Subscription ${stripeSubscriptionId} already in database — updating status`,
-        );
-        await supabase
-          .from('subscriptions')
-          .update({
-            status: stripeSub.status,
-            current_period_start: stripeSub.current_period_start
-              ? new Date(stripeSub.current_period_start * 1000).toISOString()
-              : new Date().toISOString(),
-            current_period_end: stripeSub.current_period_end
-              ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          })
-          .eq('id', existingByStripeId.id);
-
-        // Update checkout session record
-        if (checkoutSession) {
-          await supabase
-            .from('checkout_sessions')
-            .update({
-              completed_at: new Date().toISOString(),
-              subscription_id: existingByStripeId.id,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', checkoutSession.id);
-        }
-      } else {
-        // Check for existing active subscription by (customer_id, product_id)
-        // to avoid violating idx_unique_active_subscription constraint
-        const { data: existingByCustomerProduct } = await supabase
-          .from('subscriptions')
-          .select('id, status, stripe_subscription_id')
-          .eq('customer_id', customerId)
-          .eq('product_id', productId)
-          .in('status', ['active', 'trialing', 'incomplete', 'past_due'])
-          .is('ended_at', null)
-          .maybeSingle();
-
-        let subscriptionId: string;
-
-        // Use actual amount/currency from Stripe subscription (handles adaptive pricing)
-        const stripeSubItem = stripeSub.items?.data?.[0];
-        const actualAmount =
-          stripeSubItem?.price?.unit_amount ?? price.price_amount ?? 0;
-        const actualCurrency =
-          stripeSub.currency ?? price.price_currency ?? 'usd';
-
-        if (existingByCustomerProduct) {
-          // Update existing subscription with new Stripe subscription ID
-          this.logger.log(
-            `Updating existing subscription ${existingByCustomerProduct.id} ` +
-              `(${existingByCustomerProduct.stripe_subscription_id} → ${stripeSubscriptionId})`,
-          );
-          await supabase
-            .from('subscriptions')
-            .update({
-              stripe_subscription_id: stripeSubscriptionId,
-              price_id: priceId,
-              status: stripeSub.status,
-              current_period_start: stripeSub.current_period_start
-                ? new Date(stripeSub.current_period_start * 1000).toISOString()
-                : new Date().toISOString(),
-              current_period_end: stripeSub.current_period_end
-                ? new Date(stripeSub.current_period_end * 1000).toISOString()
-                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-              amount: actualAmount,
-              currency: actualCurrency,
-              metadata: {
-                created_from: 'checkout_session_completed',
-                stripeCheckoutSessionId: session.id,
-                metadataId,
-              },
-            })
-            .eq('id', existingByCustomerProduct.id);
-
-          subscriptionId = existingByCustomerProduct.id;
-        } else {
-          // Create new subscription record
-          const subscriptionData = {
-            customer_id: customerId,
-            organization_id: customer.organization_id,
-            product_id: productId,
-            price_id: priceId,
-            stripe_subscription_id: stripeSubscriptionId,
-            status: stripeSub.status,
-            current_period_start: stripeSub.current_period_start
-              ? new Date(stripeSub.current_period_start * 1000).toISOString()
-              : new Date().toISOString(),
-            current_period_end: stripeSub.current_period_end
-              ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            trial_end: stripeSub.trial_end
-              ? new Date(stripeSub.trial_end * 1000).toISOString()
-              : null,
-            trial_start: stripeSub.trial_start
-              ? new Date(stripeSub.trial_start * 1000).toISOString()
-              : null,
-            cancel_at_period_end: false,
-            amount: actualAmount,
-            currency: actualCurrency,
-            metadata: {
-              created_from: 'checkout_session_completed',
-              stripeCheckoutSessionId: session.id,
-              metadataId,
-            },
-          };
-
-          const { data: subscription, error: subError } = await supabase
-            .from('subscriptions')
-            .insert(subscriptionData)
-            .select()
-            .single();
-
-          if (subError) {
-            this.logger.error(
-              'Failed to save subscription from checkout session:',
-              subError,
-            );
-            return;
-          }
-
-          subscriptionId = subscription.id;
-        }
-
-        this.logger.log(
-          `Subscription ${subscriptionId} processed from checkout session ${session.id}`,
-        );
-
-        // Invalidate product revenue metrics cache
-        const cacheKey = `product-metrics:${productId}`;
-        await this.cacheManager.del(cacheKey);
-
-        // Grant features — un-revoke existing grants or insert new ones
-        const { data: productFeatures } = await supabase
-          .from('product_features')
-          .select('feature_id, config')
-          .eq('product_id', productId);
-
-        if (productFeatures && productFeatures.length > 0) {
-          // Un-revoke any previously revoked grants for this subscription
-          await supabase
-            .from('feature_grants')
-            .update({ revoked_at: null })
-            .eq('subscription_id', subscriptionId)
-            .not('revoked_at', 'is', null);
-
-          // Check which features already have grants
-          const { data: existingGrants } = await supabase
-            .from('feature_grants')
-            .select('feature_id')
-            .eq('subscription_id', subscriptionId);
-
-          const existingFeatureIds = new Set(
-            (existingGrants || []).map(
-              (g: { feature_id: string }) => g.feature_id,
-            ),
-          );
-
-          // Only insert grants for features that don't already have one
-          const newGrants = productFeatures
-            .filter((pf) => !existingFeatureIds.has(pf.feature_id))
-            .map((pf) => ({
-              customer_id: customerId,
-              subscription_id: subscriptionId,
-              feature_id: pf.feature_id,
-              properties: pf.config || {},
-              granted_at: new Date().toISOString(),
-            }));
-
-          if (newGrants.length > 0) {
-            const { error: grantError } = await supabase
-              .from('feature_grants')
-              .insert(newGrants);
-
-            if (grantError) {
-              this.logger.error('Failed to grant features:', grantError);
-            } else {
-              this.logger.log(
-                `Granted ${newGrants.length} new features from checkout session`,
-              );
-            }
-          }
-
-          this.logger.log(
-            `Feature grants ensured for subscription ${subscriptionId} (${existingFeatureIds.size} existing, ${newGrants.length} new)`,
-          );
-        }
-
-        // Update checkout session record
-        if (checkoutSession) {
-          await supabase
-            .from('checkout_sessions')
-            .update({
-              completed_at: new Date().toISOString(),
-              subscription_id: subscriptionId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', checkoutSession.id);
-        }
-      }
-
-      // Best-effort: populate customer country from card
-      if (customer) {
-        const dpm = stripeSub?.default_payment_method;
-        const pmId = typeof dpm === 'string' ? dpm : (dpm?.id ?? null);
-        this.logger.log(
-          `[CardCountry] checkout-session path — customerId=${customerId}, ` +
-            `default_payment_method=${JSON.stringify(dpm)}, pmId=${pmId}, ` +
-            `stripeAccountId=${stripeAccountId}`,
-        );
-        await this.tryUpdateCustomerCardCountry(
-          customerId,
-          pmId,
-          stripeAccountId,
-        );
-      }
-
-      this.logger.log(`Checkout session ${session.id} processed successfully`);
-    } catch (error) {
-      this.logger.error('Error handling checkout.session.completed:', error);
     }
   }
 

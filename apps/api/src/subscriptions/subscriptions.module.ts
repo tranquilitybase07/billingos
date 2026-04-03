@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { SubscriptionsController } from './subscriptions.controller';
 import { SubscriptionsService } from './subscriptions.service';
-import { SubscriptionUpgradeService } from './subscription-upgrade.service';
+import { SubscriptionTransitionService } from './subscription-transition.service';
 import { SubscriptionSchedulerService } from './subscription-scheduler.service';
 import { SupabaseModule } from '../supabase/supabase.module';
 import { StripeModule } from '../stripe/stripe.module';
@@ -12,9 +12,9 @@ import { AuthModule } from '../auth/auth.module';
   controllers: [SubscriptionsController],
   providers: [
     SubscriptionsService,
-    SubscriptionUpgradeService,
+    SubscriptionTransitionService,
     SubscriptionSchedulerService,
   ],
-  exports: [SubscriptionsService, SubscriptionUpgradeService],
+  exports: [SubscriptionsService, SubscriptionTransitionService],
 })
 export class SubscriptionsModule {}

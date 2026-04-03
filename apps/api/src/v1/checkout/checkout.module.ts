@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
 import { CheckoutMetadataService } from './checkout-metadata.service';
+import { AdaptivePricingService } from './adaptive-pricing.service';
 import { StripeModule } from '../../stripe/stripe.module';
 import { SupabaseModule } from '../../supabase/supabase.module';
 import { SessionTokensModule } from '../../session-tokens/session-tokens.module';
@@ -11,6 +13,7 @@ import { QueueModule } from '../../queue/queue.module';
 
 @Module({
   imports: [
+    ConfigModule,
     StripeModule,
     SupabaseModule,
     SessionTokensModule,
@@ -19,7 +22,7 @@ import { QueueModule } from '../../queue/queue.module';
     QueueModule,
   ],
   controllers: [CheckoutController],
-  providers: [CheckoutService, CheckoutMetadataService],
-  exports: [CheckoutService, CheckoutMetadataService],
+  providers: [CheckoutService, CheckoutMetadataService, AdaptivePricingService],
+  exports: [CheckoutService, CheckoutMetadataService, AdaptivePricingService],
 })
 export class CheckoutModule {}
