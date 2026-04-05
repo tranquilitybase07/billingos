@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
 import { SubscriptionsService } from './subscriptions.service';
@@ -519,6 +520,195 @@ export class SubscriptionTransitionService {
       oldStripeSubscriptionId: oldSub.stripe_subscription_id,
       canceled: false,
       oldPeriodEnd,
+    };
+  }
+
+  // ── In-place upgrade via Stripe subscription.update() ──
+
+  /**
+   * Upgrade a subscription in-place using Stripe's subscription.update().
+   * Instead of cancel+create, this updates the existing Stripe subscription
+   * to a new price, and Stripe handles proration automatically.
+   */
+  async handleUpgradeInPlace(
+    existingBosSubId: string,
+    newProductId: string,
+    newPriceId: string,
+    newStripePriceId: string,
+    stripeAccountId: string,
+    newAmount: number,
+  ): Promise<{
+    updatedStripeSubscription: Stripe.Subscription;
+    bosSubscriptionId: string;
+  }> {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Fetch old BOS subscription
+    const { data: oldSub } = await supabase
+      .from('subscriptions')
+      .select(
+        'id, stripe_subscription_id, product_id, customer_id, organization_id, metadata',
+      )
+      .eq('id', existingBosSubId)
+      .single();
+
+    if (!oldSub || !oldSub.stripe_subscription_id?.startsWith('sub_')) {
+      throw new Error(
+        `Subscription ${existingBosSubId} not found or has no Stripe subscription`,
+      );
+    }
+
+    // 2. Update the Stripe subscription in-place
+    const updatedStripeSub = await this.stripeService.updateSubscriptionPrice(
+      oldSub.stripe_subscription_id,
+      newStripePriceId,
+      stripeAccountId,
+    );
+
+    // 3. Update BOS subscription record with new product/price/amount
+    const subData = updatedStripeSub as any;
+    const periodStart = subData.current_period_start
+      ? new Date(subData.current_period_start * 1000)
+      : new Date();
+    const periodEnd = subData.current_period_end
+      ? new Date(subData.current_period_end * 1000)
+      : new Date();
+
+    const { data: updateResult, error: bosUpdateError } = await supabase
+      .from('subscriptions')
+      .update({
+        product_id: newProductId,
+        price_id: newPriceId,
+        amount: newAmount,
+        // Don't update period dates here — the webhook syncs them from Stripe.
+        // Writing them here can trigger the subscriptions_check constraint
+        // (current_period_end > current_period_start) when timestamps are equal.
+        status: updatedStripeSub.status,
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...((oldSub.metadata ?? {}) as Record<string, unknown>),
+          upgradedAt: new Date().toISOString(),
+          previousProductId: oldSub.product_id,
+          upgradeMethod: 'in_place',
+        },
+      })
+      .eq('id', oldSub.id)
+      .select('product_id, price_id, amount')
+      .single();
+
+    if (bosUpdateError) {
+      this.logger.error(
+        `BOS UPDATE FAILED for sub ${oldSub.id}: ${bosUpdateError.message} (code: ${bosUpdateError.code})`,
+      );
+      throw new Error(
+        `BOS subscription update failed: ${bosUpdateError.message}`,
+      );
+    } else {
+      this.logger.log(
+        `BOS UPDATE OK for sub ${oldSub.id}: product=${updateResult?.product_id}, price=${updateResult?.price_id}, amount=${updateResult?.amount}`,
+      );
+    }
+
+    // 4. Swap feature grants: hard-delete old → grant new
+    // Hard-delete instead of soft-delete (revokeSubscriptionFeatures) to avoid
+    // unique constraint conflict on (subscription_id, feature_id).
+    await supabase
+      .from('feature_grants')
+      .delete()
+      .eq('subscription_id', oldSub.id);
+    await this.subscriptionsService.grantProductFeatures(
+      oldSub.customer_id,
+      oldSub.id,
+      newProductId,
+      periodStart,
+      periodEnd,
+    );
+
+    this.logger.log(
+      `In-place upgrade complete: subscription ${oldSub.id} updated from product ${oldSub.product_id} to ${newProductId}`,
+    );
+
+    return {
+      updatedStripeSubscription: updatedStripeSub,
+      bosSubscriptionId: oldSub.id,
+    };
+  }
+
+  /**
+   * Preview the prorated amount for upgrading a subscription to a new price.
+   * Uses Stripe's upcoming invoice preview to calculate exact proration.
+   */
+  async previewProration(
+    existingBosSubId: string,
+    newStripePriceId: string,
+    stripeAccountId: string,
+  ): Promise<{
+    proratedAmount: number;
+    creditAmount: number;
+    newPlanCharge: number;
+    currency: string;
+    immediateCharge: boolean;
+  }> {
+    const supabase = this.supabaseService.getClient();
+
+    // Fetch BOS subscription + Stripe customer ID
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select(
+        'id, stripe_subscription_id, customer_id, customers!inner(stripe_customer_id)',
+      )
+      .eq('id', existingBosSubId)
+      .single();
+
+    if (
+      !sub ||
+      !sub.stripe_subscription_id?.startsWith('sub_') ||
+      !(sub as any).customers?.stripe_customer_id
+    ) {
+      throw new Error(
+        `Subscription ${existingBosSubId} not found or missing Stripe IDs`,
+      );
+    }
+
+    const stripeCustomerId = (sub as any).customers.stripe_customer_id;
+
+    // Get upcoming invoice preview from Stripe
+    const upcomingInvoice = await this.stripeService.retrieveUpcomingInvoice(
+      sub.stripe_subscription_id,
+      stripeCustomerId,
+      newStripePriceId,
+      stripeAccountId,
+    );
+
+    // Parse proration from upcoming invoice line items
+    let creditAmount = 0;
+    let newPlanCharge = 0;
+
+    for (const line of upcomingInvoice.lines?.data || []) {
+      // In Stripe SDK v20+, proration is indicated via line.parent details
+      const parent = line.parent;
+      const isProration =
+        parent?.invoice_item_details?.proration === true ||
+        parent?.subscription_item_details?.proration === true;
+      if (isProration) {
+        if (line.amount < 0) {
+          creditAmount += Math.abs(line.amount);
+        } else {
+          newPlanCharge += line.amount;
+        }
+      }
+    }
+
+    const proratedAmount = newPlanCharge - creditAmount;
+    const currency =
+      upcomingInvoice.currency || (sub as any).currency || 'usd';
+
+    return {
+      proratedAmount,
+      creditAmount,
+      newPlanCharge,
+      currency,
+      immediateCharge: proratedAmount > 0,
     };
   }
 

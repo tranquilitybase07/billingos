@@ -801,6 +801,75 @@ export class StripeWebhookService {
         return;
       }
 
+      // Detect in-place price change (upgrade via subscription.update())
+      // If the Stripe subscription's price changed, this was an in-place upgrade
+      // we initiated — BOS record should already be updated by handleUpgradeInPlace.
+      // Sync latest data from Stripe as a safety net.
+      const currentStripePrice =
+        authoritativeSubscription.items?.data?.[0]?.price?.id;
+      this.logger.log(
+        `Webhook price check for sub ${subscription.id}: currentStripePrice=${currentStripePrice}`,
+      );
+
+      if (currentStripePrice) {
+        const { data: bosSubForPrice } = await supabase
+          .from('subscriptions')
+          .select('price_id, product_prices!inner(stripe_price_id)')
+          .eq('id', existing.id)
+          .single();
+
+        const bosStripePriceId = (bosSubForPrice as any)?.product_prices
+          ?.stripe_price_id;
+        this.logger.log(
+          `Webhook price comparison for sub ${subscription.id}: ` +
+            `BOS stripe_price=${bosStripePriceId}, Stripe current_price=${currentStripePrice}, ` +
+            `match=${bosStripePriceId === currentStripePrice}`,
+        );
+        if (bosStripePriceId && bosStripePriceId !== currentStripePrice) {
+          this.logger.log(
+            `Detected price change on subscription ${subscription.id}: ` +
+              `BOS price ${bosStripePriceId} → Stripe price ${currentStripePrice}. ` +
+              `Syncing BOS record to match Stripe.`,
+          );
+
+          // Look up BOS price matching Stripe's current price
+          const { data: newBosPrice } = await supabase
+            .from('product_prices')
+            .select('id, product_id, price_amount')
+            .eq('stripe_price_id', currentStripePrice)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (newBosPrice) {
+            const { error: syncError } = await supabase
+              .from('subscriptions')
+              .update({
+                product_id: newBosPrice.product_id,
+                price_id: newBosPrice.id,
+                amount: newBosPrice.price_amount ?? 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existing.id);
+
+            if (syncError) {
+              this.logger.error(
+                `Failed to sync subscription ${subscription.id} after price change:`,
+                syncError,
+              );
+            } else {
+              this.logger.log(
+                `Synced subscription ${subscription.id}: product=${newBosPrice.product_id}, price=${newBosPrice.id}`,
+              );
+            }
+          } else {
+            this.logger.warn(
+              `No BOS price found for Stripe price ${currentStripePrice} — subscription ${subscription.id} may be out of sync`,
+            );
+          }
+        }
+      }
+
       // Invalidate product revenue metrics cache
       // Get the product_id from the subscription
       const { data: subscriptionData } = await supabase

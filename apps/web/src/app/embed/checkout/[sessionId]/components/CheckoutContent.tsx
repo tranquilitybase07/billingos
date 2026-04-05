@@ -213,9 +213,11 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       </button>
 
       <p className="text-[10px] font-semibold tracking-[0.15em] text-gray-400 dark:text-gray-500 uppercase mb-1">
-        Payment Details
+        {session?.checkoutMode === 'upgrade' ? 'Confirm Upgrade' : 'Payment Details'}
       </p>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Complete your purchase</h2>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">
+        {session?.checkoutMode === 'upgrade' ? 'Review your plan change' : 'Complete your purchase'}
+      </h2>
 
       <CheckoutForm
         key={`${clientSecretOverride ?? session.clientSecret}-${theme ?? 'light'}`}

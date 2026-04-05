@@ -45,7 +45,13 @@ export interface CheckoutSession {
   customer: CheckoutCustomer;
   stripeAccountId?: string;
   trialDays?: number;
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial';
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade';
+  proration?: {
+    credit: number;
+    charge: number;
+    netAmount: number;
+    currency: string;
+  };
   subscription?: {
     id: string;
     customerId: string;
@@ -274,6 +280,37 @@ export class CheckoutService {
     const amount = price.price_amount || 0;
     const currency = price.price_currency || orgCurrency;
     const isFreeProduct = price.amount_type === 'free' || amount === 0;
+
+    // 5a. Detect upgrade: existing paid sub + new paid price → use subscription.update() path
+    if (dto.existingSubscriptionId && !isFreeProduct) {
+      const { data: oldSub } = await supabase
+        .from('subscriptions')
+        .select('id, stripe_subscription_id, amount, product_id')
+        .eq('id', dto.existingSubscriptionId)
+        .single();
+
+      const isUpgrade =
+        oldSub &&
+        oldSub.stripe_subscription_id?.startsWith('sub_') &&
+        amount > (oldSub.amount ?? 0);
+
+      if (isUpgrade) {
+        return this.handleUpgradeCheckout(
+          organizationId,
+          externalUserId,
+          product,
+          price,
+          stripeCustomerId,
+          customerId,
+          stripeAccountId,
+          oldSub,
+          customerEmail,
+          customerName,
+          dto,
+          orgCurrency,
+        );
+      }
+    }
 
     // Handle free products differently
     if (isFreeProduct) {
@@ -659,6 +696,227 @@ export class CheckoutService {
     };
   }
 
+  /**
+   * Handle upgrade checkout: preview proration and create a checkout session
+   * that the customer confirms (no new payment form — Stripe charges prorated diff).
+   */
+  private async handleUpgradeCheckout(
+    organizationId: string,
+    externalUserId: string,
+    product: any,
+    price: any,
+    stripeCustomerId: string,
+    customerId: string,
+    stripeAccountId: string,
+    oldSub: {
+      id: string;
+      stripe_subscription_id: string | null;
+      amount: number | null;
+      product_id: string;
+    },
+    customerEmail?: string,
+    customerName?: string,
+    dto?: CreateCheckoutDto,
+    orgCurrency?: string,
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+    const amount = price.price_amount || 0;
+    const currency = price.price_currency || orgCurrency || 'usd';
+    const stripePriceId = price.stripe_price_id;
+
+    if (!stripePriceId) {
+      throw new BadRequestException('Product price is not linked to Stripe');
+    }
+
+    // Preview proration from Stripe
+    const proration = await this.transitionService.previewProration(
+      oldSub.id,
+      stripePriceId,
+      stripeAccountId,
+    );
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    // Create checkout session record for tracking
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    const { data: checkoutSession, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .insert({
+        organization_id: organizationId,
+        session_token: externalUserId,
+        customer_email: customerEmail,
+        customer_name: customerName,
+        customer_external_id: externalUserId,
+        expires_at: expiresAt.toISOString(),
+        metadata: {
+          ...dto?.metadata,
+          checkoutMode: 'upgrade',
+          existingSubscriptionId: oldSub.id,
+          stripeAccountId,
+          customerId,
+          productId: product.id,
+          priceId: price.id,
+          stripePriceId,
+          newAmount: amount,
+          proration: {
+            credit: proration.creditAmount,
+            charge: proration.newPlanCharge,
+            netAmount: proration.proratedAmount,
+            currency: proration.currency,
+          },
+        },
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      this.logger.error(
+        'Failed to create upgrade checkout session:',
+        sessionError,
+      );
+      throw new BadRequestException('Failed to create upgrade checkout session');
+    }
+
+    return {
+      id: checkoutSession.id,
+      clientSecret: '',
+      paymentIntentId: '',
+      amount,
+      currency,
+      totalAmount: proration.proratedAmount,
+      checkoutMode: 'upgrade',
+      proration: {
+        credit: proration.creditAmount,
+        charge: proration.newPlanCharge,
+        netAmount: proration.proratedAmount,
+        currency: proration.currency,
+      },
+      product: {
+        name: product.name,
+        description: product.description || undefined,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: customerEmail,
+        name: customerName,
+      },
+      stripeAccountId,
+    };
+  }
+
+  /**
+   * Confirm an upgrade checkout: performs the actual subscription.update() in Stripe.
+   */
+  async confirmUpgradeCheckout(sessionId: string): Promise<any> {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Fetch checkout session
+    const { data: session, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      throw new NotFoundException('Checkout session not found');
+    }
+
+    const metadata = session.metadata as any;
+    if (metadata?.checkoutMode !== 'upgrade') {
+      throw new BadRequestException(
+        'This endpoint is only for upgrade confirmations',
+      );
+    }
+
+    // 2. Check if already confirmed
+    if (session.completed_at) {
+      this.logger.log(
+        `Upgrade checkout ${sessionId} already completed — returning`,
+      );
+      // Return existing subscription
+      if ((session as any).subscription_id) {
+        const { data: existingSub } = await supabase
+          .from('subscriptions')
+          .select('*, product:products(*), price:product_prices(*)')
+          .eq('id', (session as any).subscription_id)
+          .single();
+        if (existingSub) return existingSub;
+      }
+      return { status: 'already_completed' };
+    }
+
+    // 3. Perform the in-place upgrade
+    const existingSubId = metadata.existingSubscriptionId;
+    const stripeAccountId = metadata.stripeAccountId;
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+    const stripePriceId = metadata.stripePriceId;
+    const newAmount = metadata.newAmount;
+
+    if (!existingSubId || !stripeAccountId || !productId || !priceId) {
+      throw new BadRequestException(
+        'Missing required upgrade data in checkout session',
+      );
+    }
+
+    const result = await this.transitionService.handleUpgradeInPlace(
+      existingSubId,
+      productId,
+      priceId,
+      stripePriceId,
+      stripeAccountId,
+      newAmount,
+    );
+
+    // 4. Mark checkout session as completed + link subscription
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        subscription_id: result.bosSubscriptionId,
+      })
+      .eq('id', sessionId);
+
+    // 5. Cleanup duplicate subscriptions
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('customer_id')
+      .eq('id', result.bosSubscriptionId)
+      .single();
+
+    if (subData?.customer_id) {
+      await this.transitionService.cleanupDuplicateSubscriptions(
+        subData.customer_id,
+        productId,
+        stripeAccountId,
+        result.bosSubscriptionId,
+      );
+    }
+
+    // 6. Return updated subscription
+    const { data: updatedSub } = await supabase
+      .from('subscriptions')
+      .select('*, product:products(*), price:product_prices(*)')
+      .eq('id', result.bosSubscriptionId)
+      .single();
+
+    return updatedSub;
+  }
+
   async confirmCheckout(
     clientSecret: string,
     dto: ConfirmCheckoutDto,
@@ -978,6 +1236,15 @@ export class CheckoutService {
           // No subscription field - user hasn't confirmed yet
         };
       }
+    }
+
+    // Handle upgrade checkout sessions (no payment_intent row)
+    if (!session.payment_intent && metadata?.checkoutMode === 'upgrade') {
+      return this.getUpgradeCheckoutStatus(
+        session,
+        metadata,
+        orgCurrency,
+      );
     }
 
     // Handle adaptive checkout sessions (no payment_intent row)
@@ -1886,6 +2153,102 @@ export class CheckoutService {
   /**
    * Return status for a trial checkout session (uses SetupIntent, no payment)
    */
+  private async getUpgradeCheckoutStatus(
+    session: any,
+    metadata: any,
+    orgCurrency: string = 'usd',
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+    const sessionWithSubscription = session as any;
+
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+
+    // Fetch product and price
+    const { data: product } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+    const { data: price } = await supabase
+      .from('product_prices')
+      .select('*')
+      .eq('id', priceId)
+      .single();
+
+    if (!product || !price) {
+      throw new NotFoundException('Product or price not found for upgrade');
+    }
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    const prorationData = metadata.proration || {};
+    const amount = metadata.newAmount || price.price_amount || 0;
+    const currency = price.price_currency || orgCurrency;
+
+    // Check if subscription exists (after confirmation)
+    let subscription: any = undefined;
+    if (sessionWithSubscription.subscription_id) {
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', sessionWithSubscription.subscription_id)
+        .single();
+      if (sub) {
+        subscription = {
+          id: sub.id,
+          customerId: sub.customer_id,
+          productId: sub.product_id,
+          priceId: sub.price_id || '',
+          status: sub.status,
+          currentPeriodStart: sub.current_period_start,
+          currentPeriodEnd: sub.current_period_end,
+          cancelAtPeriodEnd: sub.cancel_at_period_end || false,
+        };
+      }
+    }
+
+    return {
+      id: session.id,
+      clientSecret: '',
+      paymentIntentId: '',
+      amount,
+      currency,
+      totalAmount: prorationData.netAmount ?? amount,
+      status: session.completed_at ? 'completed' : 'pending',
+      expiresAt: session.expires_at,
+      checkoutMode: 'upgrade',
+      proration: {
+        credit: prorationData.credit ?? 0,
+        charge: prorationData.charge ?? 0,
+        netAmount: prorationData.netAmount ?? 0,
+        currency: prorationData.currency ?? currency,
+      },
+      product: {
+        name: product.name,
+        description: product.description || undefined,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: session.customer_email || undefined,
+        name: session.customer_name || undefined,
+      },
+      stripeAccountId: metadata.stripeAccountId || undefined,
+      subscription,
+    };
+  }
+
   private async getTrialCheckoutStatus(
     session: any,
     metadata: any,

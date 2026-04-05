@@ -355,7 +355,10 @@ export class SubscriptionsService {
         .single();
 
       if (grantError || !grant) {
-        this.logger.error('Failed to create feature grant:', grantError);
+        this.logger.error(
+          `Feature grant failed: sub=${subscriptionId} feature=${feature.id} (${feature.name}) ` +
+            `error=${grantError?.message} code=${grantError?.code}`,
+        );
         continue;
       }
 

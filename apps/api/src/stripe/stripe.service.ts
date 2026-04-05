@@ -1160,23 +1160,25 @@ export class StripeService {
     const subscriptionItemId = subscription.items.data[0].id;
 
     // Preview the upcoming invoice with the new price
-    // Note: Using type assertion as retrieveUpcoming may not be in all Stripe SDK versions
-    return (await (this.stripe.invoices as any).retrieveUpcoming(
+    // Stripe SDK v20+ uses invoices.createPreview() instead of retrieveUpcoming()
+    return await this.stripe.invoices.createPreview(
       {
         customer: customerId,
         subscription: subscriptionId,
-        subscription_items: [
-          {
-            id: subscriptionItemId,
-            price: newPriceId,
-          },
-        ],
-        subscription_proration_behavior: 'create_prorations',
+        subscription_details: {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: 'create_prorations',
+        },
       },
       {
         stripeAccount: stripeAccountId,
       },
-    )) as Promise<Stripe.Invoice>;
+    );
   }
 
   /**
@@ -1188,6 +1190,9 @@ export class StripeService {
     subscriptionId: string,
     newPriceId: string,
     stripeAccountId: string,
+    options?: {
+      prorationBehavior?: 'create_prorations' | 'always_invoice' | 'none';
+    },
   ): Promise<Stripe.Subscription> {
     this.logger.log(
       `Updating subscription ${subscriptionId} to new price ${newPriceId}`,
@@ -1215,7 +1220,8 @@ export class StripeService {
             price: newPriceId,
           },
         ],
-        proration_behavior: 'create_prorations', // Create proration items
+        proration_behavior:
+          options?.prorationBehavior ?? 'create_prorations',
         billing_cycle_anchor: 'unchanged', // Keep existing billing cycle
       },
       {

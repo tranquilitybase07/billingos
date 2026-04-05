@@ -15,6 +15,8 @@ interface ProductSummaryProps {
   proration?: {
     credit: number
     charge: number
+    netAmount?: number
+    currency?: string
   }
   /** Override currency for the total display (used in adaptive pricing when customer selects a currency) */
   displayCurrency?: string

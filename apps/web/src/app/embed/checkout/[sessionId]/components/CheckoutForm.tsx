@@ -32,8 +32,14 @@ interface CheckoutSessionDetails {
   currency: string
   totalAmount: number
   stripeAccountId?: string
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial'
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
   trialDays?: number
+  proration?: {
+    credit: number
+    charge: number
+    netAmount: number
+    currency: string
+  }
   customer?: {
     email?: string
     name?: string
@@ -260,6 +266,104 @@ function FreeProductCheckout({
   )
 }
 
+// Component for handling upgrade checkouts (no payment form — confirms in-place upgrade)
+function UpgradeCheckout({
+  session,
+  onSuccess,
+  onHeightChange,
+}: {
+  session: CheckoutSessionDetails
+  onSuccess: (subscription?: CheckoutSubscription) => void
+  onHeightChange: (height: number) => void
+}) {
+  const [isUpgrading, setIsUpgrading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!formRef.current) return
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        onHeightChange(entry.contentRect.height + 100)
+      }
+    })
+    resizeObserver.observe(formRef.current)
+    return () => resizeObserver.disconnect()
+  }, [onHeightChange])
+
+  const handleConfirm = async () => {
+    setIsUpgrading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-upgrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to confirm upgrade')
+      }
+
+      const subscription = await response.json()
+      setTimeout(() => onSuccess(subscription), 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to confirm upgrade')
+      setIsUpgrading(false)
+    }
+  }
+
+  const netAmount = session.proration?.netAmount ?? session.totalAmount
+  const displayCurrency = session.proration?.currency ?? session.currency
+  const formattedAmount = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: displayCurrency.toUpperCase(),
+  }).format(netAmount / 100)
+
+  return (
+    <div ref={formRef} className="space-y-4">
+      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <p className="text-xs text-blue-700 dark:text-blue-300">
+          Your existing payment method will be charged the prorated difference.
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      <button
+        onClick={handleConfirm}
+        disabled={isUpgrading}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isUpgrading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          }`}
+      >
+        {isUpgrading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Upgrading...
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
+            </svg>
+            {netAmount > 0 ? `Confirm Upgrade \u2014 ${formattedAmount}` : 'Confirm Upgrade'}
+          </span>
+        )}
+      </button>
+
+      <TrustSignals />
+    </div>
+  )
+}
+
 function TrustSignals() {
   return (
     <>
@@ -296,7 +400,7 @@ export function CheckoutForm({
 }: CheckoutFormProps) {
   const isFreeProduct =
     session.checkoutMode === 'free' ||
-    (!session.clientSecret && session.checkoutMode !== 'trial')
+    (!session.clientSecret && session.checkoutMode !== 'trial' && session.checkoutMode !== 'upgrade')
 
   const stripePromise = useMemo(() => {
     if (isFreeProduct) return null
@@ -310,6 +414,16 @@ export function CheckoutForm({
   if (isFreeProduct) {
     return (
       <FreeProductCheckout
+        session={session}
+        onSuccess={onSuccess}
+        onHeightChange={onHeightChange}
+      />
+    )
+  }
+
+  if (session.checkoutMode === 'upgrade') {
+    return (
+      <UpgradeCheckout
         session={session}
         onSuccess={onSuccess}
         onHeightChange={onHeightChange}
