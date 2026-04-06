@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
 import { SubscriptionsService } from './subscriptions.service';
+import { EntitlementService } from '../billing/entitlements/entitlement.service';
 import { RedisService } from '../redis/redis.service';
 
 export interface TransitionResult {
@@ -24,6 +25,7 @@ export class SubscriptionTransitionService {
     private readonly stripeService: StripeService,
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptionsService: SubscriptionsService,
+    private readonly entitlementService: EntitlementService,
     private readonly redisService: RedisService,
   ) {}
 
@@ -609,20 +611,16 @@ export class SubscriptionTransitionService {
       );
     }
 
-    // 4. Swap feature grants: hard-delete old → grant new
-    // Hard-delete instead of soft-delete (revokeSubscriptionFeatures) to avoid
-    // unique constraint conflict on (subscription_id, feature_id).
-    await supabase
-      .from('feature_grants')
-      .delete()
-      .eq('subscription_id', oldSub.id);
-    await this.subscriptionsService.grantProductFeatures(
-      oldSub.customer_id,
-      oldSub.id,
+    // 4. Swap feature grants: soft-revoke old → grant new
+    // The partial unique index (WHERE revoked_at IS NULL) allows soft-revoke
+    // without conflicting on (subscription_id, feature_id) re-grants.
+    await this.entitlementService.swapForSubscription({
+      subscriptionId: oldSub.id,
+      customerId: oldSub.customer_id,
       newProductId,
       periodStart,
       periodEnd,
-    );
+    });
 
     this.logger.log(
       `In-place upgrade complete: subscription ${oldSub.id} updated from product ${oldSub.product_id} to ${newProductId}`,

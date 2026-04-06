@@ -1,33 +1,55 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
-import { SupabaseService } from '../supabase/supabase.service';
-import { StripeService } from './stripe.service';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
-import { SubscriptionTransitionService } from '../subscriptions/subscription-transition.service';
+import { WebhookHandler, WebhookContext } from '../webhook.types';
+import { WebhookRouter } from '../webhook.router';
+import { StripeService } from '../../../stripe/stripe.service';
+import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
+import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
+import { EntitlementService } from '../../entitlements/entitlement.service';
 
+/**
+ * Handles `checkout.session.completed` webhook events.
+ *
+ * This is the unified handler for checkout session completion, absorbing the
+ * logic previously in adaptive-pricing-webhook.service.ts. Stripe creates the
+ * subscription during checkout -- this handler syncs it to our DB.
+ *
+ * Flow:
+ * 1. Validate BillingOS metadata (organizationId, productId, priceId)
+ * 2. Guard against duplicate processing (completed_at check)
+ * 3. Resolve Stripe subscription and customer
+ * 4. Handle upgrade/downgrade transitions
+ * 5. Dedup against existing DB subscriptions
+ * 6. Create or update subscription record
+ * 7. Invalidate revenue cache, grant features, update checkout session
+ * 8. Best-effort: populate customer card country
+ */
 @Injectable()
-export class AdaptivePricingWebhookService {
-  private readonly logger = new Logger(AdaptivePricingWebhookService.name);
+export class CheckoutSessionCompletedHandler
+  implements WebhookHandler, OnModuleInit
+{
+  private readonly logger = new Logger(CheckoutSessionCompletedHandler.name);
 
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly router: WebhookRouter,
     private readonly stripeService: StripeService,
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptionsService: SubscriptionsService,
     @Inject(forwardRef(() => SubscriptionTransitionService))
     private readonly transitionService: SubscriptionTransitionService,
+    private readonly entitlementService: EntitlementService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  /**
-   * Handle checkout.session.completed webhook (adaptive pricing path).
-   * Stripe creates the subscription for us — we sync it to our DB.
-   */
-  async handleCheckoutSessionCompleted(
-    session: Stripe.Checkout.Session,
-  ): Promise<void> {
+  onModuleInit(): void {
+    this.router.registerHandler('checkout.session.completed', this);
+  }
+
+  async handle(ctx: WebhookContext): Promise<void> {
+    const session = ctx.event.data.object as Stripe.Checkout.Session;
+
     try {
       this.logger.log(`Checkout session completed: ${session.id}`);
 
@@ -40,12 +62,12 @@ export class AdaptivePricingWebhookService {
 
       if (!organizationId || !productId || !priceId) {
         this.logger.log(
-          `Checkout session ${session.id} missing BillingOS metadata — skipping`,
+          `Checkout session ${session.id} missing BillingOS metadata -- skipping`,
         );
         return;
       }
 
-      const supabase = this.supabaseService.getClient();
+      const supabase = ctx.supabase;
 
       // Find our checkout_sessions record by Stripe session ID (stored in metadata)
       const { data: checkoutSession } = await supabase
@@ -56,7 +78,7 @@ export class AdaptivePricingWebhookService {
 
       if (checkoutSession?.completed_at) {
         this.logger.log(
-          `Checkout session ${session.id} already completed — skipping`,
+          `Checkout session ${session.id} already completed -- skipping`,
         );
         return;
       }
@@ -135,7 +157,7 @@ export class AdaptivePricingWebhookService {
       const actualAmount =
         stripeSubItem?.price?.unit_amount ?? price.price_amount ?? 0;
 
-      // ── HANDLE UPGRADE/DOWNGRADE BEFORE creating/updating subscription ──
+      // -- HANDLE UPGRADE/DOWNGRADE BEFORE creating/updating subscription --
       const existingSubscriptionId: string | null =
         (checkoutSessionMeta.existingSubscriptionId as string) ||
         (stripeSub.metadata?.existingSubscriptionId as string) ||
@@ -165,7 +187,7 @@ export class AdaptivePricingWebhookService {
         stripeAccountId || '',
       );
 
-      // ── NOW create/update subscription in DB ──
+      // -- NOW create/update subscription in DB --
       // Check for existing subscription by stripe_subscription_id first
       const { data: existingByStripeId } = await supabase
         .from('subscriptions')
@@ -177,7 +199,7 @@ export class AdaptivePricingWebhookService {
 
       if (existingByStripeId) {
         this.logger.log(
-          `Subscription ${stripeSubscriptionId} already in database — updating status`,
+          `Subscription ${stripeSubscriptionId} already in database -- updating status`,
         );
         await supabase
           .from('subscriptions')
@@ -188,7 +210,9 @@ export class AdaptivePricingWebhookService {
               : new Date().toISOString(),
             current_period_end: stripeSub.current_period_end
               ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              : new Date(
+                  Date.now() + 30 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
           })
           .eq('id', existingByStripeId.id);
 
@@ -212,7 +236,7 @@ export class AdaptivePricingWebhookService {
           // Update existing subscription with new Stripe subscription ID
           this.logger.log(
             `Updating existing subscription ${existingByCustomerProduct.id} ` +
-              `(${existingByCustomerProduct.stripe_subscription_id} → ${stripeSubscriptionId})`,
+              `(${existingByCustomerProduct.stripe_subscription_id} -> ${stripeSubscriptionId})`,
           );
           await supabase
             .from('subscriptions')
@@ -221,11 +245,15 @@ export class AdaptivePricingWebhookService {
               price_id: priceId,
               status: stripeSub.status,
               current_period_start: stripeSub.current_period_start
-                ? new Date(stripeSub.current_period_start * 1000).toISOString()
+                ? new Date(
+                    stripeSub.current_period_start * 1000,
+                  ).toISOString()
                 : new Date().toISOString(),
               current_period_end: stripeSub.current_period_end
                 ? new Date(stripeSub.current_period_end * 1000).toISOString()
-                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                : new Date(
+                    Date.now() + 30 * 24 * 60 * 60 * 1000,
+                  ).toISOString(),
               amount: actualAmount,
               currency: actualCurrency,
               metadata: {
@@ -251,7 +279,9 @@ export class AdaptivePricingWebhookService {
               : new Date().toISOString(),
             current_period_end: stripeSub.current_period_end
               ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              : new Date(
+                  Date.now() + 30 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
             trial_end: stripeSub.trial_end
               ? new Date(stripeSub.trial_end * 1000).toISOString()
               : null,
@@ -294,61 +324,12 @@ export class AdaptivePricingWebhookService {
       const cacheKey = `product-metrics:${productId}`;
       await this.cacheManager.del(cacheKey);
 
-      // Grant features — un-revoke existing grants or insert new ones
-      const { data: productFeatures } = await supabase
-        .from('product_features')
-        .select('feature_id, config')
-        .eq('product_id', productId);
-
-      if (productFeatures && productFeatures.length > 0) {
-        // Un-revoke any previously revoked grants for this subscription
-        await supabase
-          .from('feature_grants')
-          .update({ revoked_at: null })
-          .eq('subscription_id', subscriptionId)
-          .not('revoked_at', 'is', null);
-
-        // Check which features already have grants
-        const { data: existingGrants } = await supabase
-          .from('feature_grants')
-          .select('feature_id')
-          .eq('subscription_id', subscriptionId);
-
-        const existingFeatureIds = new Set(
-          (existingGrants || []).map(
-            (g: { feature_id: string }) => g.feature_id,
-          ),
-        );
-
-        // Only insert grants for features that don't already have one
-        const newGrants = productFeatures
-          .filter((pf) => !existingFeatureIds.has(pf.feature_id))
-          .map((pf) => ({
-            customer_id: customerId,
-            subscription_id: subscriptionId,
-            feature_id: pf.feature_id,
-            properties: pf.config || {},
-            granted_at: new Date().toISOString(),
-          }));
-
-        if (newGrants.length > 0) {
-          const { error: grantError } = await supabase
-            .from('feature_grants')
-            .insert(newGrants);
-
-          if (grantError) {
-            this.logger.error('Failed to grant features:', grantError);
-          } else {
-            this.logger.log(
-              `Granted ${newGrants.length} new features from checkout session`,
-            );
-          }
-        }
-
-        this.logger.log(
-          `Feature grants ensured for subscription ${subscriptionId} (${existingFeatureIds.size} existing, ${newGrants.length} new)`,
-        );
-      }
+      // Grant features -- un-revoke existing grants or insert new ones
+      await this.entitlementService.ensureGrantsForSubscription(
+        customerId,
+        subscriptionId,
+        productId,
+      );
 
       // Update checkout session record
       if (checkoutSession) {
@@ -367,40 +348,45 @@ export class AdaptivePricingWebhookService {
         const dpm = stripeSub?.default_payment_method;
         const pmId = typeof dpm === 'string' ? dpm : (dpm?.id ?? null);
         this.logger.log(
-          `[CardCountry] checkout-session path — customerId=${customerId}, ` +
+          `[CardCountry] checkout-session path -- customerId=${customerId}, ` +
             `default_payment_method=${JSON.stringify(dpm)}, pmId=${pmId}, ` +
             `stripeAccountId=${stripeAccountId}`,
         );
         await this.tryUpdateCustomerCardCountry(
+          ctx,
           customerId,
           pmId,
           stripeAccountId,
         );
       }
 
-      this.logger.log(`Checkout session ${session.id} processed successfully`);
+      this.logger.log(
+        `Checkout session ${session.id} processed successfully`,
+      );
     } catch (error) {
       this.logger.error('Error handling checkout.session.completed:', error);
     }
   }
 
   /**
-   * Best-effort: update customer's billing country from their card
+   * Best-effort: update customer's billing country from their card.
+   * Non-critical -- must never fail the parent flow.
    */
   private async tryUpdateCustomerCardCountry(
+    ctx: WebhookContext,
     customerId: string,
     paymentMethodId: string | null | undefined,
     stripeAccountId: string | null | undefined,
   ): Promise<void> {
     if (!paymentMethodId || !stripeAccountId) {
       this.logger.log(
-        `[CardCountry] skipping — paymentMethodId=${paymentMethodId}, stripeAccountId=${stripeAccountId}`,
+        `[CardCountry] skipping -- paymentMethodId=${paymentMethodId}, stripeAccountId=${stripeAccountId}`,
       );
       return;
     }
 
     try {
-      const supabase = this.supabaseService.getClient();
+      const supabase = ctx.supabase;
 
       const { data: customer } = await supabase
         .from('customers')
@@ -422,7 +408,7 @@ export class AdaptivePricingWebhookService {
 
       const cardCountry = paymentMethod.card?.country;
       this.logger.log(
-        `[CardCountry] retrieved PM ${paymentMethodId} — type=${paymentMethod.type}, ` +
+        `[CardCountry] retrieved PM ${paymentMethodId} -- type=${paymentMethod.type}, ` +
           `card.country=${cardCountry}, card.brand=${paymentMethod.card?.brand}`,
       );
       if (!cardCountry) return;
