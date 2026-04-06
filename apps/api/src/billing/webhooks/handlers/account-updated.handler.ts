@@ -113,12 +113,7 @@ export class AccountUpdatedHandler implements WebhookHandler, OnModuleInit {
       if (data) {
         if (account.charges_enabled && account.payouts_enabled) {
           // Fully enabled - mark as active
-          await this.updateOrganizationStatus(
-            ctx,
-            data.id,
-            'active',
-            true,
-          );
+          await this.updateOrganizationStatus(ctx, data.id, 'active', true);
         } else if (account.details_submitted) {
           // Details submitted but not fully enabled yet
           await this.updateOrganizationStatus(

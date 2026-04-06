@@ -96,6 +96,20 @@ export class CheckoutController {
     return this.checkoutService.confirmUpgradeCheckout(sessionId);
   }
 
+  @Post(':sessionId/confirm-downgrade')
+  // No auth guard - session ID acts as bearer token for downgrade confirmations
+  // This is safe because:
+  // 1. Session ID is cryptographically secure UUID
+  // 2. Only performs downgrade for already-validated session
+  // 3. User has already authenticated when creating the session
+  async confirmDowngradeCheckout(@Param('sessionId') sessionId: string) {
+    this.logger.log(
+      `Confirming downgrade checkout for session: ${sessionId}`,
+    );
+
+    return this.checkoutService.confirmDowngradeCheckout(sessionId);
+  }
+
   @Post(':sessionId/apply-discount')
   // No auth guard — sessionId is cryptographically secure UUID acting as bearer
   async applyDiscount(

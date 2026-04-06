@@ -17,7 +17,12 @@ export const SUPPORTED_CURRENCIES: CurrencyInfo[] = [
   { code: 'mxn', name: 'Mexican Peso', symbol: 'MX$', zero_decimal: false },
   { code: 'sgd', name: 'Singapore Dollar', symbol: 'S$', zero_decimal: false },
   { code: 'hkd', name: 'Hong Kong Dollar', symbol: 'HK$', zero_decimal: false },
-  { code: 'nzd', name: 'New Zealand Dollar', symbol: 'NZ$', zero_decimal: false },
+  {
+    code: 'nzd',
+    name: 'New Zealand Dollar',
+    symbol: 'NZ$',
+    zero_decimal: false,
+  },
   { code: 'sek', name: 'Swedish Krona', symbol: 'kr', zero_decimal: false },
   { code: 'nok', name: 'Norwegian Krone', symbol: 'kr', zero_decimal: false },
   { code: 'dkk', name: 'Danish Krone', symbol: 'kr', zero_decimal: false },

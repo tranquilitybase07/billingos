@@ -1,4 +1,10 @@
-import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  forwardRef,
+  OnModuleInit,
+} from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
@@ -210,9 +216,7 @@ export class CheckoutSessionCompletedHandler
               : new Date().toISOString(),
             current_period_end: stripeSub.current_period_end
               ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(
-                  Date.now() + 30 * 24 * 60 * 60 * 1000,
-                ).toISOString(),
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           })
           .eq('id', existingByStripeId.id);
 
@@ -245,15 +249,11 @@ export class CheckoutSessionCompletedHandler
               price_id: priceId,
               status: stripeSub.status,
               current_period_start: stripeSub.current_period_start
-                ? new Date(
-                    stripeSub.current_period_start * 1000,
-                  ).toISOString()
+                ? new Date(stripeSub.current_period_start * 1000).toISOString()
                 : new Date().toISOString(),
               current_period_end: stripeSub.current_period_end
                 ? new Date(stripeSub.current_period_end * 1000).toISOString()
-                : new Date(
-                    Date.now() + 30 * 24 * 60 * 60 * 1000,
-                  ).toISOString(),
+                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               amount: actualAmount,
               currency: actualCurrency,
               metadata: {
@@ -279,9 +279,7 @@ export class CheckoutSessionCompletedHandler
               : new Date().toISOString(),
             current_period_end: stripeSub.current_period_end
               ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(
-                  Date.now() + 30 * 24 * 60 * 60 * 1000,
-                ).toISOString(),
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             trial_end: stripeSub.trial_end
               ? new Date(stripeSub.trial_end * 1000).toISOString()
               : null,
@@ -360,9 +358,7 @@ export class CheckoutSessionCompletedHandler
         );
       }
 
-      this.logger.log(
-        `Checkout session ${session.id} processed successfully`,
-      );
+      this.logger.log(`Checkout session ${session.id} processed successfully`);
     } catch (error) {
       this.logger.error('Error handling checkout.session.completed:', error);
     }

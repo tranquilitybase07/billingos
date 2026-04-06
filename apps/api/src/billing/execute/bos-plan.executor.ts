@@ -44,23 +44,48 @@ export class BosPlanExecutor {
     // 3. Dispatch to mode-specific BOS writer
     switch (stripeResult.kind) {
       case 'subscription_created':
-        return this.handleSubscriptionCreated(ctx, plan, stripeResult, checkoutMode);
+        return this.handleSubscriptionCreated(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+        );
 
       case 'checkout_session_created':
-        return this.handleCheckoutSessionCreated(ctx, plan, stripeResult, checkoutMode);
+        return this.handleCheckoutSessionCreated(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+        );
 
       case 'setup_intent_created':
-        return this.handleSetupIntentCreated(ctx, plan, stripeResult, checkoutMode);
+        return this.handleSetupIntentCreated(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+        );
 
       case 'subscription_updated':
-        return this.handleSubscriptionUpdated(ctx, plan, stripeResult, checkoutMode);
+        return this.handleSubscriptionUpdated(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+        );
 
       case 'no_stripe_result':
+        if (ctx.isInPlaceDowngrade) {
+          return this.handleScheduledDowngrade(ctx, plan, checkoutMode);
+        }
         return this.handleFreeActivation(ctx, plan, checkoutMode);
 
       default: {
         const _exhaustive: never = stripeResult;
-        throw new Error(`Unknown stripe result: ${JSON.stringify(_exhaustive)}`);
+        throw new Error(
+          `Unknown stripe result: ${JSON.stringify(_exhaustive)}`,
+        );
       }
     }
   }
@@ -179,7 +204,9 @@ export class BosPlanExecutor {
       stripe_subscription_id: subscription.id,
       status: subscription.status,
       current_period_start: subData.current_period_start
-        ? new Date((subData.current_period_start as number) * 1000).toISOString()
+        ? new Date(
+            (subData.current_period_start as number) * 1000,
+          ).toISOString()
         : new Date().toISOString(),
       current_period_end: subData.current_period_end
         ? new Date((subData.current_period_end as number) * 1000).toISOString()
@@ -205,12 +232,17 @@ export class BosPlanExecutor {
     }
 
     // Create checkout session record
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'standard',
-      stripeSubscriptionId: subscription.id,
-      stripeAccountId: ctx.organization.stripeAccountId,
-      existingSubscriptionId: ctx.transition?.oldSubscription.id,
-    }, piRecord.id, subscription.id);
+    const checkoutSessionId = await this.createCheckoutSession(
+      ctx,
+      {
+        checkoutMode: 'standard',
+        stripeSubscriptionId: subscription.id,
+        stripeAccountId: ctx.organization.stripeAccountId,
+        existingSubscriptionId: ctx.transition?.oldSubscription.id,
+      },
+      piRecord.id,
+      subscription.id,
+    );
 
     // Link metadata
     if (ctx.checkoutMetadataId) {
@@ -314,7 +346,9 @@ export class BosPlanExecutor {
     const sub = plan.subscription;
 
     if (sub.kind !== 'update_subscription') {
-      throw new Error('Expected update_subscription action for subscription_updated result');
+      throw new Error(
+        'Expected update_subscription action for subscription_updated result',
+      );
     }
 
     // Update BOS subscription record
@@ -336,12 +370,18 @@ export class BosPlanExecutor {
       .eq('id', sub.existingBosSubId);
 
     if (updateError) {
-      this.logger.error(`BOS update failed for sub ${sub.existingBosSubId}:`, updateError);
+      this.logger.error(
+        `BOS update failed for sub ${sub.existingBosSubId}:`,
+        updateError,
+      );
       throw new BadRequestException('Failed to update subscription');
     }
 
     // Execute entitlement swap
-    await this.entitlementExecutor.execute(plan.entitlements, sub.existingBosSubId);
+    await this.entitlementExecutor.execute(
+      plan.entitlements,
+      sub.existingBosSubId,
+    );
 
     // Create checkout session for tracking
     const checkoutSessionId = await this.createCheckoutSession(ctx, {
@@ -377,6 +417,45 @@ export class BosPlanExecutor {
             currency: plan.proration.currency,
           }
         : undefined,
+    };
+  }
+
+  // ── Scheduled downgrade ──
+
+  private async handleScheduledDowngrade(
+    ctx: BillingContext,
+    plan: BillingPlan,
+    checkoutMode: PipelineResult['checkoutMode'],
+  ): Promise<PipelineResult> {
+    const sub = plan.subscription;
+
+    if (sub.kind !== 'schedule_downgrade') {
+      throw new Error(
+        'Expected schedule_downgrade action for scheduled downgrade',
+      );
+    }
+
+    // Create checkout session with downgrade metadata — no DB updates to subscriptions or entitlements
+    const checkoutSessionId = await this.createCheckoutSession(ctx, {
+      checkoutMode: 'downgrade',
+      existingSubscriptionId: sub.existingBosSubId,
+      stripeAccountId: ctx.organization.stripeAccountId,
+      customerId: ctx.customer.id,
+      productId: sub.newProductId,
+      priceId: sub.newPriceId,
+      stripePriceId: sub.newStripePriceId,
+      newAmount: sub.newAmount,
+      scheduledFor: sub.scheduledFor.toISOString(),
+      effectiveDate: sub.scheduledFor.toISOString(),
+      fromPriceId: sub.fromPriceId,
+      fromAmount: sub.fromAmount,
+    });
+
+    return {
+      stripeResult: { kind: 'no_stripe_result' },
+      checkoutSessionId,
+      clientSecret: '',
+      checkoutMode,
     };
   }
 
@@ -479,6 +558,7 @@ export class BosPlanExecutor {
   ): PipelineResult['checkoutMode'] {
     if (ctx.isFreeProduct) return 'free';
     if (ctx.isInPlaceUpgrade) return 'upgrade';
+    if (ctx.isInPlaceDowngrade) return 'downgrade';
     if (plan.subscription.kind === 'setup_trial') return 'trial';
     if (plan.useAdaptivePricing) return 'adaptive';
     return 'standard';

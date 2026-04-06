@@ -25,6 +25,13 @@ export interface PortalSubscription {
     limit?: number;
     used?: number;
   }>;
+  pendingDowngrade?: {
+    newProductName: string;
+    newAmount: number;
+    newCurrency: string;
+    newInterval: string;
+    scheduledFor: string;
+  };
 }
 
 export interface PortalInvoice {

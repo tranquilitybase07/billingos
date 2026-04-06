@@ -29,7 +29,9 @@ import { SubscriptionTransitionService } from '../../../subscriptions/subscripti
  * 5. Otherwise, revokes all feature grants for the subscription.
  */
 @Injectable()
-export class SubscriptionDeletedHandler implements WebhookHandler, OnModuleInit {
+export class SubscriptionDeletedHandler
+  implements WebhookHandler, OnModuleInit
+{
   private readonly logger = new Logger(SubscriptionDeletedHandler.name);
 
   constructor(

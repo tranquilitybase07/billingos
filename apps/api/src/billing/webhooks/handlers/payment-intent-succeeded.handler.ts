@@ -1,4 +1,10 @@
-import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  forwardRef,
+  OnModuleInit,
+} from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
@@ -270,8 +276,7 @@ export class PaymentIntentSucceededHandler
       updateData.discount_amount = checkoutMetadata.discountAmount
         ? parseInt(String(checkoutMetadata.discountAmount), 10)
         : null;
-      updateData.discount_code =
-        checkoutMetadata.appliedDiscountCode || null;
+      updateData.discount_code = checkoutMetadata.appliedDiscountCode || null;
     }
 
     // Update metadata
@@ -338,9 +343,7 @@ export class PaymentIntentSucceededHandler
             updateData.current_period_start || new Date().toISOString(),
           current_period_end:
             updateData.current_period_end ||
-            new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
+            new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           cancel_at_period_end: false,
           amount: paymentIntentRecord.amount || 0,
           currency: paymentIntentRecord.currency || 'usd',
@@ -350,8 +353,7 @@ export class PaymentIntentSucceededHandler
           discount_code: updateData.discount_code || null,
           metadata: {
             payment_intent_id: paymentIntentRecord.id,
-            created_from:
-              'direct_subscription_payment_succeeded_fallback',
+            created_from: 'direct_subscription_payment_succeeded_fallback',
           },
         })
         .select()
@@ -387,9 +389,7 @@ export class PaymentIntentSucceededHandler
     // Best-effort: populate customer country from card
     const directPmRaw = paymentIntent.payment_method;
     const directPmId =
-      typeof directPmRaw === 'string'
-        ? directPmRaw
-        : (directPmRaw as any)?.id;
+      typeof directPmRaw === 'string' ? directPmRaw : (directPmRaw as any)?.id;
     this.logger.log(
       `[CardCountry] direct-sub path -- customerId=${customerId}, ` +
         `payment_method=${JSON.stringify(directPmRaw)}, pmId=${directPmId}, ` +
@@ -485,10 +485,7 @@ export class PaymentIntentSucceededHandler
             break;
           }
         } else {
-          this.logger.error(
-            'Failed to create/find customer:',
-            customerError,
-          );
+          this.logger.error('Failed to create/find customer:', customerError);
           return;
         }
       }
@@ -559,10 +556,7 @@ export class PaymentIntentSucceededHandler
             !sub.stripe_subscription_id.startsWith('sub_')),
       );
       for (const invalidSub of invalidSubs) {
-        await supabase
-          .from('subscriptions')
-          .delete()
-          .eq('id', invalidSub.id);
+        await supabase.from('subscriptions').delete().eq('id', invalidSub.id);
       }
     }
 
@@ -708,10 +702,7 @@ export class PaymentIntentSucceededHandler
         idempotencyKey,
       );
     } catch (subError) {
-      this.logger.error(
-        'Failed to create Stripe subscription:',
-        subError,
-      );
+      this.logger.error('Failed to create Stripe subscription:', subError);
       return;
     }
 
@@ -734,17 +725,11 @@ export class PaymentIntentSucceededHandler
       stripe_subscription_id: stripeSubscription.id,
       status: stripeSubscription.status,
       current_period_start: stripeSubscription.current_period_start
-        ? new Date(
-            stripeSubscription.current_period_start * 1000,
-          ).toISOString()
+        ? new Date(stripeSubscription.current_period_start * 1000).toISOString()
         : new Date().toISOString(),
       current_period_end: stripeSubscription.current_period_end
-        ? new Date(
-            stripeSubscription.current_period_end * 1000,
-          ).toISOString()
-        : new Date(
-            Date.now() + 30 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
+        ? new Date(stripeSubscription.current_period_end * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       trial_end: stripeSubscription.trial_end
         ? new Date(stripeSubscription.trial_end * 1000).toISOString()
         : null,
@@ -754,16 +739,11 @@ export class PaymentIntentSucceededHandler
       cancel_at_period_end: false,
       amount: price.price_amount || 0,
       currency: price.price_currency || 'usd',
-      discount_id:
-        (checkoutMetadata.appliedDiscountId as string) || null,
+      discount_id: (checkoutMetadata.appliedDiscountId as string) || null,
       discount_amount: checkoutMetadata.discountAmount
-        ? parseInt(
-            String(checkoutMetadata.discountAmount as number),
-            10,
-          )
+        ? parseInt(String(checkoutMetadata.discountAmount as number), 10)
         : null,
-      discount_code:
-        (checkoutMetadata.appliedDiscountCode as string) || null,
+      discount_code: (checkoutMetadata.appliedDiscountCode as string) || null,
       payment_intent_id: paymentIntentRecord.id,
       metadata: {
         payment_intent_id: paymentIntentRecord.id,
@@ -843,9 +823,7 @@ export class PaymentIntentSucceededHandler
       })
       .eq('payment_intent_id', paymentIntentRecord.id);
 
-    this.logger.log(
-      `Legacy flow completed for PI ${paymentIntent.id}`,
-    );
+    this.logger.log(`Legacy flow completed for PI ${paymentIntent.id}`);
   }
 
   // ---------------------------------------------------------------------------

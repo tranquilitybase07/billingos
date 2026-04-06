@@ -32,8 +32,15 @@ interface CheckoutSessionDetails {
   currency: string
   totalAmount: number
   stripeAccountId?: string
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade'
   trialDays?: number
+  downgradeInfo?: {
+    effectiveDate?: string
+    newPrice: number
+    newInterval: string
+    newIntervalCount: number
+    currency: string
+  }
   proration?: {
     credit: number
     charge: number
@@ -364,6 +371,108 @@ function UpgradeCheckout({
   )
 }
 
+// Component for handling downgrade checkouts (no payment form — confirms in-place downgrade)
+function DowngradeCheckout({
+  session,
+  onSuccess,
+  onHeightChange,
+}: {
+  session: CheckoutSessionDetails
+  onSuccess: (subscription?: CheckoutSubscription) => void
+  onHeightChange: (height: number) => void
+}) {
+  const [isDowngrading, setIsDowngrading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!formRef.current) return
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        onHeightChange(entry.contentRect.height + 100)
+      }
+    })
+    resizeObserver.observe(formRef.current)
+    return () => resizeObserver.disconnect()
+  }, [onHeightChange])
+
+  const handleConfirm = async () => {
+    setIsDowngrading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-downgrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to schedule downgrade')
+      }
+
+      const result = await response.json()
+      // The confirm endpoint returns { status: 'scheduled', scheduledFor, subscriptionId }
+      setTimeout(() => onSuccess(result.subscriptionId ? { id: result.subscriptionId } as CheckoutSubscription : undefined), 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to schedule downgrade')
+      setIsDowngrading(false)
+    }
+  }
+
+  const info = session.downgradeInfo
+  const displayCurrency = info?.currency ?? session.currency
+  const newPrice = info?.newPrice ?? session.amount
+  const formattedPrice = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: displayCurrency.toUpperCase(),
+  }).format(newPrice / 100)
+  const intervalLabels: Record<string, string> = { day: 'day', week: 'wk', month: 'month', year: 'year' }
+  const intervalShort = intervalLabels[info?.newInterval || session.product?.interval || ''] || 'mo'
+
+  return (
+    <div ref={formRef} className="space-y-4">
+      <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Your plan will change to {session.product?.name || 'the new plan'}{info?.effectiveDate ? ` on ${new Date(info.effectiveDate).toLocaleDateString()}` : ' at the end of your current billing period'}. You&apos;ll keep your current features until then.
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      <button
+        onClick={handleConfirm}
+        disabled={isDowngrading}
+        className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isDowngrading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          }`}
+      >
+        {isDowngrading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Scheduling...
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
+            </svg>
+            Schedule Downgrade — {formattedPrice}/{intervalShort}
+          </span>
+        )}
+      </button>
+
+      <TrustSignals />
+    </div>
+  )
+}
+
 function TrustSignals() {
   return (
     <>
@@ -400,7 +509,7 @@ export function CheckoutForm({
 }: CheckoutFormProps) {
   const isFreeProduct =
     session.checkoutMode === 'free' ||
-    (!session.clientSecret && session.checkoutMode !== 'trial' && session.checkoutMode !== 'upgrade')
+    (!session.clientSecret && session.checkoutMode !== 'trial' && session.checkoutMode !== 'upgrade' && session.checkoutMode !== 'downgrade')
 
   const stripePromise = useMemo(() => {
     if (isFreeProduct) return null
@@ -424,6 +533,16 @@ export function CheckoutForm({
   if (session.checkoutMode === 'upgrade') {
     return (
       <UpgradeCheckout
+        session={session}
+        onSuccess={onSuccess}
+        onHeightChange={onHeightChange}
+      />
+    )
+  }
+
+  if (session.checkoutMode === 'downgrade') {
+    return (
+      <DowngradeCheckout
         session={session}
         onSuccess={onSuccess}
         onHeightChange={onHeightChange}

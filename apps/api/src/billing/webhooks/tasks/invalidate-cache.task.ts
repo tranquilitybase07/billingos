@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { Cache } from 'cache-manager';
-import { WebhookContext, WebhookTask, SubscriptionUpdatedData } from '../webhook.types';
+import {
+  WebhookContext,
+  WebhookTask,
+  SubscriptionUpdatedData,
+} from '../webhook.types';
 
 /**
  * Invalidate the product-metrics cache after subscription changes.
@@ -15,7 +19,10 @@ export class InvalidateCacheTask implements WebhookTask<SubscriptionUpdatedData>
 
   constructor(private readonly cacheManager: Cache) {}
 
-  async execute(ctx: WebhookContext, data: SubscriptionUpdatedData): Promise<void> {
+  async execute(
+    ctx: WebhookContext,
+    data: SubscriptionUpdatedData,
+  ): Promise<void> {
     // Re-fetch product_id from DB because the DetectPriceChange task
     // may have changed it since the handler loaded `existing`.
     const { data: subscriptionData } = await ctx.supabase

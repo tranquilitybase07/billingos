@@ -1,5 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { WebhookContext, WebhookTask, SubscriptionUpdatedData } from '../webhook.types';
+import {
+  WebhookContext,
+  WebhookTask,
+  SubscriptionUpdatedData,
+} from '../webhook.types';
 
 /**
  * Placeholder task to ensure features are granted after a subscription
@@ -14,7 +18,10 @@ export class GrantFeaturesTask implements WebhookTask<SubscriptionUpdatedData> {
   readonly name = 'GrantFeatures';
   private readonly logger = new Logger(GrantFeaturesTask.name);
 
-  async execute(_ctx: WebhookContext, data: SubscriptionUpdatedData): Promise<void> {
+  async execute(
+    _ctx: WebhookContext,
+    data: SubscriptionUpdatedData,
+  ): Promise<void> {
     // No-op for subscription.updated — features are granted at creation time.
     // This task is a placeholder for future logic such as:
     //  - Re-granting after a failed payment is retried successfully

@@ -1220,8 +1220,7 @@ export class StripeService {
             price: newPriceId,
           },
         ],
-        proration_behavior:
-          options?.prorationBehavior ?? 'create_prorations',
+        proration_behavior: options?.prorationBehavior ?? 'create_prorations',
         billing_cycle_anchor: 'unchanged', // Keep existing billing cycle
       },
       {

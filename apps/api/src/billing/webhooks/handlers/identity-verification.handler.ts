@@ -33,10 +33,7 @@ export class IdentityVerificationHandler
         .object as Stripe.Identity.VerificationSession;
       await this.handleIdentityVerificationUpdated(ctx, session);
     } catch (error) {
-      this.logger.error(
-        'Error in IdentityVerificationHandler:',
-        error,
-      );
+      this.logger.error('Error in IdentityVerificationHandler:', error);
     }
   }
 

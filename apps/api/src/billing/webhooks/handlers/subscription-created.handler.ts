@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import Stripe from 'stripe';
 import { WebhookContext, WebhookHandler } from '../webhook.types';
 import { WebhookRouter } from '../webhook.router';
@@ -18,7 +24,9 @@ import { SubscriptionTransitionService } from '../../../subscriptions/subscripti
  * 3. Otherwise: logs a warning about an externally-created subscription.
  */
 @Injectable()
-export class SubscriptionCreatedHandler implements WebhookHandler, OnModuleInit {
+export class SubscriptionCreatedHandler
+  implements WebhookHandler, OnModuleInit
+{
   private readonly logger = new Logger(SubscriptionCreatedHandler.name);
 
   constructor(

@@ -257,6 +257,25 @@ export class PortalService {
           limit: pf.feature.limit || undefined,
         }));
 
+        // Check for pending scheduled downgrade
+        const { data: pendingChange } = await supabase
+          .from('subscription_changes')
+          .select(`
+            scheduled_for,
+            to_amount,
+            to_price:product_prices!subscription_changes_to_price_id_fkey (
+              price_currency,
+              recurring_interval,
+              product:products (name)
+            )
+          `)
+          .eq('subscription_id', sub.id)
+          .eq('status', 'scheduled')
+          .eq('change_type', 'downgrade')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         portalSubscriptions.push({
           id: sub.id,
           status: sub.status,
@@ -278,6 +297,13 @@ export class PortalService {
             intervalCount: price.recurring_interval_count || 1,
           },
           features,
+          pendingDowngrade: pendingChange ? {
+            newProductName: (pendingChange.to_price as any)?.product?.name ?? 'Unknown',
+            newAmount: pendingChange.to_amount ?? 0,
+            newCurrency: (pendingChange.to_price as any)?.price_currency ?? 'usd',
+            newInterval: (pendingChange.to_price as any)?.recurring_interval ?? 'month',
+            scheduledFor: pendingChange.scheduled_for ?? '',
+          } : undefined,
         });
       }
     }

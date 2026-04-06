@@ -1,5 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { WebhookContext, WebhookTask, SubscriptionUpdatedData } from '../webhook.types';
+import {
+  WebhookContext,
+  WebhookTask,
+  SubscriptionUpdatedData,
+} from '../webhook.types';
 
 /**
  * Detect in-place price changes on a Stripe subscription and
@@ -14,11 +18,13 @@ export class DetectPriceChangeTask implements WebhookTask<SubscriptionUpdatedDat
   readonly name = 'DetectPriceChange';
   private readonly logger = new Logger(DetectPriceChangeTask.name);
 
-  async execute(ctx: WebhookContext, data: SubscriptionUpdatedData): Promise<void> {
+  async execute(
+    ctx: WebhookContext,
+    data: SubscriptionUpdatedData,
+  ): Promise<void> {
     const { existing, stripeSub } = data;
 
-    const currentStripePrice =
-      stripeSub.items?.data?.[0]?.price?.id;
+    const currentStripePrice = stripeSub.items?.data?.[0]?.price?.id;
 
     this.logger.log(
       `Webhook price check for sub ${stripeSub.id}: currentStripePrice=${currentStripePrice}`,
@@ -34,9 +40,11 @@ export class DetectPriceChangeTask implements WebhookTask<SubscriptionUpdatedDat
       .eq('id', existing.id)
       .single();
 
-    const bosStripePriceId = (bosSubForPrice as Record<string, unknown> & {
-      product_prices?: { stripe_price_id?: string };
-    })?.product_prices?.stripe_price_id;
+    const bosStripePriceId = (
+      bosSubForPrice as Record<string, unknown> & {
+        product_prices?: { stripe_price_id?: string };
+      }
+    )?.product_prices?.stripe_price_id;
 
     this.logger.log(
       `Webhook price comparison for sub ${stripeSub.id}: ` +

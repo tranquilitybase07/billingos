@@ -427,6 +427,35 @@ export class SubscriptionsService {
       throw new BadRequestException('Failed to fetch subscriptions');
     }
 
+    if (subscriptions && subscriptions.length > 0) {
+      const subIds = subscriptions.map(s => s.id);
+      const { data: pendingChanges } = await supabase
+        .from('subscription_changes')
+        .select(`
+          subscription_id, scheduled_for, to_amount,
+          to_price:product_prices!subscription_changes_to_price_id_fkey (
+            price_currency, recurring_interval,
+            product:products (name)
+          )
+        `)
+        .in('subscription_id', subIds)
+        .eq('status', 'scheduled')
+        .eq('change_type', 'downgrade');
+
+      if (pendingChanges) {
+        for (const sub of subscriptions) {
+          const pending = pendingChanges.find(pc => pc.subscription_id === sub.id);
+          if (pending) {
+            (sub as Record<string, unknown>).pending_downgrade = {
+              newProductName: (pending.to_price as any)?.product?.name,
+              newAmount: pending.to_amount,
+              scheduledFor: pending.scheduled_for,
+            };
+          }
+        }
+      }
+    }
+
     return subscriptions || [];
   }
 

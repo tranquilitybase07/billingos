@@ -11,6 +11,7 @@ import type { Column, Row, ColumnDef } from "@tanstack/react-table";
 import { useMRR, useChurnRate } from "@/hooks/queries/analytics";
 import { DataTable, DataTableColumnHeader } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
+import { PendingChangeBadge } from "@/components/Subscriptions/PendingChangeBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ function getChurnRisk(sub: Subscription | null): ChurnRisk {
   if (sub.status === "past_due" || sub.status === "unpaid") return "High";
   if (sub.status === "trialing") return "Medium";
   if (sub.status === "active" && sub.cancel_at_period_end) return "Medium";
+  if (sub.status === "active" && sub.pending_downgrade) return "Medium";
   if (sub.status === "active") return "Low";
   return "N/A";
 }
@@ -206,6 +208,8 @@ export default function CustomersPage({ params }: CustomersPageProps) {
       const displayName = customer.name || customer.email;
       const avatarInitial = displayName?.charAt(0).toUpperCase() ?? "?";
 
+      const pendingDowngrade = primarySub?.pending_downgrade ?? null;
+
       return {
         id: customer.id,
         name: customer.name ?? customer.email,
@@ -219,6 +223,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         churnRisk: getChurnRisk(primarySub),
         primarySubscriptionId: primarySub?.id ?? null,
         subscriptions: customerSubs,
+        pendingDowngrade,
       };
     });
   }, [customersData, subscriptions]);
@@ -277,6 +282,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
     () => [
       {
         id: "customer",
+        size: 200,
         header: ({ column }: { column: Column<EnrichedCustomer> }) => <DataTableColumnHeader column={column} title="Customer" />,
         cell: ({ row }: { row: Row<EnrichedCustomer> }) => {
           const c = row.original;
@@ -295,6 +301,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
       },
       {
         accessorKey: "country",
+        size: 80,
         header: ({ column }: { column: Column<EnrichedCustomer> }) => <DataTableColumnHeader column={column} title="Country" />,
         cell: ({ row }: { row: Row<EnrichedCustomer> }) => (
           <span className="text-sm text-muted-foreground">{row.original.country}</span>
@@ -314,13 +321,24 @@ export default function CustomersPage({ params }: CustomersPageProps) {
       },
       {
         accessorKey: "subscriptionStatus",
+        size: 180,
         header: ({ column }: { column: Column<EnrichedCustomer> }) => <DataTableColumnHeader column={column} title="Status" />,
         cell: ({ row }: { row: Row<EnrichedCustomer> }) => {
-          const status = row.original.subscriptionStatus;
-          return status ? (
-            <SubscriptionStatus status={status} />
-          ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+          const c = row.original;
+          const status = c.subscriptionStatus;
+          if (!status) return <span className="text-sm text-muted-foreground">—</span>;
+          return (
+            <div className="flex items-center gap-1.5">
+              <SubscriptionStatus status={status} />
+              {c.pendingDowngrade && (
+                <PendingChangeBadge
+                  variant="compact"
+                  newPlanName={c.pendingDowngrade.newProductName}
+                  scheduledFor={c.pendingDowngrade.scheduledFor}
+                  newAmount={c.pendingDowngrade.newAmount}
+                />
+              )}
+            </div>
           );
         },
       },

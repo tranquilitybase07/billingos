@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
-import { WebhookContext, WebhookTask, SubscriptionUpdatedData } from '../webhook.types';
+import {
+  WebhookContext,
+  WebhookTask,
+  SubscriptionUpdatedData,
+} from '../webhook.types';
 
 /**
  * Detect billing-period changes (renewals) and create new usage records.
@@ -14,11 +18,12 @@ export class HandleRenewalTask implements WebhookTask<SubscriptionUpdatedData> {
   readonly name = 'HandleRenewal';
   private readonly logger = new Logger(HandleRenewalTask.name);
 
-  constructor(
-    private readonly subscriptionsService: SubscriptionsService,
-  ) {}
+  constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
-  async execute(ctx: WebhookContext, data: SubscriptionUpdatedData): Promise<void> {
+  async execute(
+    ctx: WebhookContext,
+    data: SubscriptionUpdatedData,
+  ): Promise<void> {
     if (!data.periodChanged) {
       return;
     }

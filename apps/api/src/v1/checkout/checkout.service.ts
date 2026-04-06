@@ -45,7 +45,14 @@ export interface CheckoutSession {
   customer: CheckoutCustomer;
   stripeAccountId?: string;
   trialDays?: number;
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade';
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade';
+  downgradeInfo?: {
+    effectiveDate?: string;
+    newPrice: number;
+    newInterval: string;
+    newIntervalCount: number;
+    currency: string;
+  };
   proration?: {
     credit: number;
     charge: number;
@@ -787,7 +794,9 @@ export class CheckoutService {
         'Failed to create upgrade checkout session:',
         sessionError,
       );
-      throw new BadRequestException('Failed to create upgrade checkout session');
+      throw new BadRequestException(
+        'Failed to create upgrade checkout session',
+      );
     }
 
     return {
@@ -893,7 +902,18 @@ export class CheckoutService {
       })
       .eq('id', sessionId);
 
-    // 5. Cleanup duplicate subscriptions
+    // 5. Cancel any pending scheduled downgrades for this subscription
+    await supabase
+      .from('subscription_changes')
+      .update({
+        status: 'failed',
+        failed_reason: 'Superseded by upgrade',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('subscription_id', existingSubId)
+      .eq('status', 'scheduled');
+
+    // 6. Cleanup duplicate subscriptions
     const { data: subData } = await supabase
       .from('subscriptions')
       .select('customer_id')
@@ -909,7 +929,7 @@ export class CheckoutService {
       );
     }
 
-    // 6. Return updated subscription
+    // 7. Return updated subscription
     const { data: updatedSub } = await supabase
       .from('subscriptions')
       .select('*, product:products(*), price:product_prices(*)')
@@ -917,6 +937,126 @@ export class CheckoutService {
       .single();
 
     return updatedSub;
+  }
+
+  /**
+   * Confirm a downgrade checkout: schedules the downgrade for end of billing period.
+   * Inserts a subscription_changes row; the SubscriptionSchedulerService cron executes it.
+   */
+  async confirmDowngradeCheckout(sessionId: string): Promise<any> {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Fetch checkout session
+    const { data: session, error: sessionError } = await supabase
+      .from('checkout_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      throw new NotFoundException('Checkout session not found');
+    }
+
+    const metadata = session.metadata as any;
+    if (metadata?.checkoutMode !== 'downgrade') {
+      throw new BadRequestException(
+        'This endpoint is only for downgrade confirmations',
+      );
+    }
+
+    // 2. Check if already confirmed (idempotent)
+    if (session.completed_at) {
+      this.logger.log(
+        `Downgrade checkout ${sessionId} already completed — returning`,
+      );
+      return {
+        status: 'scheduled',
+        scheduledFor: metadata.scheduledFor,
+        subscriptionId: metadata.existingSubscriptionId,
+      };
+    }
+
+    const existingSubId = metadata.existingSubscriptionId;
+    const scheduledFor = metadata.scheduledFor;
+    const newPriceId = metadata.priceId;
+    const fromPriceId = metadata.fromPriceId;
+    const newAmount = metadata.newAmount;
+    const fromAmount = metadata.fromAmount;
+
+    if (!existingSubId || !newPriceId || !scheduledFor) {
+      throw new BadRequestException(
+        'Missing required downgrade data in checkout session',
+      );
+    }
+
+    // 3. Fetch subscription to get organization_id
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('id, organization_id')
+      .eq('id', existingSubId)
+      .single();
+
+    if (!sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    // 4. Cancel any existing scheduled downgrade for this subscription (prevent duplicates)
+    await supabase
+      .from('subscription_changes')
+      .update({
+        status: 'failed',
+        failed_reason: 'Superseded by new downgrade',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('subscription_id', existingSubId)
+      .eq('status', 'scheduled');
+
+    // 5. Insert scheduled downgrade into subscription_changes
+    const { error: insertError } = await supabase
+      .from('subscription_changes')
+      .insert({
+        subscription_id: existingSubId,
+        organization_id: sub.organization_id,
+        change_type: 'downgrade',
+        status: 'scheduled',
+        from_price_id: fromPriceId || null,
+        to_price_id: newPriceId,
+        from_amount: fromAmount || null,
+        to_amount: newAmount || null,
+        scheduled_for: scheduledFor,
+        metadata: {
+          checkoutSessionId: sessionId,
+          scheduledBy: 'billing_pipeline',
+        },
+      });
+
+    if (insertError) {
+      this.logger.error(
+        `Failed to insert subscription_changes for sub ${existingSubId}:`,
+        insertError,
+      );
+      throw new BadRequestException('Failed to schedule downgrade');
+    }
+
+    // 6. Mark checkout session as completed
+    await supabase
+      .from('checkout_sessions')
+      .update({
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        subscription_id: existingSubId,
+      })
+      .eq('id', sessionId);
+
+    this.logger.log(
+      `Downgrade scheduled for subscription ${existingSubId}, effective ${scheduledFor}`,
+    );
+
+    return {
+      status: 'scheduled',
+      scheduledFor,
+      subscriptionId: existingSubId,
+    };
   }
 
   async confirmCheckout(
@@ -1242,11 +1382,12 @@ export class CheckoutService {
 
     // Handle upgrade checkout sessions (no payment_intent row)
     if (!session.payment_intent && metadata?.checkoutMode === 'upgrade') {
-      return this.getUpgradeCheckoutStatus(
-        session,
-        metadata,
-        orgCurrency,
-      );
+      return this.getUpgradeCheckoutStatus(session, metadata, orgCurrency);
+    }
+
+    // Handle downgrade checkout sessions (no payment_intent row)
+    if (!session.payment_intent && metadata?.checkoutMode === 'downgrade') {
+      return this.getDowngradeCheckoutStatus(session, metadata, orgCurrency);
     }
 
     // Handle adaptive checkout sessions (no payment_intent row)
@@ -1575,7 +1716,7 @@ export class CheckoutService {
     orgCurrency: string = 'usd',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
-    const sessionWithSubscription = session as any;
+    const sessionWithSubscription = session;
 
     const productId = metadata.productId;
     const priceId = metadata.priceId;
@@ -1648,6 +1789,103 @@ export class CheckoutService {
         charge: prorationData.charge ?? 0,
         netAmount: prorationData.netAmount ?? 0,
         currency: prorationData.currency ?? currency,
+      },
+      product: {
+        name: product.name,
+        description: product.description || undefined,
+        interval: price.recurring_interval || 'month',
+        intervalCount: price.recurring_interval_count || 1,
+        features,
+      },
+      customer: {
+        email: session.customer_email || undefined,
+        name: session.customer_name || undefined,
+      },
+      stripeAccountId: metadata.stripeAccountId || undefined,
+      subscription,
+    };
+  }
+
+  private async getDowngradeCheckoutStatus(
+    session: any,
+    metadata: any,
+    orgCurrency: string = 'usd',
+  ): Promise<CheckoutSession> {
+    const supabase = this.supabaseService.getClient();
+    const sessionWithSubscription = session;
+
+    const productId = metadata.productId;
+    const priceId = metadata.priceId;
+
+    // Fetch product and price
+    const { data: product } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+    const { data: price } = await supabase
+      .from('product_prices')
+      .select('*')
+      .eq('id', priceId)
+      .single();
+
+    if (!product || !price) {
+      throw new NotFoundException('Product or price not found for downgrade');
+    }
+
+    // Fetch product features
+    const { data: productFeatures } = await supabase
+      .from('product_features')
+      .select('features(title, properties)')
+      .eq('product_id', product.id)
+      .order('display_order', { ascending: true });
+
+    const features = (productFeatures || []).map(
+      (pf: any) => pf.features.title,
+    );
+
+    const amount = metadata.newAmount || price.price_amount || 0;
+    const currency = price.price_currency || orgCurrency;
+
+    // Check if subscription exists (after confirmation)
+    let subscription: any = undefined;
+    if (sessionWithSubscription.subscription_id) {
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', sessionWithSubscription.subscription_id)
+        .single();
+      if (sub) {
+        subscription = {
+          id: sub.id,
+          customerId: sub.customer_id,
+          productId: sub.product_id,
+          priceId: sub.price_id || '',
+          status: sub.status,
+          currentPeriodStart: sub.current_period_start,
+          currentPeriodEnd: sub.current_period_end,
+          cancelAtPeriodEnd: sub.cancel_at_period_end || false,
+        };
+      }
+    }
+
+    return {
+      id: session.id,
+      clientSecret: '',
+      paymentIntentId: '',
+      amount,
+      currency,
+      totalAmount: amount,
+      status: session.completed_at ? 'completed' : 'pending',
+      expiresAt: session.expires_at,
+      checkoutMode: 'downgrade',
+      downgradeInfo: {
+        effectiveDate:
+          metadata.scheduledFor || metadata.effectiveDate || undefined,
+        newPrice: amount,
+        newInterval: price.recurring_interval || 'month',
+        newIntervalCount: price.recurring_interval_count || 1,
+        currency,
       },
       product: {
         name: product.name,
@@ -2221,5 +2459,4 @@ export class CheckoutService {
         : undefined,
     };
   }
-
 }

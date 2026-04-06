@@ -299,9 +299,7 @@ export class SetupIntentSucceededHandler
           : new Date().toISOString(),
         current_period_end: subData.current_period_end
           ? new Date(subData.current_period_end * 1000).toISOString()
-          : new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         trial_end: subData.trial_end
           ? new Date(subData.trial_end * 1000).toISOString()
           : null,

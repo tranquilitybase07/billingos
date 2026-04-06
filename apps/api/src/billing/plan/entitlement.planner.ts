@@ -16,6 +16,12 @@ export class EntitlementPlanner {
       ctx.price.recurringIntervalCount,
     );
 
+    // In-place downgrade: no entitlement changes at pipeline time
+    // Old features stay active until the scheduled downgrade executes
+    if (ctx.isInPlaceDowngrade) {
+      return { grant: null, revoke: null, swap: null };
+    }
+
     // In-place upgrade: swap features on the existing subscription
     if (ctx.isInPlaceUpgrade && ctx.transition) {
       return {

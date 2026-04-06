@@ -84,10 +84,7 @@ export class EntitlementService {
     const usageRows = productFeatures
       .filter((pf) => pf.features!.type === FeatureType.USAGE_QUOTA)
       .map((pf) => {
-        const merged = this.mergeProperties(
-          pf.features!.properties,
-          pf.config,
-        );
+        const merged = this.mergeProperties(pf.features!.properties, pf.config);
         return {
           customer_id: customerId,
           feature_id: pf.features!.id,
@@ -169,13 +166,8 @@ export class EntitlementService {
    * need hard-deletes.
    */
   async swapForSubscription(input: SwapInput): Promise<SwapResult> {
-    const {
-      subscriptionId,
-      customerId,
-      newProductId,
-      periodStart,
-      periodEnd,
-    } = input;
+    const { subscriptionId, customerId, newProductId, periodStart, periodEnd } =
+      input;
 
     // Step 1: Soft-revoke all existing active grants
     const revoked = await this.revokeForSubscription({ subscriptionId });

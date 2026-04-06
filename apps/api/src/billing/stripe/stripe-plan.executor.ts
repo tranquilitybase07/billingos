@@ -31,8 +31,7 @@ export class StripePlanExecutor {
     cancelAction: NonNullable<StripePlan['cancelAction']>,
     stripeAccountId: string,
   ): Promise<void> {
-    const cancelAtPeriodEnd =
-      cancelAction.kind === 'cancel_at_period_end';
+    const cancelAtPeriodEnd = cancelAction.kind === 'cancel_at_period_end';
 
     try {
       await this.stripeService.cancelSubscription(
@@ -74,13 +73,18 @@ export class StripePlanExecutor {
 
       default: {
         const _exhaustive: never = action;
-        throw new Error(`Unknown stripe action: ${JSON.stringify(_exhaustive)}`);
+        throw new Error(
+          `Unknown stripe action: ${JSON.stringify(_exhaustive)}`,
+        );
       }
     }
   }
 
   private async createSubscription(
-    action: Extract<StripePlan['action'], { kind: 'create_stripe_subscription' }>,
+    action: Extract<
+      StripePlan['action'],
+      { kind: 'create_stripe_subscription' }
+    >,
     stripeAccountId: string,
   ): Promise<StripeResult> {
     const params = { ...action.params };
@@ -111,12 +115,16 @@ export class StripePlanExecutor {
       { stripeAccount: stripeAccountId },
     );
 
-    const firstPayment = (expandedInvoice as unknown as Record<string, unknown>).payments as
+    const firstPayment = (expandedInvoice as unknown as Record<string, unknown>)
+      .payments as Record<string, unknown> | undefined;
+    const paymentsData =
+      (firstPayment?.data as Array<Record<string, unknown>>) || [];
+    const payment = paymentsData[0]?.payment as
       | Record<string, unknown>
       | undefined;
-    const paymentsData = (firstPayment?.data as Array<Record<string, unknown>>) || [];
-    const payment = paymentsData[0]?.payment as Record<string, unknown> | undefined;
-    const paymentIntent = payment?.payment_intent as Stripe.PaymentIntent | undefined;
+    const paymentIntent = payment?.payment_intent as
+      | Stripe.PaymentIntent
+      | undefined;
 
     if (!paymentIntent?.client_secret) {
       this.logger.error('No PaymentIntent found on subscription invoice', {
@@ -155,10 +163,9 @@ export class StripePlanExecutor {
 
     const session = await this.stripeService
       .getClient()
-      .checkout.sessions.create(
-        params as Stripe.Checkout.SessionCreateParams,
-        { stripeAccount: stripeAccountId },
-      );
+      .checkout.sessions.create(params as Stripe.Checkout.SessionCreateParams, {
+        stripeAccount: stripeAccountId,
+      });
 
     return {
       kind: 'checkout_session_created',
@@ -183,13 +190,17 @@ export class StripePlanExecutor {
   }
 
   private async updateSubscription(
-    action: Extract<StripePlan['action'], { kind: 'update_stripe_subscription' }>,
+    action: Extract<
+      StripePlan['action'],
+      { kind: 'update_stripe_subscription' }
+    >,
     stripeAccountId: string,
   ): Promise<StripeResult> {
     const updatedSub = await this.stripeService.updateSubscriptionPrice(
       action.stripeSubscriptionId,
       action.newStripePriceId,
       stripeAccountId,
+      { prorationBehavior: action.prorationBehavior || 'create_prorations' },
     );
 
     return {

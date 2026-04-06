@@ -29,8 +29,8 @@ export class EntitlementHandler implements WebhookHandler, OnModuleInit {
 
   async handle(ctx: WebhookContext): Promise<void> {
     try {
-      const activeEntitlement =
-        ctx.event.data.object as unknown as Stripe.Entitlements.ActiveEntitlement;
+      const activeEntitlement = ctx.event.data
+        .object as unknown as Stripe.Entitlements.ActiveEntitlement;
 
       switch (ctx.event.type as string) {
         case 'entitlements.active_entitlement.created':

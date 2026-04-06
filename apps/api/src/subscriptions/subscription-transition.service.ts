@@ -698,8 +698,7 @@ export class SubscriptionTransitionService {
     }
 
     const proratedAmount = newPlanCharge - creditAmount;
-    const currency =
-      upcomingInvoice.currency || (sub as any).currency || 'usd';
+    const currency = upcomingInvoice.currency || (sub as any).currency || 'usd';
 
     return {
       proratedAmount,

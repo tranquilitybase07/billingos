@@ -15,7 +15,10 @@ export class WebhookRouter {
   /**
    * Register a handler for one or more event types.
    */
-  registerHandler(eventTypes: string | string[], handler: WebhookHandler): void {
+  registerHandler(
+    eventTypes: string | string[],
+    handler: WebhookHandler,
+  ): void {
     const types = Array.isArray(eventTypes) ? eventTypes : [eventTypes];
     for (const eventType of types) {
       if (this.handlers.has(eventType)) {

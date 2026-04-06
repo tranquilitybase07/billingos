@@ -114,8 +114,7 @@ export class WebhookMiddleware {
         .from('webhook_events')
         .update({
           status: 'failed',
-          error_message:
-            error instanceof Error ? error.message : String(error),
+          error_message: error instanceof Error ? error.message : String(error),
           retry_count: 1,
         })
         .eq('event_id', event.id);

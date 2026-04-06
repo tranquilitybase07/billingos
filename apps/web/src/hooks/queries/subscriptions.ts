@@ -44,6 +44,11 @@ export interface Subscription {
   customer?: Customer
   product?: Product
   price?: ProductPrice
+  pending_downgrade?: {
+    newProductName: string
+    newAmount: number
+    scheduledFor: string
+  }
 }
 
 export interface ProductSubscriptionsResponse {

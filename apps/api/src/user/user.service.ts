@@ -64,9 +64,10 @@ export class UserService {
     });
   }
 
-  async getOnboarding(
-    userId: string,
-  ): Promise<{ onboarding_step: string; onboarding_answers: Record<string, unknown> }> {
+  async getOnboarding(userId: string): Promise<{
+    onboarding_step: string;
+    onboarding_answers: Record<string, unknown>;
+  }> {
     const supabase = this.supabaseService.getClient();
 
     const { data, error } = await supabase
@@ -80,13 +81,19 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return data as { onboarding_step: string; onboarding_answers: Record<string, unknown> };
+    return data as {
+      onboarding_step: string;
+      onboarding_answers: Record<string, unknown>;
+    };
   }
 
   async updateOnboarding(
     userId: string,
     dto: UpdateOnboardingDto,
-  ): Promise<{ onboarding_step: string; onboarding_answers: Record<string, unknown> }> {
+  ): Promise<{
+    onboarding_step: string;
+    onboarding_answers: Record<string, unknown>;
+  }> {
     const supabase = this.supabaseService.getClient();
 
     const updateData: Record<string, unknown> = {};
@@ -108,6 +115,9 @@ export class UserService {
       throw new Error(`Failed to update onboarding: ${error.message}`);
     }
 
-    return data as { onboarding_step: string; onboarding_answers: Record<string, unknown> };
+    return data as {
+      onboarding_step: string;
+      onboarding_answers: Record<string, unknown>;
+    };
   }
 }

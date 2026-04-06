@@ -13,6 +13,7 @@
 export type SubscriptionAction =
   | CreateSubscriptionAction
   | UpdateSubscriptionAction
+  | ScheduleDowngradeAction
   | FreeActivationAction
   | SetupTrialAction;
 
@@ -38,6 +39,20 @@ export interface UpdateSubscriptionAction {
   newAmount: number;
   newProductId: string;
   newPriceId: string;
+  /** Proration behavior: 'create_prorations' for upgrades, 'none' for downgrades */
+  prorationBehavior?: 'create_prorations' | 'none';
+}
+
+export interface ScheduleDowngradeAction {
+  kind: 'schedule_downgrade';
+  existingBosSubId: string;
+  newStripePriceId: string;
+  newAmount: number;
+  newProductId: string;
+  newPriceId: string;
+  scheduledFor: Date;
+  fromAmount: number;
+  fromPriceId: string;
 }
 
 export interface FreeActivationAction {

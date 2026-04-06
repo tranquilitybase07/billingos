@@ -42,7 +42,9 @@ import { InvalidateCacheTask } from '../tasks/invalidate-cache.task';
  * - Terminal `incomplete_expired` status (revoke features and exit)
  */
 @Injectable()
-export class SubscriptionUpdatedHandler implements WebhookHandler, OnModuleInit {
+export class SubscriptionUpdatedHandler
+  implements WebhookHandler, OnModuleInit
+{
   private readonly logger = new Logger(SubscriptionUpdatedHandler.name);
   private readonly tasks: WebhookTask<SubscriptionUpdatedData>[];
 

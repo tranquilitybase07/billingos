@@ -50,10 +50,7 @@ export class PaymentIntentFailedHandler
 
       this.logger.log(`Payment intent ${paymentIntent.id} marked as failed`);
     } catch (error) {
-      this.logger.error(
-        'Error handling payment_intent.payment_failed:',
-        error,
-      );
+      this.logger.error('Error handling payment_intent.payment_failed:', error);
     }
   }
 }

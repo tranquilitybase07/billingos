@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { TransitionContext, TransitionType, OldSubscriptionInfo } from './types';
+import {
+  TransitionContext,
+  TransitionType,
+  OldSubscriptionInfo,
+} from './types';
 
 /**
  * Detects whether a checkout is a plan transition (upgrade/downgrade/swap).
@@ -51,7 +55,7 @@ export class TransitionDetector {
     const { data: oldSub } = await supabase
       .from('subscriptions')
       .select(
-        'id, stripe_subscription_id, product_id, amount, status, cancel_at_period_end, current_period_end, metadata',
+        'id, stripe_subscription_id, product_id, price_id, amount, status, cancel_at_period_end, current_period_end, metadata',
       )
       .eq('id', oldSubId)
       .single();
@@ -76,6 +80,7 @@ export class TransitionDetector {
       id: oldSub.id,
       stripeSubscriptionId: oldSub.stripe_subscription_id,
       productId: oldSub.product_id,
+      priceId: oldSub.price_id ?? '',
       amount: oldAmount,
       status: oldSub.status,
       cancelAtPeriodEnd: oldSub.cancel_at_period_end ?? false,

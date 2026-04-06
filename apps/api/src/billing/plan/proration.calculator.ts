@@ -62,7 +62,9 @@ export class ProrationCalculator {
     let newPlanCharge = 0;
 
     for (const line of upcomingInvoice.lines?.data || []) {
-      const parent = line.parent as unknown as Record<string, unknown> | undefined;
+      const parent = line.parent as unknown as
+        | Record<string, unknown>
+        | undefined;
       const invoiceItemDetails = parent?.invoice_item_details as
         | Record<string, unknown>
         | undefined;
@@ -83,8 +85,7 @@ export class ProrationCalculator {
     }
 
     const proratedAmount = newPlanCharge - creditAmount;
-    const currency =
-      upcomingInvoice.currency || 'usd';
+    const currency = upcomingInvoice.currency || 'usd';
 
     return {
       proratedAmount,

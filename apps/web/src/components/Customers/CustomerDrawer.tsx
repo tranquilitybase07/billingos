@@ -20,6 +20,11 @@ export interface EnrichedCustomer {
   churnRisk: "Low" | "Medium" | "High" | "Churned" | "N/A";
   primarySubscriptionId: string | null;
   subscriptions: Subscription[];
+  pendingDowngrade: {
+    newProductName: string;
+    newAmount: number;
+    scheduledFor: string;
+  } | null;
 }
 
 interface CustomerDrawerProps {

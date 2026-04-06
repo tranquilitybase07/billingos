@@ -24,10 +24,7 @@ export class AccountDeauthorizedHandler
       const accountId = ctx.event.account as string;
       await this.handleAccountDeauthorized(ctx, accountId);
     } catch (error) {
-      this.logger.error(
-        'Error in AccountDeauthorizedHandler:',
-        error,
-      );
+      this.logger.error('Error in AccountDeauthorizedHandler:', error);
     }
   }
 

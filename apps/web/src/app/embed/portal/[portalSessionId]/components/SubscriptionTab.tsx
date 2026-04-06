@@ -215,6 +215,15 @@ export function SubscriptionTab({
                       Access ends {formatDate(subscription.currentPeriodEnd)}
                     </p>
                   )}
+                  {subscription.pendingDowngrade && (
+                    <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Switching to <span className="font-semibold">{subscription.pendingDowngrade.newProductName}</span>{' '}
+                        ({formatPrice(subscription.pendingDowngrade.newAmount, subscription.pendingDowngrade.newCurrency, subscription.pendingDowngrade.newInterval)}){' '}
+                        on {formatDate(subscription.pendingDowngrade.scheduledFor)}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -42,6 +42,7 @@ export interface UpdateStripeSubscriptionAction {
   kind: 'update_stripe_subscription';
   stripeSubscriptionId: string;
   newStripePriceId: string;
+  prorationBehavior?: 'create_prorations' | 'none';
 }
 
 export interface NoStripeAction {
@@ -123,7 +124,7 @@ export interface PipelineResult {
   /** Client secret for frontend (PaymentIntent, SetupIntent, or Checkout Session) */
   clientSecret: string;
   /** Checkout mode for status polling */
-  checkoutMode: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade';
+  checkoutMode: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade';
   /** Proration preview (for upgrade mode) */
   proration?: {
     credit: number;

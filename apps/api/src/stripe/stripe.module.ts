@@ -18,11 +18,7 @@ import { QueueModule } from '../queue/queue.module';
     forwardRef(() => BillingModule),
   ],
   controllers: [StripeController],
-  providers: [
-    StripeService,
-    StripFeesService,
-    RefundService,
-  ],
+  providers: [StripeService, StripFeesService, RefundService],
   exports: [StripeService, StripFeesService, RefundService],
 })
 export class StripeModule {}

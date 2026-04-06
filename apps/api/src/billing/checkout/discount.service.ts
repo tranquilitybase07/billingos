@@ -81,9 +81,7 @@ export class CheckoutDiscountService {
    * Acquires a Redis lock to prevent concurrent discount operations.
    */
   async remove(sessionId: string): Promise<RemoveDiscountResult> {
-    return this.withDiscountLock(sessionId, () =>
-      this.removeInner(sessionId),
-    );
+    return this.withDiscountLock(sessionId, () => this.removeInner(sessionId));
   }
 
   /**
@@ -110,11 +108,16 @@ export class CheckoutDiscountService {
       basisPoints: (discount.basis_points as number | null) ?? undefined,
       amount: (discount.amount as number | null) ?? undefined,
       currency: (discount.currency as string | null) ?? undefined,
-      duration: ((discount.duration as string) || 'once') as 'once' | 'repeating' | 'forever',
-      durationInMonths: (discount.duration_in_months as number | null) ?? undefined,
+      duration: ((discount.duration as string) || 'once') as
+        | 'once'
+        | 'repeating'
+        | 'forever',
+      durationInMonths:
+        (discount.duration_in_months as number | null) ?? undefined,
       stripeCouponId: (discount.stripe_coupon_id as string | null) ?? undefined,
       maxRedemptions: (discount.max_redemptions as number | null) ?? undefined,
-      redemptionsCount: (discount.redemptions_count as number | null) ?? undefined,
+      redemptionsCount:
+        (discount.redemptions_count as number | null) ?? undefined,
     };
   }
 
@@ -136,8 +139,10 @@ export class CheckoutDiscountService {
     );
 
     // Calculate discount amount
-    const { discountAmount, discountLabel, newAmount } =
-      this.calculateDiscount(discount, info.amount);
+    const { discountAmount, discountLabel, newAmount } = this.calculateDiscount(
+      discount,
+      info.amount,
+    );
 
     // Build Stripe coupon params
     const couponParams = this.buildCouponParams(
@@ -173,7 +178,7 @@ export class CheckoutDiscountService {
       // Standard checkout
       const stripeSubscriptionId =
         (info.metadata.stripeSubscriptionId as string) ||
-        (info.session as Record<string, unknown>).stripe_subscription_id as string;
+        (info.session.stripe_subscription_id as string);
 
       if (!stripeSubscriptionId) {
         throw new BadRequestException(
@@ -198,15 +203,20 @@ export class CheckoutDiscountService {
     }
 
     // Update session metadata with discount info
-    await this.saveDiscountMetadata(supabase, sessionId, {
-      appliedDiscountId: discount.id,
-      appliedDiscountCode: code,
-      discountAmount,
-      originalAmount: info.amount,
-      stripeCouponId: stripeCouponId || discount.stripe_coupon_id || null,
-      discountDuration: discount.duration || 'once',
-      discountDurationInMonths: discount.duration_in_months || null,
-    }, clientSecretResult);
+    await this.saveDiscountMetadata(
+      supabase,
+      sessionId,
+      {
+        appliedDiscountId: discount.id,
+        appliedDiscountCode: code,
+        discountAmount,
+        originalAmount: info.amount,
+        stripeCouponId: stripeCouponId || discount.stripe_coupon_id || null,
+        discountDuration: discount.duration || 'once',
+        discountDurationInMonths: discount.duration_in_months || null,
+      },
+      clientSecretResult,
+    );
 
     // Determine if trial product (affects totalAmount display)
     const isTrialProduct =
@@ -223,9 +233,7 @@ export class CheckoutDiscountService {
     };
   }
 
-  private async removeInner(
-    sessionId: string,
-  ): Promise<RemoveDiscountResult> {
+  private async removeInner(sessionId: string): Promise<RemoveDiscountResult> {
     const supabase = this.supabaseService.getClient();
     const info = await this.loadSessionInfo(sessionId);
 
@@ -234,7 +242,7 @@ export class CheckoutDiscountService {
       const fallbackAmount =
         info.checkoutMode === 'adaptive' || info.checkoutMode === 'trial'
           ? ((info.metadata.priceAmount as number) ?? 0)
-          : (info.paymentIntent?.amount as number) ?? 0;
+          : ((info.paymentIntent?.amount as number) ?? 0);
       return { totalAmount: fallbackAmount };
     }
 
@@ -255,7 +263,7 @@ export class CheckoutDiscountService {
       // Standard checkout
       const stripeSubscriptionId =
         (info.metadata.stripeSubscriptionId as string) ||
-        (info.session as Record<string, unknown>).stripe_subscription_id as string;
+        (info.session.stripe_subscription_id as string);
       const stripeAccountId = info.stripeAccountId;
 
       if (stripeSubscriptionId && stripeAccountId) {
@@ -406,7 +414,8 @@ export class CheckoutDiscountService {
   ): Promise<{ clientSecret: string }> {
     const stripeClient = this.stripeService.getClient();
     const stripeAccountId = info.stripeAccountId;
-    const paymentIntentDbId = (info.paymentIntent as Record<string, unknown>)?.id as string;
+    const paymentIntentDbId = (info.paymentIntent as Record<string, unknown>)
+      ?.id as string;
 
     // Find subscription DB record
     const { data: subscriptionRecord } = await supabase
@@ -438,7 +447,7 @@ export class CheckoutDiscountService {
     // 2. Create new subscription with/without discounts
     const createParams: Stripe.SubscriptionCreateParams = {
       customer: originalSub.customer as string,
-      items: [{ price: (originalSub.items.data[0]?.price as Stripe.Price).id }],
+      items: [{ price: (originalSub.items.data[0]?.price).id }],
       payment_behavior: 'default_incomplete',
       payment_settings: {
         save_default_payment_method: 'on_subscription',
@@ -471,7 +480,11 @@ export class CheckoutDiscountService {
     );
 
     const firstPayment = (expandedInvoice as unknown as Record<string, unknown>)
-      .payments as { data?: Array<{ payment?: { payment_intent?: Stripe.PaymentIntent } }> } | undefined;
+      .payments as
+      | {
+          data?: Array<{ payment?: { payment_intent?: Stripe.PaymentIntent } }>;
+        }
+      | undefined;
     const newPaymentIntent = firstPayment?.data?.[0]?.payment?.payment_intent;
 
     if (!newPaymentIntent?.client_secret) {
@@ -511,10 +524,14 @@ export class CheckoutDiscountService {
         amount: newAmount,
         status: newSubscription.status,
         current_period_start: (subData.current_period_start as number)
-          ? new Date((subData.current_period_start as number) * 1000).toISOString()
+          ? new Date(
+              (subData.current_period_start as number) * 1000,
+            ).toISOString()
           : new Date().toISOString(),
         current_period_end: (subData.current_period_end as number)
-          ? new Date((subData.current_period_end as number) * 1000).toISOString()
+          ? new Date(
+              (subData.current_period_end as number) * 1000,
+            ).toISOString()
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       })
       .eq('id', subscriptionRecord.id);
@@ -525,7 +542,7 @@ export class CheckoutDiscountService {
         stripe_subscription_id: newSubscription.id,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', (info.session as Record<string, unknown>).id as string);
+      .eq('id', info.session.id as string);
 
     this.logger.log(
       `Recreated subscription: ${stripeSubscriptionId} → ${newSubscription.id} (amount: ${newAmount})`,
@@ -542,7 +559,7 @@ export class CheckoutDiscountService {
     supabase: ReturnType<SupabaseService['getClient']>,
   ): Promise<{ clientSecret: string }> {
     const stripeClient = this.stripeService.getClient();
-    const session = info.session as Record<string, unknown>;
+    const session = info.session;
     const metadata = info.metadata;
 
     const stripeAccountId = metadata.stripeAccountId as string;
@@ -607,9 +624,7 @@ export class CheckoutDiscountService {
         line_items: [{ price: stripePriceId, quantity: 1 }],
         ui_mode: 'custom',
         adaptive_pricing: { enabled: true },
-        ...(hasExistingSub
-          ? { payment_method_collection: 'if_required' }
-          : {}),
+        ...(hasExistingSub ? { payment_method_collection: 'if_required' } : {}),
         subscription_data: {
           application_fee_percent: 5,
           ...(trialDays > 0 && !hasExistingSub
@@ -639,9 +654,7 @@ export class CheckoutDiscountService {
           priceId,
           ...(metadata.existingSubscriptionId
             ? {
-                existingSubscriptionId: String(
-                  metadata.existingSubscriptionId,
-                ),
+                existingSubscriptionId: String(metadata.existingSubscriptionId),
               }
             : {}),
         },
@@ -697,8 +710,11 @@ export class CheckoutDiscountService {
       throw new BadRequestException('Checkout session already completed');
     }
 
-    const metadata = ((session.metadata as Record<string, unknown>) || {});
-    const paymentIntent = session.payment_intent as Record<string, unknown> | null;
+    const metadata = (session.metadata as Record<string, unknown>) || {};
+    const paymentIntent = session.payment_intent as Record<
+      string,
+      unknown
+    > | null;
     const checkoutMode = (metadata.checkoutMode as string) || 'standard';
     const isAdaptive = checkoutMode === 'adaptive';
     const isTrial = checkoutMode === 'trial';
@@ -713,18 +729,22 @@ export class CheckoutDiscountService {
       paymentIntent,
       checkoutMode: checkoutMode as SessionInfo['checkoutMode'],
       organizationId: session.organization_id,
-      productId: isAdaptive || isTrial
-        ? (metadata.productId as string)
-        : (paymentIntent?.product_id as string),
-      amount: isAdaptive || isTrial
-        ? (metadata.priceAmount as number)
-        : (paymentIntent?.amount as number),
-      currency: isAdaptive || isTrial
-        ? ((metadata.priceCurrency as string) ?? 'usd')
-        : ((paymentIntent?.currency as string) ?? 'usd'),
-      stripeAccountId: isAdaptive || isTrial
-        ? (metadata.stripeAccountId as string)
-        : (paymentIntent?.stripe_account_id as string),
+      productId:
+        isAdaptive || isTrial
+          ? (metadata.productId as string)
+          : (paymentIntent?.product_id as string),
+      amount:
+        isAdaptive || isTrial
+          ? (metadata.priceAmount as number)
+          : (paymentIntent?.amount as number),
+      currency:
+        isAdaptive || isTrial
+          ? ((metadata.priceCurrency as string) ?? 'usd')
+          : ((paymentIntent?.currency as string) ?? 'usd'),
+      stripeAccountId:
+        isAdaptive || isTrial
+          ? (metadata.stripeAccountId as string)
+          : (paymentIntent?.stripe_account_id as string),
     };
   }
 
@@ -743,7 +763,8 @@ export class CheckoutDiscountService {
       .eq('id', sessionId)
       .single();
 
-    const existingMetadata = (freshSession?.metadata as Record<string, unknown>) || {};
+    const existingMetadata =
+      (freshSession?.metadata as Record<string, unknown>) || {};
     const newStripeSubscriptionId = clientSecretResult
       ? freshSession?.stripe_subscription_id
       : null;
@@ -775,7 +796,9 @@ export class CheckoutDiscountService {
       .eq('id', sessionId)
       .single();
 
-    const cleanMetadata = { ...((freshSession?.metadata as Record<string, unknown>) || {}) };
+    const cleanMetadata = {
+      ...((freshSession?.metadata as Record<string, unknown>) || {}),
+    };
     delete cleanMetadata.appliedDiscountId;
     delete cleanMetadata.appliedDiscountCode;
     delete cleanMetadata.discountAmount;

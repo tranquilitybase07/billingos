@@ -85,12 +85,19 @@ export class BillingContextBuilder {
       !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
-    // 7. Determine trial eligibility (trial product + no transition)
-    const isTrialEligible =
-      (product.trialDays || 0) > 0 && transition === null;
+    // 6b. Determine if in-place downgrade (existing paid Stripe sub + new lower price)
+    const isInPlaceDowngrade =
+      transition !== null &&
+      transition.type === 'downgrade' &&
+      !isFreeProduct &&
+      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
-    // 8. Determine adaptive pricing
-    const isAdaptivePricing = dto.adaptivePricing === true && !isInPlaceUpgrade;
+    // 7. Determine trial eligibility (trial product + no transition)
+    const isTrialEligible = (product.trialDays || 0) > 0 && transition === null;
+
+    // 8. Determine adaptive pricing (disabled for in-place upgrades and downgrades)
+    const isAdaptivePricing =
+      dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
 
     // 9. Fetch product features for display
     const features = await this.resolveProductFeatures(product.id);
@@ -116,6 +123,7 @@ export class BillingContextBuilder {
       isTrialEligible,
       isAdaptivePricing,
       isInPlaceUpgrade,
+      isInPlaceDowngrade,
       metadata: dto.metadata || {},
     };
   }
@@ -157,7 +165,10 @@ export class BillingContextBuilder {
   private async resolveProductAndPrice(
     priceId: string,
     organizationId: string,
-  ): Promise<{ product: Omit<BillingProduct, 'features'>; price: BillingPrice }> {
+  ): Promise<{
+    product: Omit<BillingProduct, 'features'>;
+    price: BillingPrice;
+  }> {
     const supabase = this.supabaseService.getClient();
 
     const { data: priceRow, error } = await supabase
@@ -194,10 +205,11 @@ export class BillingContextBuilder {
       id: priceRow.id,
       stripePriceId: priceRow.stripe_price_id || '',
       amount: priceRow.price_amount || 0,
-      currency:
-        priceRow.price_currency || 'usd',
+      currency: priceRow.price_currency || 'usd',
       amountType: priceRow.amount_type === 'free' ? 'free' : 'fixed',
-      recurringInterval: (priceRow.recurring_interval as BillingPrice['recurringInterval']) || 'month',
+      recurringInterval:
+        (priceRow.recurring_interval as BillingPrice['recurringInterval']) ||
+        'month',
       recurringIntervalCount: priceRow.recurring_interval_count || 1,
     };
 

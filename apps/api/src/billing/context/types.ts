@@ -70,6 +70,7 @@ export interface OldSubscriptionInfo {
   id: string;
   stripeSubscriptionId: string | null;
   productId: string;
+  priceId: string;
   amount: number;
   status: string;
   cancelAtPeriodEnd: boolean;
@@ -115,6 +116,8 @@ export interface BillingContext {
   isAdaptivePricing: boolean;
   /** True when upgrading in-place via subscription.update() */
   isInPlaceUpgrade: boolean;
+  /** True when downgrading in-place via subscription.update() with no proration */
+  isInPlaceDowngrade: boolean;
 
   /** Caller-provided metadata to pass through to Stripe + BOS records */
   metadata: Record<string, unknown>;

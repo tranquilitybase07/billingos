@@ -2,11 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import Stripe from 'stripe';
 import { BillingContext } from '../context/types';
 import { BillingPlan } from '../plan/types';
-import {
-  StripePlan,
-  StripeAction,
-  StripeCancelAction,
-} from './types';
+import { StripePlan, StripeAction, StripeCancelAction } from './types';
 
 /**
  * Phase 3a: Converts a BillingPlan into concrete Stripe API call parameters.
@@ -29,6 +25,7 @@ export class StripePlanBuilder {
   private buildAction(ctx: BillingContext, plan: BillingPlan): StripeAction {
     switch (plan.subscription.kind) {
       case 'free_activation':
+      case 'schedule_downgrade':
         return { kind: 'no_stripe_action' };
 
       case 'update_subscription':
@@ -37,6 +34,7 @@ export class StripePlanBuilder {
           stripeSubscriptionId:
             ctx.transition!.oldSubscription.stripeSubscriptionId!,
           newStripePriceId: plan.subscription.newStripePriceId,
+          prorationBehavior: plan.subscription.prorationBehavior,
         };
 
       case 'setup_trial':
@@ -59,7 +57,9 @@ export class StripePlanBuilder {
 
       default: {
         const _exhaustive: never = plan.subscription;
-        throw new Error(`Unknown subscription action: ${JSON.stringify(_exhaustive)}`);
+        throw new Error(
+          `Unknown subscription action: ${JSON.stringify(_exhaustive)}`,
+        );
       }
     }
   }

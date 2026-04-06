@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import Stripe from 'stripe';
-import { WebhookContext, WebhookTask, SubscriptionUpdatedData } from '../webhook.types';
+import {
+  WebhookContext,
+  WebhookTask,
+  SubscriptionUpdatedData,
+} from '../webhook.types';
 
 /**
  * Sync subscription status from Stripe to BOS database.
@@ -13,7 +17,10 @@ export class SyncStatusTask implements WebhookTask<SubscriptionUpdatedData> {
   readonly name = 'SyncStatus';
   private readonly logger = new Logger(SyncStatusTask.name);
 
-  async execute(ctx: WebhookContext, data: SubscriptionUpdatedData): Promise<void> {
+  async execute(
+    ctx: WebhookContext,
+    data: SubscriptionUpdatedData,
+  ): Promise<void> {
     const { existing, stripeSub } = data;
 
     const subData = stripeSub as Stripe.Subscription & {

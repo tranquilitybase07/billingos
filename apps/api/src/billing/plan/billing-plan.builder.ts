@@ -51,7 +51,8 @@ export class BillingPlanBuilder {
     // 6. Determine if payment is required
     const paymentRequired =
       subscription.kind !== 'free_activation' &&
-      subscription.kind !== 'setup_trial';
+      subscription.kind !== 'setup_trial' &&
+      subscription.kind !== 'schedule_downgrade';
 
     return {
       subscription,
@@ -70,7 +71,7 @@ export class BillingPlanBuilder {
       return { kind: 'free_activation' };
     }
 
-    // In-place upgrade → update existing subscription
+    // In-place upgrade → update existing subscription (with proration)
     if (ctx.isInPlaceUpgrade && ctx.transition) {
       return {
         kind: 'update_subscription',
@@ -79,6 +80,22 @@ export class BillingPlanBuilder {
         newAmount: ctx.price.amount,
         newProductId: ctx.product.id,
         newPriceId: ctx.price.id,
+        prorationBehavior: 'create_prorations',
+      };
+    }
+
+    // In-place downgrade → schedule for end of billing period
+    if (ctx.isInPlaceDowngrade && ctx.transition) {
+      return {
+        kind: 'schedule_downgrade',
+        existingBosSubId: ctx.transition.oldSubscription.id,
+        newStripePriceId: ctx.price.stripePriceId,
+        newAmount: ctx.price.amount,
+        newProductId: ctx.product.id,
+        newPriceId: ctx.price.id,
+        scheduledFor: ctx.transition.oldPeriodEnd || new Date(),
+        fromAmount: ctx.transition.oldSubscription.amount,
+        fromPriceId: ctx.transition.oldSubscription.priceId,
       };
     }
 
@@ -133,8 +150,8 @@ export class BillingPlanBuilder {
       return { kind: 'no_transition' };
     }
 
-    // In-place upgrade doesn't cancel — it updates
-    if (ctx.isInPlaceUpgrade) {
+    // In-place upgrade/downgrade doesn't cancel — it updates
+    if (ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade) {
       return { kind: 'no_transition' };
     }
 

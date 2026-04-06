@@ -58,7 +58,10 @@ export class BillingService {
       productName: ctx.product.name,
       priceAmount: ctx.price.amount,
       currency: ctx.price.currency,
-      billingInterval: ctx.price.recurringInterval as 'month' | 'year' | undefined,
+      billingInterval: ctx.price.recurringInterval as
+        | 'month'
+        | 'year'
+        | undefined,
       billingIntervalCount: ctx.price.recurringIntervalCount,
       trialPeriodDays: ctx.product.trialDays || undefined,
       shouldGrantTrial: ctx.isTrialEligible,
@@ -124,6 +127,16 @@ export class BillingService {
         : ctx.price.amount,
       checkoutMode: result.checkoutMode,
       proration: result.proration,
+      downgradeInfo:
+        result.checkoutMode === 'downgrade'
+          ? {
+              effectiveDate: ctx.transition?.oldPeriodEnd?.toISOString(),
+              newPrice: ctx.price.amount,
+              newInterval: ctx.price.recurringInterval,
+              newIntervalCount: ctx.price.recurringIntervalCount,
+              currency: ctx.price.currency,
+            }
+          : undefined,
       product: {
         name: ctx.product.name,
         description: ctx.product.description,
