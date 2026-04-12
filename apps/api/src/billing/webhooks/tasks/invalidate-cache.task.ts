@@ -29,7 +29,7 @@ export class InvalidateCacheTask implements WebhookTask<SubscriptionUpdatedData>
       .from('subscriptions')
       .select('product_id')
       .eq('id', data.existing.id)
-      .single();
+      .maybeSingle();
 
     if (!subscriptionData?.product_id) {
       return;

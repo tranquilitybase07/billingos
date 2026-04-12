@@ -68,8 +68,7 @@ export class DetectPriceChangeTask implements WebhookTask<SubscriptionUpdatedDat
       .select('id, product_id, price_amount')
       .eq('stripe_price_id', currentStripePrice)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .maybeSingle();
 
     if (newBosPrice) {
       const { error: syncError } = await ctx.supabase

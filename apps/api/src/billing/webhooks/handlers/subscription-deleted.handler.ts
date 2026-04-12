@@ -50,55 +50,61 @@ export class SubscriptionDeletedHandler
   async handle(ctx: WebhookContext): Promise<void> {
     const subscription = ctx.event.data.object as Stripe.Subscription;
 
-    try {
-      this.logger.log(`Subscription deleted: ${subscription.id}`);
+    this.logger.log(`Subscription deleted: ${subscription.id}`);
 
-      // Skip recently-created incomplete subscriptions — these are being canceled
-      // and recreated during discount apply/remove in the checkout flow.
-      // Older incomplete subscriptions (>5 min) should be processed normally.
-      if (subscription.status === 'incomplete') {
-        const createdAt = subscription.created
-          ? new Date(subscription.created * 1000)
-          : null;
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    // Skip recently-created incomplete subscriptions — these are being canceled
+    // and recreated during discount apply/remove in the checkout flow.
+    // Older incomplete subscriptions (>5 min) should be processed normally.
+    if (subscription.status === 'incomplete') {
+      const createdAt = subscription.created
+        ? new Date(subscription.created * 1000)
+        : null;
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-        if (createdAt && createdAt > fiveMinutesAgo) {
-          this.logger.log(
-            `Skipping deletion of recent incomplete subscription ${subscription.id} (likely recreated for discount)`,
-          );
-          return;
-        }
+      if (createdAt && createdAt > fiveMinutesAgo) {
         this.logger.log(
-          `Processing deletion of stale incomplete subscription ${subscription.id}`,
-        );
-      }
-
-      // Get subscription with metadata to detect downgrade completions
-      const { data: existing, error: fetchError } = await ctx.supabase
-        .from('subscriptions')
-        .select('id, product_id, metadata')
-        .eq('stripe_subscription_id', subscription.id)
-        .single();
-
-      if (fetchError || !existing) {
-        this.logger.warn(
-          `Subscription ${subscription.id} not found in database`,
+          `Skipping deletion of recent incomplete subscription ${subscription.id} (likely recreated for discount)`,
         );
         return;
       }
+      this.logger.log(
+        `Processing deletion of stale incomplete subscription ${subscription.id}`,
+      );
+    }
 
-      const subMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
+    // Get subscription with metadata to detect downgrade completions
+    const { data: existing, error: fetchError } = await ctx.supabase
+      .from('subscriptions')
+      .select('id, product_id, metadata')
+      .eq('stripe_subscription_id', subscription.id)
+      .single();
 
-      // Update subscription status
-      await ctx.supabase
-        .from('subscriptions')
-        .update({
-          status: 'canceled',
-          canceled_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
+    if (fetchError || !existing) {
+      this.logger.warn(
+        `Subscription ${subscription.id} not found in database`,
+      );
+      return;
+    }
 
-      // Invalidate product revenue metrics cache
+    const subMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
+
+    // Update subscription status — critical write, must succeed
+    const { error: updateError } = await ctx.supabase
+      .from('subscriptions')
+      .update({
+        status: 'canceled',
+        canceled_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id);
+
+    if (updateError) {
+      throw new Error(
+        `Failed to mark subscription ${existing.id} as canceled: ${updateError.message}`,
+      );
+    }
+
+    // Invalidate product revenue metrics cache (non-critical)
+    try {
       if (existing.product_id) {
         const cacheKey = `product-metrics:${existing.product_id}`;
         await this.cacheManager.del(cacheKey);
@@ -106,26 +112,26 @@ export class SubscriptionDeletedHandler
           `Invalidated cache for product ${existing.product_id} after subscription cancellation`,
         );
       }
+    } catch (cacheError) {
+      this.logger.warn('Cache invalidation failed (non-critical):', cacheError);
+    }
 
-      // Handle downgrade completion: the old sub's period has ended,
-      // the new sub's trial should end simultaneously and Stripe will start billing.
-      if (subMetadata.canceledReason === 'downgraded') {
-        await this.transitionService.handleDowngradeCompletion(
-          existing.id,
-          subMetadata,
-        );
-        this.logger.log(
-          `Subscription ${subscription.id} downgrade completed — features revoked`,
-        );
-      } else {
-        // Normal cancellation: revoke all feature grants
-        await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
-        this.logger.log(
-          `Subscription ${subscription.id} canceled and features revoked`,
-        );
-      }
-    } catch (error) {
-      this.logger.error('Error handling subscription.deleted:', error);
+    // Handle downgrade completion: the old sub's period has ended,
+    // the new sub's trial should end simultaneously and Stripe will start billing.
+    if (subMetadata.canceledReason === 'downgraded') {
+      await this.transitionService.handleDowngradeCompletion(
+        existing.id,
+        subMetadata,
+      );
+      this.logger.log(
+        `Subscription ${subscription.id} downgrade completed — features revoked`,
+      );
+    } else {
+      // Normal cancellation: revoke all feature grants
+      await this.subscriptionsService.revokeSubscriptionFeatures(existing.id);
+      this.logger.log(
+        `Subscription ${subscription.id} canceled and features revoked`,
+      );
     }
   }
 }

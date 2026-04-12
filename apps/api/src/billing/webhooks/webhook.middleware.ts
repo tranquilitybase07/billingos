@@ -62,10 +62,15 @@ export class WebhookMiddleware {
       .maybeSingle();
 
     if (existingEvent) {
-      this.logger.warn(
-        `Duplicate webhook event ${event.id} found in database - already ${existingEvent.status}. Skipping.`,
-      );
-      return;
+      if (existingEvent.status === 'processed') {
+        this.logger.warn(
+          `Duplicate webhook event ${event.id} found in database - already processed. Skipping.`,
+        );
+        return;
+      }
+      // Failed/pending — allow retry by removing stale record
+      this.logger.log(`Retrying ${existingEvent.status} event ${event.id}`);
+      await supabase.from('webhook_events').delete().eq('event_id', event.id);
     }
 
     // 4. Audit trail insert

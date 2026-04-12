@@ -49,6 +49,11 @@ export class EntitlementExecutor {
     }
 
     // 3. Grant new features
+    if (plan.grant && !subscriptionId) {
+      this.logger.warn(
+        `Skipping entitlement grant for product ${plan.grant.productId} — no subscriptionId yet (expected for trial/deferred flows)`,
+      );
+    }
     if (plan.grant && subscriptionId) {
       await this.entitlementService.grantForSubscription({
         subscriptionId,
