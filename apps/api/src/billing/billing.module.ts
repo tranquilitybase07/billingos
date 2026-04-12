@@ -35,6 +35,7 @@ import { EntitlementPlanner } from './plan/entitlement.planner';
 import { ProrationCalculator } from './plan/proration.calculator';
 import { StripePlanBuilder } from './stripe/stripe-plan.builder';
 import { StripePlanExecutor } from './stripe/stripe-plan.executor';
+import { ProrationInvoiceService } from './stripe/proration-invoice.service';
 import { BosPlanExecutor } from './execute/bos-plan.executor';
 import { EntitlementExecutor } from './execute/entitlement.executor';
 import { CheckoutDiscountService } from './checkout/discount.service';
@@ -96,6 +97,7 @@ const webhookHandlers = [
     ProrationCalculator,
     StripePlanBuilder,
     StripePlanExecutor,
+    ProrationInvoiceService,
     BosPlanExecutor,
     EntitlementExecutor,
     // Discount service

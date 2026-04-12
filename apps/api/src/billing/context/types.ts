@@ -124,4 +124,13 @@ export interface BillingContext {
 
   /** Checkout metadata record ID (for linking to checkout_sessions) */
   checkoutMetadataId?: string;
+
+  /**
+   * BOS checkout_sessions row ID, when the pipeline is being executed for an
+   * already-persisted preview. Used by the upgrade orchestrator as the
+   * idempotency key for the proration invoice and as the metadata pointer the
+   * webhooks use to find the session on `invoice.payment_succeeded` /
+   * `invoice.payment_failed`.
+   */
+  existingCheckoutSessionId?: string;
 }

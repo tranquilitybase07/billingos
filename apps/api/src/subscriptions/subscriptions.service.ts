@@ -428,23 +428,27 @@ export class SubscriptionsService {
     }
 
     if (subscriptions && subscriptions.length > 0) {
-      const subIds = subscriptions.map(s => s.id);
+      const subIds = subscriptions.map((s) => s.id);
       const { data: pendingChanges } = await supabase
         .from('subscription_changes')
-        .select(`
+        .select(
+          `
           subscription_id, scheduled_for, to_amount,
           to_price:product_prices!subscription_changes_to_price_id_fkey (
             price_currency, recurring_interval,
             product:products (name)
           )
-        `)
+        `,
+        )
         .in('subscription_id', subIds)
         .eq('status', 'scheduled')
         .eq('change_type', 'downgrade');
 
       if (pendingChanges) {
         for (const sub of subscriptions) {
-          const pending = pendingChanges.find(pc => pc.subscription_id === sub.id);
+          const pending = pendingChanges.find(
+            (pc) => pc.subscription_id === sub.id,
+          );
           if (pending) {
             (sub as Record<string, unknown>).pending_downgrade = {
               newProductName: (pending.to_price as any)?.product?.name,
@@ -725,5 +729,53 @@ export class SubscriptionsService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Swap entitlements during an in-place upgrade — revoke the old product's
+   * grants for the subscription and grant the new product's. Used by the
+   * `invoice.payment_succeeded` webhook handler when finalizing an upgrade
+   * that was deferred for SCA / 3DS.
+   *
+   * The grant period is set to the subscription's current_period_start /
+   * current_period_end so usage windows line up with the post-upgrade billing
+   * period.
+   */
+  async swapProductEntitlementsForUpgrade(
+    bosSubscriptionId: string,
+    newProductId: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: sub, error } = await supabase
+      .from('subscriptions')
+      .select('id, customer_id, current_period_start, current_period_end')
+      .eq('id', bosSubscriptionId)
+      .single();
+
+    if (error || !sub) {
+      throw new NotFoundException(
+        `Subscription ${bosSubscriptionId} not found while swapping entitlements`,
+      );
+    }
+
+    const periodStart = sub.current_period_start
+      ? new Date(sub.current_period_start)
+      : new Date();
+    const periodEnd = sub.current_period_end
+      ? new Date(sub.current_period_end)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await this.entitlementService.swapForSubscription({
+      subscriptionId: sub.id,
+      customerId: sub.customer_id,
+      newProductId,
+      periodStart,
+      periodEnd,
+    });
+
+    this.logger.log(
+      `Swapped entitlements for subscription ${bosSubscriptionId} → product ${newProductId}`,
+    );
   }
 }

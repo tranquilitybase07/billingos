@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import Stripe from 'stripe';
 import { StripeService } from '../../stripe/stripe.service';
 import { StripePlan, StripeResult } from './types';
+import { ProrationInvoiceService } from './proration-invoice.service';
 
 /**
  * Phase 3b: Executes the StripePlan — makes actual Stripe API calls.
@@ -13,7 +14,10 @@ import { StripePlan, StripeResult } from './types';
 export class StripePlanExecutor {
   private readonly logger = new Logger(StripePlanExecutor.name);
 
-  constructor(private readonly stripeService: StripeService) {}
+  constructor(
+    private readonly stripeService: StripeService,
+    private readonly prorationInvoiceService: ProrationInvoiceService,
+  ) {}
 
   async execute(plan: StripePlan): Promise<StripeResult> {
     const { stripeAccountId } = plan;
@@ -196,16 +200,40 @@ export class StripePlanExecutor {
     >,
     stripeAccountId: string,
   ): Promise<StripeResult> {
-    const updatedSub = await this.stripeService.updateSubscriptionPrice(
-      action.stripeSubscriptionId,
-      action.newStripePriceId,
+    const result = await this.prorationInvoiceService.runUpgrade({
       stripeAccountId,
-      { prorationBehavior: action.prorationBehavior || 'create_prorations' },
-    );
+      stripeCustomerId: action.stripeCustomerId,
+      stripeSubscriptionId: action.stripeSubscriptionId,
+      newStripePriceId: action.newStripePriceId,
+      checkoutSessionId: action.checkoutSessionId,
+    });
 
-    return {
-      kind: 'subscription_updated',
-      subscription: updatedSub,
-    };
+    switch (result.kind) {
+      case 'no_proration':
+        return {
+          kind: 'subscription_updated',
+          subscription: result.updatedSub,
+          prorationInvoice: null,
+        };
+      case 'paid':
+        return {
+          kind: 'subscription_updated',
+          subscription: result.updatedSub,
+          prorationInvoice: result.invoice,
+        };
+      case 'action_required':
+        return {
+          kind: 'subscription_update_action_required',
+          subscription: result.updatedSub,
+          invoice: result.invoice,
+          hostedInvoiceUrl: result.hostedInvoiceUrl,
+        };
+      default: {
+        const _exhaustive: never = result;
+        throw new Error(
+          `Unknown proration result: ${JSON.stringify(_exhaustive)}`,
+        );
+      }
+    }
   }
 }

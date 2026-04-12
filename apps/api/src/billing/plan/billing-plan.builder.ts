@@ -72,6 +72,8 @@ export class BillingPlanBuilder {
     }
 
     // In-place upgrade → update existing subscription (with proration)
+    // Proration is handled by ProrationInvoiceService via the manual invoice
+    // flow; the planner does not need to specify proration_behavior here.
     if (ctx.isInPlaceUpgrade && ctx.transition) {
       return {
         kind: 'update_subscription',
@@ -80,7 +82,6 @@ export class BillingPlanBuilder {
         newAmount: ctx.price.amount,
         newProductId: ctx.product.id,
         newPriceId: ctx.price.id,
-        prorationBehavior: 'create_prorations',
       };
     }
 

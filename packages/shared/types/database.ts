@@ -290,6 +290,8 @@ export type Database = {
           customer_email: string | null
           customer_external_id: string | null
           customer_name: string | null
+          executed_at: string | null
+          execution_error: string | null
           expires_at: string
           id: string
           idempotency_key: string | null
@@ -298,8 +300,10 @@ export type Database = {
           organization_id: string
           payment_intent_id: string | null
           product_id: string | null
+          request_dto: Json | null
           session_token: string
-          status: string | null
+          status: Database["public"]["Enums"]["checkout_session_status"]
+          stripe_invoice_id: string | null
           stripe_subscription_id: string | null
           subscription_id: string | null
           updated_at: string | null
@@ -310,6 +314,8 @@ export type Database = {
           customer_email?: string | null
           customer_external_id?: string | null
           customer_name?: string | null
+          executed_at?: string | null
+          execution_error?: string | null
           expires_at: string
           id?: string
           idempotency_key?: string | null
@@ -318,8 +324,10 @@ export type Database = {
           organization_id: string
           payment_intent_id?: string | null
           product_id?: string | null
+          request_dto?: Json | null
           session_token: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["checkout_session_status"]
+          stripe_invoice_id?: string | null
           stripe_subscription_id?: string | null
           subscription_id?: string | null
           updated_at?: string | null
@@ -330,6 +338,8 @@ export type Database = {
           customer_email?: string | null
           customer_external_id?: string | null
           customer_name?: string | null
+          executed_at?: string | null
+          execution_error?: string | null
           expires_at?: string
           id?: string
           idempotency_key?: string | null
@@ -338,8 +348,10 @@ export type Database = {
           organization_id?: string
           payment_intent_id?: string | null
           product_id?: string | null
+          request_dto?: Json | null
           session_token?: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["checkout_session_status"]
+          stripe_invoice_id?: string | null
           stripe_subscription_id?: string | null
           subscription_id?: string | null
           updated_at?: string | null
@@ -2303,7 +2315,14 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      checkout_session_status:
+        | "pending"
+        | "awaiting_payment"
+        | "executing"
+        | "requires_action"
+        | "completed"
+        | "failed"
+        | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2430,6 +2449,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      checkout_session_status: [
+        "pending",
+        "awaiting_payment",
+        "executing",
+        "requires_action",
+        "completed",
+        "failed",
+        "expired",
+      ],
+    },
   },
 } as const

@@ -72,6 +72,14 @@ export class CheckoutController {
     return this.checkoutService.getCheckoutStatus(sessionId);
   }
 
+  @Post(':sessionId/execute')
+  // No auth guard — sessionId is the bearer for execute, same security model
+  // as confirm-free / confirm-upgrade / confirm-downgrade.
+  async executeCheckout(@Param('sessionId') sessionId: string) {
+    this.logger.log(`Executing checkout session: ${sessionId}`);
+    return this.checkoutService.executeCheckout(sessionId);
+  }
+
   @Post(':sessionId/confirm-free')
   // No auth guard - session ID acts as bearer token for free product confirmations
   // This is safe because:
@@ -103,9 +111,7 @@ export class CheckoutController {
   // 2. Only performs downgrade for already-validated session
   // 3. User has already authenticated when creating the session
   async confirmDowngradeCheckout(@Param('sessionId') sessionId: string) {
-    this.logger.log(
-      `Confirming downgrade checkout for session: ${sessionId}`,
-    );
+    this.logger.log(`Confirming downgrade checkout for session: ${sessionId}`);
 
     return this.checkoutService.confirmDowngradeCheckout(sessionId);
   }

@@ -41,8 +41,11 @@ export interface CreateSetupIntentAction {
 export interface UpdateStripeSubscriptionAction {
   kind: 'update_stripe_subscription';
   stripeSubscriptionId: string;
+  /** Stripe customer ID — needed to list pending invoice items during upgrade */
+  stripeCustomerId: string;
   newStripePriceId: string;
-  prorationBehavior?: 'create_prorations' | 'none';
+  /** BOS checkout session ID — used as Stripe idempotency key + invoice metadata */
+  checkoutSessionId: string;
 }
 
 export interface NoStripeAction {
@@ -56,6 +59,7 @@ export type StripeResult =
   | CheckoutSessionCreatedResult
   | SetupIntentCreatedResult
   | SubscriptionUpdatedResult
+  | SubscriptionUpdateActionRequiredResult
   | NoStripeResult;
 
 export interface SubscriptionCreatedResult {
@@ -81,6 +85,20 @@ export interface SetupIntentCreatedResult {
 export interface SubscriptionUpdatedResult {
   kind: 'subscription_updated';
   subscription: Stripe.Subscription;
+  /** The proration invoice that was created and paid (null when no proration delta) */
+  prorationInvoice: Stripe.Invoice | null;
+}
+
+/**
+ * In-place upgrade where Stripe returned an `open` proration invoice that
+ * needs SCA / 3DS authentication. The BOS subscription/entitlement writes are
+ * deferred until the `invoice.payment_succeeded` webhook fires.
+ */
+export interface SubscriptionUpdateActionRequiredResult {
+  kind: 'subscription_update_action_required';
+  subscription: Stripe.Subscription;
+  invoice: Stripe.Invoice;
+  hostedInvoiceUrl: string;
 }
 
 export interface NoStripeResult {
@@ -124,7 +142,13 @@ export interface PipelineResult {
   /** Client secret for frontend (PaymentIntent, SetupIntent, or Checkout Session) */
   clientSecret: string;
   /** Checkout mode for status polling */
-  checkoutMode: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade';
+  checkoutMode:
+    | 'standard'
+    | 'adaptive'
+    | 'free'
+    | 'trial'
+    | 'upgrade'
+    | 'downgrade';
   /** Proration preview (for upgrade mode) */
   proration?: {
     credit: number;
@@ -132,4 +156,17 @@ export interface PipelineResult {
     netAmount: number;
     currency: string;
   };
+  /**
+   * True when the upgrade flow stalled at SCA / 3DS. The SDK should open
+   * `actionUrl` to let the customer authenticate the proration invoice.
+   * BOS will finalize the upgrade via the `invoice.payment_succeeded`
+   * webhook.
+   */
+  requiresAction?: boolean;
+  /** Hosted invoice URL the customer must visit to complete the upgrade */
+  actionUrl?: string;
+  /** Discriminator for the kind of action required */
+  actionType?: 'invoice_payment';
+  /** Stripe invoice ID associated with the upgrade (proration invoice) */
+  stripeInvoiceId?: string;
 }

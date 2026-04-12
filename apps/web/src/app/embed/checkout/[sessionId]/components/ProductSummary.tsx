@@ -65,15 +65,19 @@ export function ProductSummary({
       {/* Price summary box — white card elevated on grey panel */}
       <div className="bg-white dark:bg-[#0f0f11] rounded-xl border border-gray-200 dark:border-[#2e2e30] p-4 space-y-2.5">
         <div className="flex items-baseline gap-1">
-          {/* For trial products, show the recurring amount (not 0 = today's charge) */}
+          {/* Trial → recurring amount. Upgrade (proration set) → recurring price. Otherwise → totalAmount. */}
           <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {(trialDays && trialDays > 0) ? formatAmount(displayRecurringAmount ?? amount, displayCurrency) : formatAmount(totalAmount, displayCurrency)}
+            {(trialDays && trialDays > 0)
+              ? formatAmount(displayRecurringAmount ?? amount, displayCurrency)
+              : proration
+                ? formatAmount(amount, displayCurrency)
+                : formatAmount(totalAmount, displayCurrency)}
           </span>
           <span className="text-gray-400 dark:text-gray-500 text-xs">/{getIntervalShort(product.interval)}</span>
         </div>
 
         <div className="space-y-1.5 pt-0.5">
-          {!displayCurrency && (
+          {!displayCurrency && !proration && (
             <div className="flex justify-between text-xs">
               <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
               <span className="text-gray-900 dark:text-gray-200">{formatAmount(amount)}</span>

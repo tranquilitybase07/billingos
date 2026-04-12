@@ -7,7 +7,40 @@ import { BillingContext } from '../context/types';
 import { BillingPlan } from '../plan/types';
 import { StripeResult, PipelineResult } from '../stripe/types';
 import { EntitlementExecutor } from './entitlement.executor';
-import type { Json } from '../../../../../packages/shared/types/database';
+import type {
+  Json,
+  Database,
+} from '../../../../../packages/shared/types/database';
+
+type CheckoutSessionStatus =
+  Database['public']['Enums']['checkout_session_status'];
+
+export interface BosExecuteOptions {
+  /**
+   * Status to persist on the resulting checkout_sessions row.
+   * - 'awaiting_payment' for immediate flows that still need a Stripe webhook
+   *   to finalize (standard / adaptive / trial).
+   * - 'completed' for synchronous executions kicked off from
+   *   `BillingService.executeCheckout` (upgrades, downgrades, free).
+   * - 'requires_action' for in-place upgrades that hit SCA / 3DS — the BOS
+   *   subscription/entitlement writes are deferred until the
+   *   `invoice.payment_succeeded` webhook fires.
+   */
+  persistAs: 'awaiting_payment' | 'completed' | 'requires_action';
+  /**
+   * If provided, the executor will UPDATE this checkout_sessions row
+   * (created earlier by `previewCheckout`) instead of inserting a new one.
+   */
+  existingSessionId?: string;
+}
+
+interface UpsertSessionInput {
+  metadata: Record<string, unknown>;
+  paymentIntentId?: string;
+  stripeSubscriptionId?: string;
+  subscriptionId?: string;
+  stripeInvoiceId?: string;
+}
 
 /**
  * Phase 4: Executes BOS database writes after Stripe succeeds.
@@ -32,9 +65,8 @@ export class BosPlanExecutor {
     ctx: BillingContext,
     plan: BillingPlan,
     stripeResult: StripeResult,
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    const supabase = this.supabaseService.getClient();
-
     // 1. Execute transition BOS writes (cancel old subscription in DB)
     await this.executeTransition(ctx, plan);
 
@@ -49,6 +81,7 @@ export class BosPlanExecutor {
           plan,
           stripeResult,
           checkoutMode,
+          options,
         );
 
       case 'checkout_session_created':
@@ -57,6 +90,7 @@ export class BosPlanExecutor {
           plan,
           stripeResult,
           checkoutMode,
+          options,
         );
 
       case 'setup_intent_created':
@@ -65,6 +99,7 @@ export class BosPlanExecutor {
           plan,
           stripeResult,
           checkoutMode,
+          options,
         );
 
       case 'subscription_updated':
@@ -73,13 +108,33 @@ export class BosPlanExecutor {
           plan,
           stripeResult,
           checkoutMode,
+          options,
+        );
+
+      case 'subscription_update_action_required':
+        return this.handleUpgradeActionRequired(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+          options,
         );
 
       case 'no_stripe_result':
         if (ctx.isInPlaceDowngrade) {
-          return this.handleScheduledDowngrade(ctx, plan, checkoutMode);
+          return this.handleScheduledDowngrade(
+            ctx,
+            plan,
+            checkoutMode,
+            options,
+          );
         }
-        return this.handleFreeActivation(ctx, plan, checkoutMode);
+        if (ctx.isFreeProduct) {
+          return this.handleFreeActivation(ctx, plan, checkoutMode, options);
+        }
+        throw new Error(
+          'no_stripe_result without a deferred-flow context (downgrade/free)',
+        );
 
       default: {
         const _exhaustive: never = stripeResult;
@@ -150,6 +205,7 @@ export class BosPlanExecutor {
     plan: BillingPlan,
     result: Extract<StripeResult, { kind: 'subscription_created' }>,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
     const supabase = this.supabaseService.getClient();
     const { subscription, paymentIntent } = result;
@@ -231,18 +287,17 @@ export class BosPlanExecutor {
       );
     }
 
-    // Create checkout session record
-    const checkoutSessionId = await this.createCheckoutSession(
-      ctx,
-      {
+    // Create / update checkout session record
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
         checkoutMode: 'standard',
         stripeSubscriptionId: subscription.id,
         stripeAccountId: ctx.organization.stripeAccountId,
         existingSubscriptionId: ctx.transition?.oldSubscription.id,
       },
-      piRecord.id,
-      subscription.id,
-    );
+      paymentIntentId: piRecord.id,
+      stripeSubscriptionId: subscription.id,
+    });
 
     // Link metadata
     if (ctx.checkoutMetadataId) {
@@ -267,19 +322,22 @@ export class BosPlanExecutor {
     plan: BillingPlan,
     result: Extract<StripeResult, { kind: 'checkout_session_created' }>,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'adaptive',
-      stripeCheckoutSessionId: result.checkoutSession.id,
-      clientSecret: result.clientSecret,
-      stripeAccountId: ctx.organization.stripeAccountId,
-      productId: ctx.product.id,
-      priceId: ctx.price.id,
-      customerId: ctx.customer.id,
-      priceAmount: ctx.price.amount,
-      priceCurrency: ctx.price.currency,
-      metadataId: ctx.checkoutMetadataId || '',
-      existingSubscriptionId: ctx.transition?.oldSubscription.id,
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'adaptive',
+        stripeCheckoutSessionId: result.checkoutSession.id,
+        clientSecret: result.clientSecret,
+        stripeAccountId: ctx.organization.stripeAccountId,
+        productId: ctx.product.id,
+        priceId: ctx.price.id,
+        customerId: ctx.customer.id,
+        priceAmount: ctx.price.amount,
+        priceCurrency: ctx.price.currency,
+        metadataId: ctx.checkoutMetadataId || '',
+        existingSubscriptionId: ctx.transition?.oldSubscription.id,
+      },
     });
 
     if (ctx.checkoutMetadataId) {
@@ -304,19 +362,22 @@ export class BosPlanExecutor {
     plan: BillingPlan,
     result: Extract<StripeResult, { kind: 'setup_intent_created' }>,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'trial',
-      stripeSetupIntentId: result.setupIntent.id,
-      clientSecret: result.clientSecret,
-      stripeAccountId: ctx.organization.stripeAccountId,
-      productId: ctx.product.id,
-      priceId: ctx.price.id,
-      customerId: ctx.customer.id,
-      priceAmount: ctx.price.amount,
-      priceCurrency: ctx.price.currency,
-      metadataId: ctx.checkoutMetadataId || '',
-      trialDays: ctx.product.trialDays,
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'trial',
+        stripeSetupIntentId: result.setupIntent.id,
+        clientSecret: result.clientSecret,
+        stripeAccountId: ctx.organization.stripeAccountId,
+        productId: ctx.product.id,
+        priceId: ctx.price.id,
+        customerId: ctx.customer.id,
+        priceAmount: ctx.price.amount,
+        priceCurrency: ctx.price.currency,
+        metadataId: ctx.checkoutMetadataId || '',
+        trialDays: ctx.product.trialDays,
+      },
     });
 
     if (ctx.checkoutMetadataId) {
@@ -341,6 +402,7 @@ export class BosPlanExecutor {
     plan: BillingPlan,
     result: Extract<StripeResult, { kind: 'subscription_updated' }>,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
     const supabase = this.supabaseService.getClient();
     const sub = plan.subscription;
@@ -383,24 +445,41 @@ export class BosPlanExecutor {
       sub.existingBosSubId,
     );
 
-    // Create checkout session for tracking
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'upgrade',
-      existingSubscriptionId: sub.existingBosSubId,
-      stripeAccountId: ctx.organization.stripeAccountId,
-      customerId: ctx.customer.id,
-      productId: sub.newProductId,
-      priceId: sub.newPriceId,
-      stripePriceId: sub.newStripePriceId,
-      newAmount: sub.newAmount,
-      proration: plan.proration
-        ? {
-            credit: plan.proration.creditAmount,
-            charge: plan.proration.newPlanCharge,
-            netAmount: plan.proration.proratedAmount,
-            currency: plan.proration.currency,
-          }
-        : undefined,
+    // Cancel any pending scheduled downgrades for this subscription
+    await supabase
+      .from('subscription_changes')
+      .update({
+        status: 'failed',
+        failed_reason: 'Superseded by upgrade',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('subscription_id', sub.existingBosSubId)
+      .eq('status', 'scheduled');
+
+    // Create / update checkout session for tracking
+    const prorationInvoiceId = result.prorationInvoice?.id;
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'upgrade',
+        existingSubscriptionId: sub.existingBosSubId,
+        stripeAccountId: ctx.organization.stripeAccountId,
+        customerId: ctx.customer.id,
+        productId: sub.newProductId,
+        priceId: sub.newPriceId,
+        stripePriceId: sub.newStripePriceId,
+        newAmount: sub.newAmount,
+        ...(prorationInvoiceId ? { stripeInvoiceId: prorationInvoiceId } : {}),
+        proration: plan.proration
+          ? {
+              credit: plan.proration.creditAmount,
+              charge: plan.proration.newPlanCharge,
+              netAmount: plan.proration.proratedAmount,
+              currency: plan.proration.currency,
+            }
+          : undefined,
+      },
+      subscriptionId: sub.existingBosSubId,
+      stripeInvoiceId: prorationInvoiceId,
     });
 
     return {
@@ -417,6 +496,94 @@ export class BosPlanExecutor {
             currency: plan.proration.currency,
           }
         : undefined,
+      stripeInvoiceId: prorationInvoiceId,
+    };
+  }
+
+  // ── In-place upgrade requires customer action (SCA / 3DS) ──
+
+  /**
+   * Stripe returned an `open` proration invoice that needs SCA / 3DS. We
+   * persist the session in `requires_action` with the hosted invoice URL but
+   * do NOT mutate the BOS subscription row or swap entitlements. The
+   * `invoice.payment_succeeded` webhook handler is responsible for finalizing.
+   */
+  private async handleUpgradeActionRequired(
+    ctx: BillingContext,
+    plan: BillingPlan,
+    result: Extract<
+      StripeResult,
+      { kind: 'subscription_update_action_required' }
+    >,
+    checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
+  ): Promise<PipelineResult> {
+    const sub = plan.subscription;
+    if (sub.kind !== 'update_subscription') {
+      throw new Error(
+        'Expected update_subscription action for action-required result',
+      );
+    }
+
+    // 30-minute grace before BillingCleanupService voids the invoice and
+    // reverts the sub. Long enough for SCA but not so long that an abandoned
+    // upgrade lingers indefinitely.
+    const actionExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const checkoutSessionId = await this.upsertCheckoutSession(
+      // Override persistAs to requires_action regardless of caller intent —
+      // we cannot mark the session 'completed' until the customer authenticates.
+      ctx,
+      { ...options, persistAs: 'requires_action' },
+      {
+        metadata: {
+          checkoutMode: 'upgrade',
+          existingSubscriptionId: sub.existingBosSubId,
+          stripeAccountId: ctx.organization.stripeAccountId,
+          customerId: ctx.customer.id,
+          productId: sub.newProductId,
+          priceId: sub.newPriceId,
+          stripePriceId: sub.newStripePriceId,
+          newAmount: sub.newAmount,
+          stripeInvoiceId: result.invoice.id,
+          requiresAction: true,
+          actionType: 'invoice_payment',
+          actionUrl: result.hostedInvoiceUrl,
+          hostedInvoiceUrl: result.hostedInvoiceUrl,
+          actionExpiresAt,
+          proration: plan.proration
+            ? {
+                credit: plan.proration.creditAmount,
+                charge: plan.proration.newPlanCharge,
+                netAmount: plan.proration.proratedAmount,
+                currency: plan.proration.currency,
+              }
+            : undefined,
+        },
+        subscriptionId: sub.existingBosSubId,
+        stripeInvoiceId: result.invoice.id ?? undefined,
+      },
+    );
+
+    return {
+      stripeResult: result,
+      checkoutSessionId,
+      // Intentionally do NOT set subscriptionId here — the BOS sub has not
+      // been mutated yet, so the response should not pretend it has.
+      clientSecret: '',
+      checkoutMode,
+      proration: plan.proration
+        ? {
+            credit: plan.proration.creditAmount,
+            charge: plan.proration.newPlanCharge,
+            netAmount: plan.proration.proratedAmount,
+            currency: plan.proration.currency,
+          }
+        : undefined,
+      requiresAction: true,
+      actionUrl: result.hostedInvoiceUrl,
+      actionType: 'invoice_payment',
+      stripeInvoiceId: result.invoice.id ?? undefined,
     };
   }
 
@@ -426,7 +593,9 @@ export class BosPlanExecutor {
     ctx: BillingContext,
     plan: BillingPlan,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
+    const supabase = this.supabaseService.getClient();
     const sub = plan.subscription;
 
     if (sub.kind !== 'schedule_downgrade') {
@@ -435,25 +604,65 @@ export class BosPlanExecutor {
       );
     }
 
-    // Create checkout session with downgrade metadata — no DB updates to subscriptions or entitlements
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'downgrade',
-      existingSubscriptionId: sub.existingBosSubId,
-      stripeAccountId: ctx.organization.stripeAccountId,
-      customerId: ctx.customer.id,
-      productId: sub.newProductId,
-      priceId: sub.newPriceId,
-      stripePriceId: sub.newStripePriceId,
-      newAmount: sub.newAmount,
-      scheduledFor: sub.scheduledFor.toISOString(),
-      effectiveDate: sub.scheduledFor.toISOString(),
-      fromPriceId: sub.fromPriceId,
-      fromAmount: sub.fromAmount,
+    // Cancel any existing scheduled downgrade for this subscription
+    await supabase
+      .from('subscription_changes')
+      .update({
+        status: 'failed',
+        failed_reason: 'Superseded by new downgrade',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('subscription_id', sub.existingBosSubId)
+      .eq('status', 'scheduled');
+
+    // Insert new scheduled downgrade
+    const { error: insertError } = await supabase
+      .from('subscription_changes')
+      .insert({
+        subscription_id: sub.existingBosSubId,
+        organization_id: ctx.organization.id,
+        change_type: 'downgrade',
+        status: 'scheduled',
+        from_price_id: sub.fromPriceId,
+        to_price_id: sub.newPriceId,
+        from_amount: sub.fromAmount,
+        to_amount: sub.newAmount,
+        scheduled_for: sub.scheduledFor.toISOString(),
+        metadata: {
+          scheduledBy: 'billing_pipeline',
+        } as Json,
+      });
+
+    if (insertError) {
+      this.logger.error(
+        `Failed to insert subscription_changes for sub ${sub.existingBosSubId}:`,
+        insertError,
+      );
+      throw new BadRequestException('Failed to schedule downgrade');
+    }
+
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'downgrade',
+        existingSubscriptionId: sub.existingBosSubId,
+        stripeAccountId: ctx.organization.stripeAccountId,
+        customerId: ctx.customer.id,
+        productId: sub.newProductId,
+        priceId: sub.newPriceId,
+        stripePriceId: sub.newStripePriceId,
+        newAmount: sub.newAmount,
+        scheduledFor: sub.scheduledFor.toISOString(),
+        effectiveDate: sub.scheduledFor.toISOString(),
+        fromPriceId: sub.fromPriceId,
+        fromAmount: sub.fromAmount,
+      },
+      subscriptionId: sub.existingBosSubId,
     });
 
     return {
       stripeResult: { kind: 'no_stripe_result' },
       checkoutSessionId,
+      subscriptionId: sub.existingBosSubId,
       clientSecret: '',
       checkoutMode,
     };
@@ -465,18 +674,122 @@ export class BosPlanExecutor {
     ctx: BillingContext,
     plan: BillingPlan,
     checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    const checkoutSessionId = await this.createCheckoutSession(ctx, {
-      checkoutMode: 'free',
-      isFreeProduct: true,
-      productId: ctx.product.id,
-      priceId: ctx.price.id,
-      customerId: ctx.customer.id,
+    const supabase = this.supabaseService.getClient();
+    const now = new Date();
+
+    // Reuse-or-create subscription. Free flows have no Stripe object,
+    // so the entire activation is BOS-only.
+    const { data: existing } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('customer_id', ctx.customer.id)
+      .eq('product_id', ctx.product.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let subscriptionId: string;
+    const periodEnd = this.calculatePeriodEnd(
+      now,
+      ctx.price.recurringInterval,
+      ctx.price.recurringIntervalCount,
+    );
+
+    if (
+      existing &&
+      (existing.status === 'active' || existing.status === 'trialing')
+    ) {
+      // Already active — idempotent
+      subscriptionId = existing.id;
+    } else if (
+      existing &&
+      (existing.status === 'canceled' || existing.status === 'ended')
+    ) {
+      // Reactivate
+      const { data: reactivated, error: reactivateError } = await supabase
+        .from('subscriptions')
+        .update({
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: periodEnd,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          ended_at: null,
+          updated_at: now.toISOString(),
+          metadata: {
+            ...((existing.metadata as Record<string, unknown>) || {}),
+            isFreeProduct: true,
+            reactivatedAt: now.toISOString(),
+            metadataId: ctx.checkoutMetadataId || '',
+          } as Json,
+        })
+        .eq('id', existing.id)
+        .select('id')
+        .single();
+
+      if (reactivateError || !reactivated) {
+        this.logger.error(
+          'Failed to reactivate free subscription:',
+          reactivateError,
+        );
+        throw new BadRequestException('Failed to reactivate subscription');
+      }
+      subscriptionId = reactivated.id;
+    } else {
+      const { data: newSub, error: insertError } = await supabase
+        .from('subscriptions')
+        .insert({
+          organization_id: ctx.organization.id,
+          customer_id: ctx.customer.id,
+          product_id: ctx.product.id,
+          price_id: ctx.price.id,
+          stripe_subscription_id: null,
+          status: 'active',
+          amount: 0,
+          currency: ctx.price.currency,
+          current_period_start: now.toISOString(),
+          current_period_end: periodEnd,
+          trial_start: null,
+          trial_end: null,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          ended_at: null,
+          metadata: {
+            isFreeProduct: true,
+            metadataId: ctx.checkoutMetadataId || '',
+            externalUserId: ctx.customer.externalUserId,
+          } as Json,
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !newSub) {
+        this.logger.error('Failed to create free subscription:', insertError);
+        throw new BadRequestException('Failed to create subscription');
+      }
+      subscriptionId = newSub.id;
+    }
+
+    // Grant entitlements (use the actual sub id)
+    await this.entitlementExecutor.execute(plan.entitlements, subscriptionId);
+
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'free',
+        isFreeProduct: true,
+        productId: ctx.product.id,
+        priceId: ctx.price.id,
+        customerId: ctx.customer.id,
+      },
+      subscriptionId,
     });
 
     return {
       stripeResult: { kind: 'no_stripe_result' },
       checkoutSessionId,
+      subscriptionId,
       clientSecret: '',
       checkoutMode,
     };
@@ -484,13 +797,63 @@ export class BosPlanExecutor {
 
   // ── Helpers ──
 
-  private async createCheckoutSession(
+  private async upsertCheckoutSession(
     ctx: BillingContext,
-    metadata: Record<string, unknown>,
-    paymentIntentId?: string,
-    stripeSubscriptionId?: string,
+    options: BosExecuteOptions,
+    input: UpsertSessionInput,
   ): Promise<string> {
     const supabase = this.supabaseService.getClient();
+    const status: CheckoutSessionStatus = options.persistAs;
+
+    if (options.existingSessionId) {
+      // UPDATE the existing pending row
+      const { data: existing } = await supabase
+        .from('checkout_sessions')
+        .select('metadata')
+        .eq('id', options.existingSessionId)
+        .single();
+
+      const mergedMetadata = {
+        ...((existing?.metadata as Record<string, unknown>) || {}),
+        ...input.metadata,
+      };
+
+      const updates: Database['public']['Tables']['checkout_sessions']['Update'] =
+        {
+          metadata: mergedMetadata as unknown as Json,
+          status,
+          updated_at: new Date().toISOString(),
+        };
+      if (input.paymentIntentId) {
+        updates.payment_intent_id = input.paymentIntentId;
+      }
+      if (input.stripeSubscriptionId) {
+        updates.stripe_subscription_id = input.stripeSubscriptionId;
+      }
+      if (input.subscriptionId) {
+        updates.subscription_id = input.subscriptionId;
+      }
+      if (input.stripeInvoiceId) {
+        updates.stripe_invoice_id = input.stripeInvoiceId;
+      }
+      if (status === 'completed') {
+        updates.completed_at = new Date().toISOString();
+        updates.executed_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('checkout_sessions')
+        .update(updates)
+        .eq('id', options.existingSessionId);
+
+      if (error) {
+        this.logger.error('Failed to update existing checkout session:', error);
+        throw new BadRequestException('Failed to update checkout session');
+      }
+      return options.existingSessionId;
+    }
+
+    // INSERT a fresh row (immediate flows: standard / adaptive / trial)
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
@@ -499,15 +862,26 @@ export class BosPlanExecutor {
       .insert({
         organization_id: ctx.organization.id,
         session_token: ctx.customer.externalUserId,
-        payment_intent_id: paymentIntentId || null,
-        stripe_subscription_id: stripeSubscriptionId || null,
+        payment_intent_id: input.paymentIntentId || null,
+        stripe_subscription_id: input.stripeSubscriptionId || null,
+        stripe_invoice_id: input.stripeInvoiceId || null,
+        subscription_id: input.subscriptionId || null,
+        product_id: ctx.product.id,
+        metadata_id: ctx.checkoutMetadataId || null,
         customer_email: ctx.customer.email,
         customer_name: ctx.customer.name,
         customer_external_id: ctx.customer.externalUserId,
         expires_at: expiresAt.toISOString(),
+        status,
+        ...(status === 'completed'
+          ? {
+              completed_at: new Date().toISOString(),
+              executed_at: new Date().toISOString(),
+            }
+          : {}),
         metadata: {
           ...ctx.metadata,
-          ...metadata,
+          ...input.metadata,
         } as Json,
       })
       .select('id')
@@ -562,5 +936,30 @@ export class BosPlanExecutor {
     if (plan.subscription.kind === 'setup_trial') return 'trial';
     if (plan.useAdaptivePricing) return 'adaptive';
     return 'standard';
+  }
+
+  private calculatePeriodEnd(
+    startDate: Date,
+    interval: 'day' | 'week' | 'month' | 'year',
+    intervalCount: number,
+  ): string {
+    const endDate = new Date(startDate);
+    switch (interval) {
+      case 'day':
+        endDate.setDate(endDate.getDate() + intervalCount);
+        break;
+      case 'week':
+        endDate.setDate(endDate.getDate() + 7 * intervalCount);
+        break;
+      case 'month':
+        endDate.setMonth(endDate.getMonth() + intervalCount);
+        break;
+      case 'year':
+        endDate.setFullYear(endDate.getFullYear() + intervalCount);
+        break;
+      default:
+        endDate.setMonth(endDate.getMonth() + 1);
+    }
+    return endDate.toISOString();
   }
 }

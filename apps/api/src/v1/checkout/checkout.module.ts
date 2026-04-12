@@ -6,10 +6,6 @@ import { CheckoutMetadataService } from './checkout-metadata.service';
 import { StripeModule } from '../../stripe/stripe.module';
 import { SupabaseModule } from '../../supabase/supabase.module';
 import { SessionTokensModule } from '../../session-tokens/session-tokens.module';
-import { CustomersModule } from '../../customers/customers.module';
-import { RedisModule } from '../../redis/redis.module';
-import { QueueModule } from '../../queue/queue.module';
-import { SubscriptionsModule } from '../../subscriptions/subscriptions.module';
 import { BillingModule } from '../../billing/billing.module';
 
 @Module({
@@ -18,10 +14,6 @@ import { BillingModule } from '../../billing/billing.module';
     StripeModule,
     SupabaseModule,
     SessionTokensModule,
-    CustomersModule,
-    RedisModule,
-    QueueModule,
-    SubscriptionsModule,
     forwardRef(() => BillingModule),
   ],
   controllers: [CheckoutController],

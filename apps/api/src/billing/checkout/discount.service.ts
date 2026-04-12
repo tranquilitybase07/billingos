@@ -35,7 +35,13 @@ interface SessionInfo {
   session: Record<string, unknown>;
   metadata: Record<string, unknown>;
   paymentIntent: Record<string, unknown> | null;
-  checkoutMode: 'standard' | 'adaptive' | 'trial' | 'free' | 'upgrade';
+  checkoutMode:
+    | 'standard'
+    | 'adaptive'
+    | 'trial'
+    | 'free'
+    | 'upgrade'
+    | 'downgrade';
   organizationId: string;
   productId: string;
   amount: number;
@@ -693,6 +699,32 @@ export class CheckoutDiscountService {
 
   // ── Session helpers ──
 
+  /**
+   * Reject discount operations on deferred-flow checkouts (upgrade,
+   * downgrade, free) — these don't have a Stripe object to attach a
+   * coupon to at preview time. To support coupons on these flows in
+   * the future, re-run `previewCheckout` with `dto.couponCode` set.
+   */
+  private assertNotDeferredMode(
+    checkoutMode: SessionInfo['checkoutMode'],
+    operation: 'apply' | 'remove' | 'discount',
+  ): void {
+    const deferredModes: SessionInfo['checkoutMode'][] = [
+      'upgrade',
+      'downgrade',
+      'free',
+    ];
+    if (deferredModes.includes(checkoutMode)) {
+      const verb =
+        operation === 'apply' || operation === 'discount'
+          ? 'applied to'
+          : 'removed from';
+      throw new BadRequestException(
+        `Discounts cannot be ${verb} ${checkoutMode} checkouts.`,
+      );
+    }
+  }
+
   private async loadSessionInfo(sessionId: string): Promise<SessionInfo> {
     const supabase = this.supabaseService.getClient();
 
@@ -716,6 +748,16 @@ export class CheckoutDiscountService {
       unknown
     > | null;
     const checkoutMode = (metadata.checkoutMode as string) || 'standard';
+
+    // Deferred flows (upgrade, downgrade, free) don't have a Stripe object
+    // to attach a coupon to at preview time. Reject before any other checks
+    // so callers get a clear error rather than the generic
+    // "payment intent not found" message below.
+    this.assertNotDeferredMode(
+      checkoutMode as SessionInfo['checkoutMode'],
+      'discount',
+    );
+
     const isAdaptive = checkoutMode === 'adaptive';
     const isTrial = checkoutMode === 'trial';
 

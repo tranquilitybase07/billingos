@@ -13,6 +13,7 @@ export class BillingCleanupService {
   private isProcessingIdempotency = false;
   private isProcessingReconciliation = false;
   private isProcessingDriftDetection = false;
+  private isProcessingRequiresAction = false;
 
   constructor(
     private readonly supabaseService: SupabaseService,
@@ -108,6 +109,178 @@ export class BillingCleanupService {
       this.logger.error('Error in expired checkout cleanup:', error);
     } finally {
       this.isProcessingCheckouts = false;
+    }
+  }
+
+  /**
+   * Job A2: Sweep expired requires_action checkout sessions — every 5 minutes
+   *
+   * In-place upgrades that hit SCA / 3DS land in `requires_action` with a
+   * 30-minute grace window (`metadata.actionExpiresAt`). If the customer
+   * never completes the hosted invoice flow, this sweeper:
+   *   1. Voids the open Stripe invoice.
+   *   2. Reverts the Stripe subscription items back to the original price.
+   *   3. Marks the checkout session as `failed`.
+   *
+   * The BOS subscription was never mutated for `requires_action` flows, so
+   * no entitlement rollback is required.
+   */
+  @Cron('0 */5 * * * *')
+  async sweepExpiredRequiresAction() {
+    if (this.isProcessingRequiresAction) {
+      this.logger.log('Skipping requires_action sweep — already running');
+      return;
+    }
+
+    this.isProcessingRequiresAction = true;
+
+    try {
+      const supabase = this.supabaseService.getClient();
+      const now = new Date().toISOString();
+
+      const { data: sessions, error } = await supabase
+        .from('checkout_sessions')
+        .select('id, stripe_invoice_id, metadata, organization_id')
+        .eq('status', 'requires_action')
+        .order('updated_at', { ascending: true })
+        .limit(50);
+
+      if (error) {
+        this.logger.error('Error fetching requires_action sessions:', error);
+        return;
+      }
+      if (!sessions || sessions.length === 0) return;
+
+      const expired = sessions.filter((s) => {
+        const meta = (s.metadata as Record<string, unknown>) || {};
+        const expiresAt = meta.actionExpiresAt as string | undefined;
+        if (!expiresAt) return false;
+        return expiresAt < now;
+      });
+
+      if (expired.length === 0) return;
+
+      this.logger.log(
+        `Sweeping ${expired.length} expired requires_action sessions`,
+      );
+
+      for (const session of expired) {
+        try {
+          const meta = (session.metadata as Record<string, unknown>) || {};
+          const stripeAccountId = meta.stripeAccountId as string | undefined;
+          const existingSubscriptionId = meta.existingSubscriptionId as
+            | string
+            | undefined;
+          const invoiceId = session.stripe_invoice_id;
+
+          // 1. Void the proration invoice if we have one.
+          if (invoiceId && stripeAccountId) {
+            try {
+              await this.stripeService.voidInvoice(invoiceId, stripeAccountId);
+            } catch (voidError) {
+              this.logger.warn(
+                `Failed to void invoice ${invoiceId}:`,
+                voidError,
+              );
+            }
+          }
+
+          // 2. Revert the Stripe subscription items.
+          if (existingSubscriptionId && stripeAccountId) {
+            await this.revertExpiredUpgrade(
+              existingSubscriptionId,
+              stripeAccountId,
+            );
+          }
+
+          // 3. Flip session to failed.
+          await supabase
+            .from('checkout_sessions')
+            .update({
+              status: 'failed',
+              execution_error:
+                'requires_action expired before customer completed payment',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', session.id);
+        } catch (itemError) {
+          this.logger.error(
+            `Failed to sweep requires_action session ${session.id}:`,
+            itemError,
+          );
+        }
+      }
+
+      this.logger.log(
+        `requires_action sweep complete: ${expired.length} processed`,
+      );
+    } catch (error) {
+      this.logger.error('Error in requires_action sweep:', error);
+    } finally {
+      this.isProcessingRequiresAction = false;
+    }
+  }
+
+  private async revertExpiredUpgrade(
+    bosSubscriptionId: string,
+    stripeAccountId: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: bosSub, error } = await supabase
+      .from('subscriptions')
+      .select('stripe_subscription_id, price_id')
+      .eq('id', bosSubscriptionId)
+      .single();
+
+    if (error || !bosSub?.stripe_subscription_id || !bosSub.price_id) {
+      this.logger.warn(
+        `Cannot revert expired upgrade: BOS sub ${bosSubscriptionId} missing fields`,
+      );
+      return;
+    }
+
+    const { data: priceRow } = await supabase
+      .from('product_prices')
+      .select('stripe_price_id')
+      .eq('id', bosSub.price_id)
+      .single();
+
+    if (!priceRow?.stripe_price_id) {
+      this.logger.warn(
+        `Cannot revert expired upgrade: original price ${bosSub.price_id} has no stripe_price_id`,
+      );
+      return;
+    }
+
+    try {
+      const stripeSub = await this.stripeService.getSubscription(
+        bosSub.stripe_subscription_id,
+        stripeAccountId,
+      );
+      const itemId = stripeSub.items?.data?.[0]?.id;
+      if (!itemId) {
+        throw new Error('Stripe subscription has no items to revert');
+      }
+
+      await this.stripeService.updateSubscriptionWithParams(
+        bosSub.stripe_subscription_id,
+        {
+          items: [{ id: itemId, price: priceRow.stripe_price_id }],
+          proration_behavior: 'none',
+          billing_cycle_anchor: 'unchanged',
+        },
+        stripeAccountId,
+      );
+
+      this.logger.log(
+        `Reverted Stripe sub ${bosSub.stripe_subscription_id} after requires_action expiry`,
+      );
+    } catch (revertError) {
+      this.logger.error(
+        `CRITICAL: Failed to revert Stripe sub ${bosSub.stripe_subscription_id} after requires_action expiry`,
+        revertError,
+      );
     }
   }
 

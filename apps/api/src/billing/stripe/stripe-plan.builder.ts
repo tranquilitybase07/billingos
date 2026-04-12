@@ -29,12 +29,18 @@ export class StripePlanBuilder {
         return { kind: 'no_stripe_action' };
 
       case 'update_subscription':
+        if (!ctx.existingCheckoutSessionId) {
+          throw new BadRequestException(
+            'In-place upgrade requires an existing checkout session ID',
+          );
+        }
         return {
           kind: 'update_stripe_subscription',
           stripeSubscriptionId:
             ctx.transition!.oldSubscription.stripeSubscriptionId!,
+          stripeCustomerId: ctx.customer.stripeCustomerId,
           newStripePriceId: plan.subscription.newStripePriceId,
-          prorationBehavior: plan.subscription.prorationBehavior,
+          checkoutSessionId: ctx.existingCheckoutSessionId,
         };
 
       case 'setup_trial':
