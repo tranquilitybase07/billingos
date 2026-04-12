@@ -117,4 +117,5 @@ supabase/.temp/
 
 # Claude Code — personal/local files
 .claude/settings.local.json
+.claude/skills/nestjs-best-practices
 CLAUDE.local.md
