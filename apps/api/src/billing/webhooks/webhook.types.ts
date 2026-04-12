@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../../../../../packages/shared/types/database';
+import { Database } from '../types/shared';
 
 /**
  * Context passed to every webhook handler after middleware processing.

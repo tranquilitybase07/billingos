@@ -94,7 +94,7 @@ export class InvoicePaymentFailedHandler
             attempt_count: invoiceData.attempt_count || 1,
           },
           organization_id: pastDueSub.organization_id,
-          created_by: 'stripe-webhook.service',
+          created_by: 'billing.webhooks.invoice-payment-failed.handler',
         });
       }
     } catch (error) {

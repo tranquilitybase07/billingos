@@ -70,7 +70,9 @@ export class CustomerResolver {
       email: email || '',
       name,
       stripe_customer_id: stripeCustomer.id,
-      metadata: metadata as Record<string, string> | undefined,
+      metadata: metadata
+        ? Object.fromEntries(Object.entries(metadata).map(([k, v]) => [k, String(v)]))
+        : undefined,
     });
 
     return {

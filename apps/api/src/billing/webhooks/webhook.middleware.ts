@@ -59,7 +59,7 @@ export class WebhookMiddleware {
       .from('webhook_events')
       .select('id, status')
       .eq('event_id', event.id)
-      .single();
+      .maybeSingle();
 
     if (existingEvent) {
       this.logger.warn(
@@ -118,6 +118,9 @@ export class WebhookMiddleware {
           retry_count: 1,
         })
         .eq('event_id', event.id);
+
+      // Remove Redis idempotency key so Stripe's retry isn't silently blocked
+      await this.redisService.delete(idempotencyKey);
 
       throw error; // Re-throw → 500 → Stripe retries
     }

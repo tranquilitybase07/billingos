@@ -136,7 +136,8 @@ export class StripePlanBuilder {
       },
     };
 
-    const idempotencyKey = `sub-create:${ctx.customer.id}:${ctx.product.id}:${Date.now()}`;
+    const stableKey = ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
+    const idempotencyKey = `sub-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
 
     return {
       kind: 'create_stripe_subscription',
