@@ -1,0 +1,29 @@
+# Claude Code tooling — not needed at runtime
+.claude/
+.agents/
+
+# Documentation
+docs/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Git
+.git/
+
+# Environment files
+.env*
+!.env.example
+
+# Supabase local dev
+.supabase/
+supabase/
+
+# Node modules (installed fresh in build)
+node_modules/
+
+# Build artifacts
+.next/
+dist/
+coverage/
