@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { EntitlementService } from '../billing/entitlements/entitlement.service';
 
 @Injectable()
 export class SubscriptionSchedulerService {
@@ -11,6 +12,7 @@ export class SubscriptionSchedulerService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly entitlementService: EntitlementService,
   ) {}
 
   /**
@@ -113,6 +115,25 @@ export class SubscriptionSchedulerService {
       throw new Error('Missing subscription or price data');
     }
 
+    // Guard: check subscription is still active before executing
+    if (
+      subscription.status !== 'active' &&
+      subscription.status !== 'trialing'
+    ) {
+      this.logger.warn(
+        `Subscription ${subscription.id} is ${subscription.status} — skipping scheduled downgrade`,
+      );
+      await supabase
+        .from('subscription_changes')
+        .update({
+          status: 'failed',
+          failed_reason: `Subscription status is ${subscription.status}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', change.id);
+      return;
+    }
+
     this.logger.log(
       `Executing scheduled downgrade for subscription ${subscription.id}`,
     );
@@ -146,7 +167,7 @@ export class SubscriptionSchedulerService {
       .eq('id', org?.account_id || '')
       .single();
 
-    // Update Stripe subscription if it exists
+    // Update Stripe subscription price if it exists
     if (
       subscription.stripe_subscription_id &&
       newPrice.stripe_price_id &&
@@ -157,21 +178,29 @@ export class SubscriptionSchedulerService {
           subscription.stripe_subscription_id,
           newPrice.stripe_price_id,
           account.stripe_id,
+          { prorationBehavior: 'none' },
         );
-      } catch (stripeError) {
+      } catch (stripeError: any) {
         this.logger.error('Failed to update Stripe subscription:', stripeError);
         throw new Error(`Stripe update failed: ${stripeError.message}`);
       }
     }
 
-    // Update subscription in database
+    // Update subscription in database (include price_id)
     const { error: subUpdateError } = await supabase
       .from('subscriptions')
       .update({
         product_id: newPrice.product_id,
+        price_id: newPrice.id,
         amount: newPrice.price_amount || 0,
         currency: newPrice.price_currency || org?.default_currency || 'usd',
         updated_at: new Date().toISOString(),
+        metadata: {
+          ...((subscription.metadata ?? {}) as Record<string, unknown>),
+          downgradeExecutedAt: new Date().toISOString(),
+          downgradeChangeId: change.id,
+          downgradeMethod: 'scheduled',
+        },
       })
       .eq('id', subscription.id);
 
@@ -179,31 +208,36 @@ export class SubscriptionSchedulerService {
       throw new Error('Failed to update subscription in database');
     }
 
-    // Update features (revoke old, grant new)
-    // First revoke old features
-    await supabase
-      .from('feature_grants')
-      .update({ revoked_at: new Date().toISOString() })
-      .eq('subscription_id', subscription.id)
-      .is('revoked_at', null);
-
-    // Grant new features
-    const { data: productFeatures } = await supabase
-      .from('product_features')
-      .select('feature_id, properties')
-      .eq('product_id', newPrice.product_id);
-
-    if (productFeatures && productFeatures.length > 0) {
-      const featureGrants = productFeatures.map((pf: any) => ({
-        subscription_id: subscription.id,
-        feature_id: pf.feature_id,
-        customer_id: subscription.customer_id,
-        properties: pf.properties || {},
-        granted_at: new Date().toISOString(),
-      }));
-
-      await supabase.from('feature_grants').insert(featureGrants);
+    // Swap features using EntitlementService
+    const now = new Date();
+    // Estimate next period end based on price interval
+    const periodEnd = new Date(now);
+    const interval = newPrice.recurring_interval || 'month';
+    const intervalCount = newPrice.recurring_interval_count || 1;
+    switch (interval) {
+      case 'day':
+        periodEnd.setDate(periodEnd.getDate() + intervalCount);
+        break;
+      case 'week':
+        periodEnd.setDate(periodEnd.getDate() + 7 * intervalCount);
+        break;
+      case 'month':
+        periodEnd.setMonth(periodEnd.getMonth() + intervalCount);
+        break;
+      case 'year':
+        periodEnd.setFullYear(periodEnd.getFullYear() + intervalCount);
+        break;
+      default:
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
     }
+
+    await this.entitlementService.swapForSubscription({
+      subscriptionId: subscription.id,
+      customerId: subscription.customer_id,
+      newProductId: newPrice.product_id,
+      periodStart: now,
+      periodEnd,
+    });
 
     // Mark change as completed
     await supabase
@@ -218,7 +252,5 @@ export class SubscriptionSchedulerService {
     this.logger.log(
       `Successfully completed scheduled downgrade for subscription ${subscription.id}`,
     );
-
-    // TODO: Send notification email to customer
   }
 }

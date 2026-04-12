@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   Logger,
   OnModuleInit,
@@ -174,5 +175,45 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   isHealthy(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Acquire a lock with TTL. Returns true if acquired, false if already held.
+   *
+   * Built on top of `setIdempotencyKey` (SET NX PX), which fails open when
+   * Redis is unavailable. In degraded mode, callers proceed without protection.
+   */
+  async acquireLock(key: string, ttlMs: number): Promise<boolean> {
+    return this.setIdempotencyKey(key, '1', ttlMs);
+  }
+
+  /**
+   * Release a lock. Safe to call even if Redis is down.
+   */
+  async releaseLock(key: string): Promise<void> {
+    await this.delete(key);
+  }
+
+  /**
+   * Run `fn` while holding a lock. Throws `ConflictException` if the lock is
+   * already held by another caller. Always releases the lock on exit, even
+   * when `fn` throws.
+   */
+  async withLock<T>(
+    key: string,
+    ttlMs: number,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const acquired = await this.acquireLock(key, ttlMs);
+    if (!acquired) {
+      throw new ConflictException(
+        'Operation already in progress for this customer. Please retry in a moment.',
+      );
+    }
+    try {
+      return await fn();
+    } finally {
+      await this.releaseLock(key);
+    }
   }
 }

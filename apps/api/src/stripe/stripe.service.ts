@@ -1160,23 +1160,25 @@ export class StripeService {
     const subscriptionItemId = subscription.items.data[0].id;
 
     // Preview the upcoming invoice with the new price
-    // Note: Using type assertion as retrieveUpcoming may not be in all Stripe SDK versions
-    return (await (this.stripe.invoices as any).retrieveUpcoming(
+    // Stripe SDK v20+ uses invoices.createPreview() instead of retrieveUpcoming()
+    return await this.stripe.invoices.createPreview(
       {
         customer: customerId,
         subscription: subscriptionId,
-        subscription_items: [
-          {
-            id: subscriptionItemId,
-            price: newPriceId,
-          },
-        ],
-        subscription_proration_behavior: 'create_prorations',
+        subscription_details: {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: 'create_prorations',
+        },
       },
       {
         stripeAccount: stripeAccountId,
       },
-    )) as Promise<Stripe.Invoice>;
+    );
   }
 
   /**
@@ -1188,6 +1190,9 @@ export class StripeService {
     subscriptionId: string,
     newPriceId: string,
     stripeAccountId: string,
+    options?: {
+      prorationBehavior?: 'create_prorations' | 'always_invoice' | 'none';
+    },
   ): Promise<Stripe.Subscription> {
     this.logger.log(
       `Updating subscription ${subscriptionId} to new price ${newPriceId}`,
@@ -1215,12 +1220,142 @@ export class StripeService {
             price: newPriceId,
           },
         ],
-        proration_behavior: 'create_prorations', // Create proration items
+        proration_behavior: options?.prorationBehavior ?? 'create_prorations',
         billing_cycle_anchor: 'unchanged', // Keep existing billing cycle
       },
       {
         stripeAccount: stripeAccountId,
       },
     );
+  }
+
+  // ── Invoice helpers (used by ProrationInvoiceService) ──
+
+  /**
+   * Flexible variant of `subscriptions.update` for the orchestrator. The
+   * caller fully owns the params (items, proration_behavior, payment_behavior,
+   * expand, etc.). Use this when the simpler `updateSubscriptionPrice` doesn't
+   * fit.
+   */
+  async updateSubscriptionWithParams(
+    subscriptionId: string,
+    params: Stripe.SubscriptionUpdateParams,
+    stripeAccountId: string,
+  ): Promise<Stripe.Subscription> {
+    return this.stripe.subscriptions.update(subscriptionId, params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * List pending (un-invoiced) invoice items for a customer. Used to detect
+   * whether a `subscriptions.update` actually generated proration line items
+   * worth invoicing.
+   */
+  async listPendingInvoiceItems(
+    stripeCustomerId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.InvoiceItem[]> {
+    const result = await this.stripe.invoiceItems.list(
+      { customer: stripeCustomerId, pending: true, limit: 100 },
+      { stripeAccount: stripeAccountId },
+    );
+    return result.data;
+  }
+
+  /**
+   * Create an invoice. Wraps `auto_advance: false` so the orchestrator can
+   * decide finalize/pay timing explicitly.
+   */
+  async createInvoice(
+    params: Stripe.InvoiceCreateParams,
+    stripeAccountId: string,
+    idempotencyKey?: string,
+  ): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.create(params, {
+      stripeAccount: stripeAccountId,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    });
+  }
+
+  async finalizeInvoice(
+    invoiceId: string,
+    stripeAccountId: string,
+    opts?: Stripe.InvoiceFinalizeInvoiceParams,
+  ): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.finalizeInvoice(
+      invoiceId,
+      opts ?? { auto_advance: false },
+      { stripeAccount: stripeAccountId },
+    );
+  }
+
+  async payInvoice(
+    invoiceId: string,
+    stripeAccountId: string,
+    opts?: Stripe.InvoicePayParams,
+  ): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.pay(invoiceId, opts ?? {}, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  async voidInvoice(
+    invoiceId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.voidInvoice(invoiceId, undefined, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  async retrieveInvoice(
+    invoiceId: string,
+    stripeAccountId: string,
+    expand?: string[],
+  ): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.retrieve(
+      invoiceId,
+      expand && expand.length > 0 ? { expand } : undefined,
+      { stripeAccount: stripeAccountId },
+    );
+  }
+
+  /**
+   * Idempotency recovery: search for an existing draft invoice tagged with
+   * the given checkout session ID. If `runUpgrade` crashes after creating an
+   * invoice but before finalizing it, the next attempt picks up where it left
+   * off instead of creating a duplicate.
+   */
+  async searchDraftInvoiceBySession(
+    stripeCustomerId: string,
+    checkoutSessionId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Invoice | null> {
+    const result = await this.stripe.invoices.list(
+      {
+        customer: stripeCustomerId,
+        status: 'draft',
+        limit: 100,
+      },
+      { stripeAccount: stripeAccountId },
+    );
+    const match = result.data.find(
+      (inv) => inv.metadata?.bosCheckoutSessionId === checkoutSessionId,
+    );
+    return match ?? null;
+  }
+
+  /**
+   * Connect-aware customer fetch. The original `getCustomer` is account-less
+   * (used by platform-side flows); this variant scopes to a connected account.
+   */
+  async getConnectCustomer(
+    stripeCustomerId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Customer | Stripe.DeletedCustomer> {
+    return this.stripe.customers.retrieve(stripeCustomerId, {
+      stripeAccount: stripeAccountId,
+    });
   }
 }

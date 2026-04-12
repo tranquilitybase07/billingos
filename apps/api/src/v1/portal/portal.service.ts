@@ -4,17 +4,12 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
-  forwardRef,
-  Inject,
 } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { StripeService } from '../../stripe/stripe.service';
-import { SubscriptionUpgradeService } from '../../subscriptions/subscription-upgrade.service';
 import { CreatePortalSessionDto } from './dto/create-portal-session.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpdateCustomerDto } from '../../customers/dto/update-customer.dto';
-import { PreviewChangeDto } from '../../subscriptions/dto/preview-change.dto';
-import { ChangePlanDto } from '../../subscriptions/dto/change-plan.dto';
 import {
   PortalData,
   PortalSubscription,
@@ -44,8 +39,6 @@ export class PortalService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
-    @Inject(forwardRef(() => SubscriptionUpgradeService))
-    private readonly subscriptionUpgradeService: SubscriptionUpgradeService,
   ) {}
 
   /**
@@ -264,6 +257,27 @@ export class PortalService {
           limit: pf.feature.limit || undefined,
         }));
 
+        // Check for pending scheduled downgrade
+        const { data: pendingChange } = await supabase
+          .from('subscription_changes')
+          .select(
+            `
+            scheduled_for,
+            to_amount,
+            to_price:product_prices!subscription_changes_to_price_id_fkey (
+              price_currency,
+              recurring_interval,
+              product:products (name)
+            )
+          `,
+          )
+          .eq('subscription_id', sub.id)
+          .eq('status', 'scheduled')
+          .eq('change_type', 'downgrade')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         portalSubscriptions.push({
           id: sub.id,
           status: sub.status,
@@ -285,6 +299,19 @@ export class PortalService {
             intervalCount: price.recurring_interval_count || 1,
           },
           features,
+          pendingDowngrade: pendingChange
+            ? {
+                newProductName:
+                  (pendingChange.to_price as any)?.product?.name ?? 'Unknown',
+                newAmount: pendingChange.to_amount ?? 0,
+                newCurrency:
+                  (pendingChange.to_price as any)?.price_currency ?? 'usd',
+                newInterval:
+                  (pendingChange.to_price as any)?.recurring_interval ??
+                  'month',
+                scheduledFor: pendingChange.scheduled_for ?? '',
+              }
+            : undefined,
         });
       }
     }
@@ -1037,120 +1064,5 @@ export class PortalService {
         `Failed to set default payment method: ${error.message}`,
       );
     }
-  }
-
-  /**
-   * Get available plans for subscription upgrade/downgrade
-   */
-  async getAvailablePlans(sessionId: string, subscriptionId: string) {
-    const supabase = this.supabaseService.getClient();
-
-    // 1. Validate session
-    const sessionStatus = await this.getPortalSessionStatus(sessionId);
-    if (!sessionStatus.isValid) {
-      throw new UnauthorizedException('Portal session is invalid or expired');
-    }
-
-    // 2. Get customer's organization ID
-    const { data: session } = await supabase
-      .from('portal_sessions')
-      .select('organization_id')
-      .eq('id', sessionId)
-      .single();
-
-    if (!session) {
-      throw new NotFoundException('Session not found');
-    }
-
-    // 3. Call subscription upgrade service with SDK context
-    const context = {
-      organizationId: session.organization_id,
-      isSDK: true as const,
-    };
-
-    return this.subscriptionUpgradeService.getAvailablePlans(
-      subscriptionId,
-      context,
-    );
-  }
-
-  /**
-   * Preview subscription plan change with proration
-   */
-  async previewPlanChange(
-    sessionId: string,
-    subscriptionId: string,
-    dto: PreviewChangeDto,
-  ) {
-    const supabase = this.supabaseService.getClient();
-
-    // 1. Validate session
-    const sessionStatus = await this.getPortalSessionStatus(sessionId);
-    if (!sessionStatus.isValid) {
-      throw new UnauthorizedException('Portal session is invalid or expired');
-    }
-
-    // 2. Get customer's organization ID
-    const { data: session } = await supabase
-      .from('portal_sessions')
-      .select('organization_id')
-      .eq('id', sessionId)
-      .single();
-
-    if (!session) {
-      throw new NotFoundException('Session not found');
-    }
-
-    // 3. Call subscription upgrade service with SDK context
-    const context = {
-      organizationId: session.organization_id,
-      isSDK: true as const,
-    };
-
-    return this.subscriptionUpgradeService.previewChange(
-      subscriptionId,
-      context,
-      dto,
-    );
-  }
-
-  /**
-   * Execute subscription plan change
-   */
-  async changePlan(
-    sessionId: string,
-    subscriptionId: string,
-    dto: ChangePlanDto,
-  ) {
-    const supabase = this.supabaseService.getClient();
-
-    // 1. Validate session
-    const sessionStatus = await this.getPortalSessionStatus(sessionId);
-    if (!sessionStatus.isValid) {
-      throw new UnauthorizedException('Portal session is invalid or expired');
-    }
-
-    // 2. Get customer's organization ID
-    const { data: session } = await supabase
-      .from('portal_sessions')
-      .select('organization_id')
-      .eq('id', sessionId)
-      .single();
-
-    if (!session) {
-      throw new NotFoundException('Session not found');
-    }
-
-    // 3. Call subscription upgrade service with SDK context
-    const context = {
-      organizationId: session.organization_id,
-      isSDK: true as const,
-    };
-
-    return this.subscriptionUpgradeService.changePlan(
-      subscriptionId,
-      context,
-      dto,
-    );
   }
 }

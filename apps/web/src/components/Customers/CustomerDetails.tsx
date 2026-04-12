@@ -23,6 +23,7 @@ import {
   DataTableColumnHeader,
 } from "@/components/atoms/datatable";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
+import { PendingChangeBadge } from "@/components/Subscriptions/PendingChangeBadge";
 import { useCustomerState, useUpdateCustomer } from "@/hooks/queries/customers";
 import { useProducts, type Product } from "@/hooks/queries/products";
 import { useCreateSubscription } from "@/hooks/queries/subscriptions";
@@ -98,6 +99,9 @@ export function CustomerDetails({ customer, organizationId, variant: _variant = 
     customer.id,
     organizationId
   );
+
+  // Surface the first subscription with a scheduled downgrade in the header.
+  const pendingDowngradeSub = customer.subscriptions?.find((s) => s.pending_downgrade) ?? null;
 
   const handleAddMetadataField = () => {
     setMetadataFields([...metadataFields, { key: '', value: '' }]);
@@ -196,6 +200,16 @@ export function CustomerDetails({ customer, organizationId, variant: _variant = 
                 {customer.name}
               </h1>
               <p className="text-muted-foreground mt-1">{customer.email}</p>
+              {pendingDowngradeSub?.pending_downgrade && (
+                <div className="mt-2">
+                  <PendingChangeBadge
+                    newPlanName={pendingDowngradeSub.pending_downgrade.newProductName}
+                    scheduledFor={pendingDowngradeSub.pending_downgrade.scheduledFor}
+                    newAmount={pendingDowngradeSub.pending_downgrade.newAmount}
+                    newCurrency={pendingDowngradeSub.currency}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

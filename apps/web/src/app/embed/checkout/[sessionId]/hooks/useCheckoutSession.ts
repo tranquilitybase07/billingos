@@ -28,11 +28,13 @@ interface CheckoutSession {
   proration?: {
     credit: number
     charge: number
+    netAmount: number
+    currency: string
   }
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired'
   expiresAt: string
   stripeAccountId?: string
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial'
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
   trialDays?: number
 }
 

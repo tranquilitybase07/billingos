@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { EntitlementService } from '../billing/entitlements/entitlement.service';
 import { User } from '../user/entities/user.entity';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
@@ -19,6 +20,7 @@ export class SubscriptionsService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly entitlementService: EntitlementService,
   ) {}
 
   /**
@@ -212,16 +214,16 @@ export class SubscriptionsService {
       }
 
       // 8. Grant all product features
-      const grantedFeatures = await this.grantProductFeatures(
-        customer.id,
-        subscription.id,
-        product.id,
-        new Date(subscription.current_period_start),
-        new Date(subscription.current_period_end),
-      );
+      const grantResult = await this.entitlementService.grantForSubscription({
+        customerId: customer.id,
+        subscriptionId: subscription.id,
+        productId: product.id,
+        periodStart: new Date(subscription.current_period_start),
+        periodEnd: new Date(subscription.current_period_end),
+      });
 
       this.logger.log(
-        `Subscription created: ${subscription.id} with ${grantedFeatures.length} features`,
+        `Subscription created: ${subscription.id} with ${grantResult.granted.length} features`,
       );
 
       // 9. Sync Active Entitlements from Stripe (if subscription was created in Stripe)
@@ -251,7 +253,7 @@ export class SubscriptionsService {
       // Return subscription with granted features
       return {
         ...subscription,
-        granted_features: grantedFeatures,
+        granted_features: grantResult.granted,
       };
     } catch (error) {
       this.logger.error('Error creating subscription:', error);
@@ -265,30 +267,10 @@ export class SubscriptionsService {
    * Revoke all active feature grants for a subscription
    */
   async revokeSubscriptionFeatures(subscriptionId: string): Promise<number> {
-    const supabase = this.supabaseService.getClient();
-
-    const { data, error } = await supabase
-      .from('feature_grants')
-      .update({ revoked_at: new Date().toISOString() })
-      .eq('subscription_id', subscriptionId)
-      .is('revoked_at', null)
-      .select('id');
-
-    if (error) {
-      this.logger.error(
-        `Failed to revoke features for subscription ${subscriptionId}:`,
-        error,
-      );
-      return 0;
-    }
-
-    const count = data?.length ?? 0;
-    if (count > 0) {
-      this.logger.log(
-        `Revoked ${count} feature grants for subscription ${subscriptionId}`,
-      );
-    }
-    return count;
+    const result = await this.entitlementService.revokeForSubscription({
+      subscriptionId,
+    });
+    return result.revokedCount;
   }
 
   /**
@@ -302,102 +284,14 @@ export class SubscriptionsService {
     periodStart: Date,
     periodEnd: Date,
   ) {
-    const supabase = this.supabaseService.getClient();
-
-    // Get all features for this product
-    const { data: productFeatures } = await supabase
-      .from('product_features')
-      .select(
-        `
-        feature_id,
-        display_order,
-        config,
-        features (
-          id,
-          name,
-          title,
-          type,
-          properties
-        )
-      `,
-      )
-      .eq('product_id', productId)
-      .order('display_order', { ascending: true });
-
-    if (!productFeatures || productFeatures.length === 0) {
-      return [];
-    }
-
-    const grantedFeatures: any[] = [];
-
-    for (const pf of productFeatures) {
-      const feature = pf.features;
-      if (!feature) continue;
-
-      // Merge feature properties with product-specific config
-      const mergedProperties = {
-        ...(feature.properties as any),
-        ...(pf.config as any),
-      };
-
-      // Create feature grant
-      const { data: grant, error: grantError } = await supabase
-        .from('feature_grants')
-        .insert({
-          customer_id: customerId,
-          subscription_id: subscriptionId,
-          feature_id: feature.id,
-          granted_at: new Date().toISOString(),
-          revoked_at: null,
-          properties: mergedProperties,
-        })
-        .select()
-        .single();
-
-      if (grantError || !grant) {
-        this.logger.error('Failed to create feature grant:', grantError);
-        continue;
-      }
-
-      // If feature is usage quota, create usage record
-
-      if (feature.type === FeatureType.USAGE_QUOTA) {
-        const limit = mergedProperties.limit || 0;
-
-        const { error: usageError } = await supabase
-          .from('usage_records')
-          .insert({
-            customer_id: customerId,
-            feature_id: feature.id,
-            subscription_id: subscriptionId,
-            period_start: periodStart.toISOString(),
-            period_end: periodEnd.toISOString(),
-            consumed_units: 0,
-            limit_units: limit,
-          });
-
-        if (usageError) {
-          this.logger.error('Failed to create usage record:', usageError);
-        } else {
-          this.logger.log(
-            `Usage record created for ${feature.name} with limit ${limit}`,
-          );
-        }
-      }
-
-      grantedFeatures.push({
-        id: grant.id,
-        feature_id: feature.id,
-        name: feature.name,
-        title: feature.title,
-        type: feature.type,
-        granted_at: grant.granted_at,
-        revoked_at: grant.revoked_at,
-        properties: mergedProperties,
-      });
-    }
-
-    return grantedFeatures;
+    const result = await this.entitlementService.grantForSubscription({
+      customerId,
+      subscriptionId,
+      productId,
+      periodStart,
+      periodEnd,
+    });
+    return result.granted;
   }
 
   /**
@@ -533,6 +427,39 @@ export class SubscriptionsService {
       throw new BadRequestException('Failed to fetch subscriptions');
     }
 
+    if (subscriptions && subscriptions.length > 0) {
+      const subIds = subscriptions.map((s) => s.id);
+      const { data: pendingChanges } = await supabase
+        .from('subscription_changes')
+        .select(
+          `
+          subscription_id, scheduled_for, to_amount,
+          to_price:product_prices!subscription_changes_to_price_id_fkey (
+            price_currency, recurring_interval,
+            product:products (name)
+          )
+        `,
+        )
+        .in('subscription_id', subIds)
+        .eq('status', 'scheduled')
+        .eq('change_type', 'downgrade');
+
+      if (pendingChanges) {
+        for (const sub of subscriptions) {
+          const pending = pendingChanges.find(
+            (pc) => pc.subscription_id === sub.id,
+          );
+          if (pending) {
+            (sub as Record<string, unknown>).pending_downgrade = {
+              newProductName: (pending.to_price as any)?.product?.name,
+              newAmount: pending.to_amount,
+              scheduledFor: pending.scheduled_for,
+            };
+          }
+        }
+      }
+    }
+
     return subscriptions || [];
   }
 
@@ -586,14 +513,9 @@ export class SubscriptionsService {
       if (!cancelDto.cancel_at_period_end) {
         updateData.status = 'canceled';
 
-        // Revoke all feature grants
-        await supabase
-          .from('feature_grants')
-          .update({ revoked_at: new Date().toISOString() })
-          .eq('subscription_id', id)
-          .is('revoked_at', null);
-
-        this.logger.log(`Features revoked for subscription ${id}`);
+        await this.entitlementService.revokeForSubscription({
+          subscriptionId: id,
+        });
       }
 
       const { data: updated, error } = await supabase
@@ -807,5 +729,53 @@ export class SubscriptionsService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Swap entitlements during an in-place upgrade — revoke the old product's
+   * grants for the subscription and grant the new product's. Used by the
+   * `invoice.payment_succeeded` webhook handler when finalizing an upgrade
+   * that was deferred for SCA / 3DS.
+   *
+   * The grant period is set to the subscription's current_period_start /
+   * current_period_end so usage windows line up with the post-upgrade billing
+   * period.
+   */
+  async swapProductEntitlementsForUpgrade(
+    bosSubscriptionId: string,
+    newProductId: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: sub, error } = await supabase
+      .from('subscriptions')
+      .select('id, customer_id, current_period_start, current_period_end')
+      .eq('id', bosSubscriptionId)
+      .single();
+
+    if (error || !sub) {
+      throw new NotFoundException(
+        `Subscription ${bosSubscriptionId} not found while swapping entitlements`,
+      );
+    }
+
+    const periodStart = sub.current_period_start
+      ? new Date(sub.current_period_start)
+      : new Date();
+    const periodEnd = sub.current_period_end
+      ? new Date(sub.current_period_end)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await this.entitlementService.swapForSubscription({
+      subscriptionId: sub.id,
+      customerId: sub.customer_id,
+      newProductId,
+      periodStart,
+      periodEnd,
+    });
+
+    this.logger.log(
+      `Swapped entitlements for subscription ${bosSubscriptionId} → product ${newProductId}`,
+    );
   }
 }

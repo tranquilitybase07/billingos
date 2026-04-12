@@ -2,6 +2,7 @@
 
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { SubscriptionStatus } from '@/components/Subscriptions/SubscriptionStatus'
+import { PendingChangeBadge } from '@/components/Subscriptions/PendingChangeBadge'
 import {
   DataTable,
   DataTableColumnHeader,
@@ -272,6 +273,7 @@ export default function SubscriptionsPage({
             {
               id: 'customer',
               accessorKey: 'customer',
+              size: 200,
               header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Customer" />
               ),
@@ -302,11 +304,23 @@ export default function SubscriptionsPage({
             },
             {
               accessorKey: 'status',
+              size: 180,
               header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Status" />
               ),
               cell: ({ row: { original: sub } }) => (
-                <SubscriptionStatus status={sub.status} />
+                <div className="flex items-center gap-1.5">
+                  <SubscriptionStatus status={sub.status} />
+                  {sub.pending_downgrade && (
+                    <PendingChangeBadge
+                      variant="compact"
+                      newPlanName={sub.pending_downgrade.newProductName}
+                      scheduledFor={sub.pending_downgrade.scheduledFor}
+                      newAmount={sub.pending_downgrade.newAmount}
+                      newCurrency={sub.currency}
+                    />
+                  )}
+                </div>
               ),
             },
             {

@@ -1,7 +1,7 @@
 import * as common from '@nestjs/common';
 import { Request } from 'express';
 import { StripeService } from './stripe.service';
-import { StripeWebhookService } from './stripe-webhook.service';
+import { WebhookMiddleware } from '../billing/webhooks/webhook.middleware';
 import { Public } from '../auth/decorators/public.decorator';
 import { securityLogger } from '../common/utils/security-logger';
 import { sanitizeErrorMessage } from '../common/utils/security.utils';
@@ -12,7 +12,7 @@ export class StripeController {
 
   constructor(
     private readonly stripeService: StripeService,
-    private readonly webhookService: StripeWebhookService,
+    private readonly webhookMiddleware: WebhookMiddleware,
   ) {}
 
   /**
@@ -46,7 +46,7 @@ export class StripeController {
       securityLogger.webhookValidation(event.type, true, requestId);
       this.logger.log(`Received Stripe webhook: ${event.type} (${event.id})`);
 
-      await this.webhookService.handleEvent(event);
+      await this.webhookMiddleware.handleEvent(event);
 
       return { received: true };
     } catch (error) {
