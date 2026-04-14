@@ -46,6 +46,8 @@ export interface UpdateStripeSubscriptionAction {
   newStripePriceId: string;
   /** BOS checkout session ID — used as Stripe idempotency key + invoice metadata */
   checkoutSessionId: string;
+  /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
+  intervalChanged: boolean;
 }
 
 export interface NoStripeAction {

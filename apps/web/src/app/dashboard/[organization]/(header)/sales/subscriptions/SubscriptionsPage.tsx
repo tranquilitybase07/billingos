@@ -95,7 +95,7 @@ export default function SubscriptionsPage({
   // Compute stats from subscription data
   const subscriptionStats = useMemo(() => {
     if (!subscriptions) return { activeCount: 0, trialConversionRate: 0, nrr: 0 }
-    const active = subscriptions.filter((s) => s.status === 'active').length
+    const active = subscriptions.filter((s) => s.status === 'active' && !s.cancel_at_period_end).length
     const trialing = subscriptions.filter((s) => s.status === 'trialing').length
     const total = subscriptions.length
     const trialConversionRate = total > 0 ? ((active / Math.max(active + trialing, 1)) * 100) : 0
@@ -310,7 +310,7 @@ export default function SubscriptionsPage({
               ),
               cell: ({ row: { original: sub } }) => (
                 <div className="flex items-center gap-1.5">
-                  <SubscriptionStatus status={sub.status} />
+                  <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} />
                   {sub.pending_downgrade && (
                     <PendingChangeBadge
                       variant="compact"

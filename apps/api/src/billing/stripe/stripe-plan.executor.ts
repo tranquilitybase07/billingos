@@ -206,6 +206,7 @@ export class StripePlanExecutor {
       stripeSubscriptionId: action.stripeSubscriptionId,
       newStripePriceId: action.newStripePriceId,
       checkoutSessionId: action.checkoutSessionId,
+      intervalChanged: action.intervalChanged,
     });
 
     switch (result.kind) {

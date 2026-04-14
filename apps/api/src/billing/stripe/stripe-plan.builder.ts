@@ -41,6 +41,9 @@ export class StripePlanBuilder {
           stripeCustomerId: ctx.customer.stripeCustomerId,
           newStripePriceId: plan.subscription.newStripePriceId,
           checkoutSessionId: ctx.existingCheckoutSessionId,
+          intervalChanged:
+            ctx.transition!.oldSubscription.recurringInterval !==
+            ctx.price.recurringInterval,
         };
 
       case 'setup_trial':

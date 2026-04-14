@@ -89,7 +89,6 @@ export class BillingContextBuilder {
     const isInPlaceDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
-      !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
     // 7. Determine trial eligibility (trial product + no transition)

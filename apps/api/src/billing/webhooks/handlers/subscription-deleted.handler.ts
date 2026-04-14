@@ -88,6 +88,47 @@ export class SubscriptionDeletedHandler
 
     const subMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
 
+    // Check for pending scheduled downgrade before marking as canceled.
+    // If a paid→free downgrade is scheduled, the Stripe sub deletion is expected —
+    // keep the BOS sub alive and let the scheduler complete the transition.
+    const { data: pendingChange } = await ctx.supabase
+      .from('subscription_changes')
+      .select('id')
+      .eq('subscription_id', existing.id)
+      .eq('status', 'scheduled')
+      .single();
+
+    if (pendingChange) {
+      // Clear the Stripe link (sub is gone) and make the change immediately due
+      // so the scheduler picks it up on the next tick.
+      await ctx.supabase
+        .from('subscriptions')
+        .update({
+          stripe_subscription_id: null,
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      await ctx.supabase
+        .from('subscription_changes')
+        .update({
+          scheduled_for: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pendingChange.id);
+
+      // Invalidate cache (non-critical)
+      if (existing.product_id) {
+        await this.cacheManager.del(`product-metrics:${existing.product_id}`).catch(() => {});
+      }
+
+      this.logger.log(
+        `Subscription ${subscription.id} deleted (scheduled downgrade pending) — scheduler will complete transition`,
+      );
+      return;
+    }
+
     // Update subscription status — critical write, must succeed
     const { error: updateError } = await ctx.supabase
       .from('subscriptions')

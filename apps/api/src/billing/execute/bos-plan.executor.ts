@@ -641,6 +641,34 @@ export class BosPlanExecutor {
       throw new BadRequestException('Failed to schedule downgrade');
     }
 
+    // For paid→free downgrades: tell Stripe to stop billing at period end.
+    // When the period ends, Stripe fires customer.subscription.deleted which
+    // the webhook handler will intercept and let the scheduler complete the transition.
+    if (!sub.newStripePriceId && ctx.transition?.oldSubscription.stripeSubscriptionId) {
+      try {
+        await this.stripeService.cancelSubscription(
+          ctx.transition.oldSubscription.stripeSubscriptionId,
+          ctx.organization.stripeAccountId,
+          true, // cancel at period end
+        );
+        this.logger.log(
+          `Set cancel_at_period_end on Stripe sub ${ctx.transition.oldSubscription.stripeSubscriptionId}`,
+        );
+      } catch (error) {
+        this.logger.error('Failed to set cancel_at_period_end:', error);
+        // Non-fatal: scheduler still handles it as backup
+      }
+
+      // Update BOS subscription to reflect the pending cancellation
+      await supabase
+        .from('subscriptions')
+        .update({
+          cancel_at_period_end: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', sub.existingBosSubId);
+    }
+
     const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
       metadata: {
         checkoutMode: 'downgrade',

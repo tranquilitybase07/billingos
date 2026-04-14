@@ -76,6 +76,7 @@ export interface OldSubscriptionInfo {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   metadata: Record<string, unknown>;
+  recurringInterval: 'day' | 'week' | 'month' | 'year';
 }
 
 // ── Discount ──

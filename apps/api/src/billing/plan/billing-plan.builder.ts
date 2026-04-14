@@ -66,11 +66,6 @@ export class BillingPlanBuilder {
   }
 
   private buildSubscriptionAction(ctx: BillingContext): SubscriptionAction {
-    // Free product → immediate activation
-    if (ctx.isFreeProduct) {
-      return { kind: 'free_activation' };
-    }
-
     // In-place upgrade → update existing subscription (with proration)
     // Proration is handled by ProrationInvoiceService via the manual invoice
     // flow; the planner does not need to specify proration_behavior here.
@@ -85,7 +80,7 @@ export class BillingPlanBuilder {
       };
     }
 
-    // In-place downgrade → schedule for end of billing period
+    // In-place downgrade → schedule for end of billing period (paid→paid OR paid→free)
     if (ctx.isInPlaceDowngrade && ctx.transition) {
       return {
         kind: 'schedule_downgrade',
@@ -98,6 +93,11 @@ export class BillingPlanBuilder {
         fromAmount: ctx.transition.oldSubscription.amount,
         fromPriceId: ctx.transition.oldSubscription.priceId,
       };
+    }
+
+    // Free product → immediate activation (only for NEW free signups with no existing paid sub)
+    if (ctx.isFreeProduct) {
+      return { kind: 'free_activation' };
     }
 
     // Trial product → SetupIntent (save card, $0 upfront)

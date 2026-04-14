@@ -67,6 +67,21 @@ export class TransitionDetector {
       return null;
     }
 
+    // Fetch the old price's recurring interval
+    let oldRecurringInterval: OldSubscriptionInfo['recurringInterval'] = 'month';
+    if (oldSub.price_id) {
+      const { data: oldPrice } = await supabase
+        .from('product_prices')
+        .select('recurring_interval')
+        .eq('id', oldSub.price_id)
+        .single();
+
+      if (oldPrice?.recurring_interval) {
+        oldRecurringInterval =
+          oldPrice.recurring_interval as OldSubscriptionInfo['recurringInterval'];
+      }
+    }
+
     // Determine transition type
     const oldAmount = oldSub.amount ?? 0;
     const type: TransitionType =
@@ -86,6 +101,7 @@ export class TransitionDetector {
       cancelAtPeriodEnd: oldSub.cancel_at_period_end ?? false,
       currentPeriodEnd: oldSub.current_period_end,
       metadata: (oldSub.metadata ?? {}) as Record<string, unknown>,
+      recurringInterval: oldRecurringInterval,
     };
 
     const oldPeriodEnd =

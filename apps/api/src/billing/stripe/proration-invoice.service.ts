@@ -34,6 +34,8 @@ export interface RunUpgradeParams {
   checkoutSessionId: string;
   /** BOS subscription ID — recorded on invoice metadata for webhook lookup */
   bosSubscriptionId?: string;
+  /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
+  intervalChanged?: boolean;
 }
 
 /**
@@ -122,7 +124,7 @@ export class ProrationInvoiceService {
           items: [{ id: subscriptionItemId, price: newStripePriceId }],
           proration_behavior: 'create_prorations',
           payment_behavior: 'error_if_incomplete',
-          billing_cycle_anchor: 'unchanged',
+          billing_cycle_anchor: params.intervalChanged ? 'now' : 'unchanged',
           expand: ['latest_invoice'],
         },
         stripeAccountId,
@@ -182,7 +184,7 @@ export class ProrationInvoiceService {
         );
         // No invoice exists — nothing to clean up. The pending items remain on
         // the customer; a retry will pick them up.
-        await this.undoSubUpdate(curSub, updatedSub, stripeAccountId);
+        await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, params.intervalChanged);
         throw new BadRequestException(
           `Failed to create proration invoice: ${this.errMsg(error)}`,
         );
@@ -210,7 +212,7 @@ export class ProrationInvoiceService {
           `Failed to void draft invoice ${invoice.id}: ${this.errMsg(voidErr)}`,
         );
       }
-      await this.undoSubUpdate(curSub, updatedSub, stripeAccountId);
+      await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, params.intervalChanged);
       throw new BadRequestException(
         `Failed to finalize proration invoice: ${this.errMsg(error)}`,
       );
@@ -238,6 +240,7 @@ export class ProrationInvoiceService {
         curSub,
         updatedSub,
         stripeAccountId,
+        params.intervalChanged,
       );
     } catch (error) {
       this.logger.warn(
@@ -254,6 +257,7 @@ export class ProrationInvoiceService {
         curSub,
         updatedSub,
         stripeAccountId,
+        params.intervalChanged,
       );
     }
   }
@@ -268,6 +272,7 @@ export class ProrationInvoiceService {
     curSub: Stripe.Subscription,
     updatedSub: Stripe.Subscription,
     stripeAccountId: string,
+    intervalChanged?: boolean,
   ): Promise<ProrationInvoiceResult> {
     if (invoice.status === 'paid') {
       return { kind: 'paid', updatedSub, invoice };
@@ -298,7 +303,7 @@ export class ProrationInvoiceService {
         `Failed to void invoice ${invoice.id}: ${this.errMsg(voidErr)}`,
       );
     }
-    await this.undoSubUpdate(curSub, updatedSub, stripeAccountId);
+    await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, intervalChanged);
     throw new BadRequestException(
       'Proration invoice could not be paid; subscription reverted to previous plan.',
     );
@@ -316,6 +321,7 @@ export class ProrationInvoiceService {
     curSub: Stripe.Subscription,
     updatedSub: Stripe.Subscription,
     stripeAccountId: string,
+    intervalChanged?: boolean,
   ): Promise<void> {
     type ItemParam = Stripe.SubscriptionUpdateParams.Item;
 
@@ -347,7 +353,7 @@ export class ProrationInvoiceService {
         {
           items: [...itemsToUpdate, ...itemsToAdd],
           proration_behavior: 'none',
-          billing_cycle_anchor: 'unchanged',
+          billing_cycle_anchor: intervalChanged ? 'now' : 'unchanged',
         },
         stripeAccountId,
       );
