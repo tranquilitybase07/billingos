@@ -82,6 +82,7 @@ export class BillingPlanBuilder {
 
     // In-place downgrade → schedule for end of billing period (paid→paid OR paid→free)
     if (ctx.isInPlaceDowngrade && ctx.transition) {
+      const scheduledFor = ctx.transition.oldPeriodEnd || new Date();
       return {
         kind: 'schedule_downgrade',
         existingBosSubId: ctx.transition.oldSubscription.id,
@@ -89,7 +90,7 @@ export class BillingPlanBuilder {
         newAmount: ctx.price.amount,
         newProductId: ctx.product.id,
         newPriceId: ctx.price.id,
-        scheduledFor: ctx.transition.oldPeriodEnd || new Date(),
+        scheduledFor,
         fromAmount: ctx.transition.oldSubscription.amount,
         fromPriceId: ctx.transition.oldSubscription.priceId,
       };

@@ -16,6 +16,7 @@ import { SubscriptionTransitionService } from '../../../subscriptions/subscripti
 import { EntitlementService } from '../../entitlements/entitlement.service';
 import { RedisService } from '../../../redis/redis.service';
 import { RefundService } from '../../../stripe/refund.service';
+import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
 
 /**
  * Handles `payment_intent.succeeded` webhook events.
@@ -724,12 +725,12 @@ export class PaymentIntentSucceededHandler
       price_id: priceId,
       stripe_subscription_id: stripeSubscription.id,
       status: stripeSubscription.status,
-      current_period_start: stripeSubscription.current_period_start
-        ? new Date(stripeSubscription.current_period_start * 1000).toISOString()
-        : new Date().toISOString(),
-      current_period_end: stripeSubscription.current_period_end
-        ? new Date(stripeSubscription.current_period_end * 1000).toISOString()
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      current_period_start: extractPeriodStart(
+        stripeSubscription as unknown as Record<string, unknown>,
+      ),
+      current_period_end: extractPeriodEnd(
+        stripeSubscription as unknown as Record<string, unknown>,
+      ),
       trial_end: stripeSubscription.trial_end
         ? new Date(stripeSubscription.trial_end * 1000).toISOString()
         : null,

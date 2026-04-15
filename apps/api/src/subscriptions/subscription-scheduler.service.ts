@@ -177,11 +177,31 @@ export class SubscriptionSchedulerService {
       account?.stripe_id
     ) {
       try {
+        // Detect interval change (yearly→monthly, etc.)
+        let intervalChanged = false;
+        if (subscription.price_id) {
+          const { data: oldPrice } = await supabase
+            .from('product_prices')
+            .select('recurring_interval')
+            .eq('id', subscription.price_id)
+            .single();
+
+          if (oldPrice && oldPrice.recurring_interval !== newPrice.recurring_interval) {
+            intervalChanged = true;
+            this.logger.log(
+              `Interval change detected: ${oldPrice.recurring_interval} → ${newPrice.recurring_interval}`,
+            );
+          }
+        }
+
         await this.stripeService.updateSubscriptionPrice(
           subscription.stripe_subscription_id,
           newPrice.stripe_price_id,
           account.stripe_id,
-          { prorationBehavior: 'none' },
+          {
+            prorationBehavior: 'none',
+            billingCycleAnchor: intervalChanged ? 'now' : 'unchanged',
+          },
         );
       } catch (stripeError: any) {
         this.logger.error('Failed to update Stripe subscription:', stripeError);

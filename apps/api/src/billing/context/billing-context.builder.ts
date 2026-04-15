@@ -76,6 +76,7 @@ export class BillingContextBuilder {
       product.id,
       price.amount,
       dto.existingSubscriptionId,
+      organization.stripeAccountId,
     );
 
     // 6. Determine if in-place upgrade (existing paid Stripe sub + new paid price)
@@ -94,9 +95,10 @@ export class BillingContextBuilder {
     // 7. Determine trial eligibility (trial product + no transition)
     const isTrialEligible = (product.trialDays || 0) > 0 && transition === null;
 
-    // 8. Determine adaptive pricing (disabled for in-place upgrades and downgrades)
-    const isAdaptivePricing =
-      dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
+    // 8. Adaptive pricing bypassed for MVP
+    const isAdaptivePricing = false;
+    // const isAdaptivePricing =
+    //   dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
 
     // 9. Fetch product features for display
     const features = await this.resolveProductFeatures(product.id);

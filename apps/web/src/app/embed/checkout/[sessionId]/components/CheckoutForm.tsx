@@ -332,7 +332,9 @@ function UpgradeCheckout({
     <div ref={formRef} className="space-y-4">
       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
         <p className="text-xs text-blue-700 dark:text-blue-300">
-          Your existing payment method will be charged the prorated difference.
+          {netAmount > 0
+            ? `Your payment method will be charged ${formattedAmount} for the prorated upgrade.`
+            : 'No charge today \u2014 you have credit from your previous plan that covers this upgrade.'}
         </p>
       </div>
 
@@ -361,7 +363,7 @@ function UpgradeCheckout({
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
             </svg>
-            {netAmount > 0 ? `Confirm Upgrade \u2014 ${formattedAmount}` : 'Confirm Upgrade'}
+            {netAmount > 0 ? `Confirm Upgrade \u2014 ${formattedAmount}` : 'Confirm Upgrade \u2014 No charge'}
           </span>
         )}
       </button>

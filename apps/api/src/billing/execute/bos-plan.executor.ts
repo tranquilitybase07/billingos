@@ -7,6 +7,7 @@ import { BillingContext } from '../context/types';
 import { BillingPlan } from '../plan/types';
 import { StripeResult, PipelineResult } from '../stripe/types';
 import { EntitlementExecutor } from './entitlement.executor';
+import { extractPeriodStart, extractPeriodEnd } from '../utils/period-end.helper';
 import type {
   Json,
   Database,
@@ -259,14 +260,8 @@ export class BosPlanExecutor {
       price_id: ctx.price.id,
       stripe_subscription_id: subscription.id,
       status: subscription.status,
-      current_period_start: subData.current_period_start
-        ? new Date(
-            (subData.current_period_start as number) * 1000,
-          ).toISOString()
-        : new Date().toISOString(),
-      current_period_end: subData.current_period_end
-        ? new Date((subData.current_period_end as number) * 1000).toISOString()
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      current_period_start: extractPeriodStart(subData),
+      current_period_end: extractPeriodEnd(subData),
       cancel_at_period_end: false,
       amount: ctx.price.amount,
       currency: ctx.price.currency,
@@ -414,6 +409,7 @@ export class BosPlanExecutor {
     }
 
     // Update BOS subscription record
+    const stripeSub = result.subscription as unknown as Record<string, unknown>;
     const { error: updateError } = await supabase
       .from('subscriptions')
       .update({
@@ -422,6 +418,20 @@ export class BosPlanExecutor {
         amount: sub.newAmount,
         status: result.subscription.status,
         updated_at: new Date().toISOString(),
+        ...(stripeSub.current_period_start
+          ? {
+              current_period_start: new Date(
+                (stripeSub.current_period_start as number) * 1000,
+              ).toISOString(),
+            }
+          : {}),
+        ...(stripeSub.current_period_end
+          ? {
+              current_period_end: new Date(
+                (stripeSub.current_period_end as number) * 1000,
+              ).toISOString(),
+            }
+          : {}),
         metadata: {
           ...ctx.transition!.oldSubscription.metadata,
           upgradedAt: new Date().toISOString(),
@@ -644,7 +654,10 @@ export class BosPlanExecutor {
     // For paid→free downgrades: tell Stripe to stop billing at period end.
     // When the period ends, Stripe fires customer.subscription.deleted which
     // the webhook handler will intercept and let the scheduler complete the transition.
-    if (!sub.newStripePriceId && ctx.transition?.oldSubscription.stripeSubscriptionId) {
+    if (
+      !sub.newStripePriceId &&
+      ctx.transition?.oldSubscription.stripeSubscriptionId
+    ) {
       try {
         await this.stripeService.cancelSubscription(
           ctx.transition.oldSubscription.stripeSubscriptionId,

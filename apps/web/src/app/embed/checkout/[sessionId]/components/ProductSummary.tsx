@@ -93,14 +93,14 @@ export function ProductSummary({
 
           {proration && proration.credit > 0 && (
             <div className="flex justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Credit</span>
+              <span className="text-gray-500 dark:text-gray-400">Unused time credit</span>
               <span className="text-green-600">-{formatAmount(proration.credit)}</span>
             </div>
           )}
 
           {proration && proration.charge > 0 && (
             <div className="flex justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Prorated charge</span>
+              <span className="text-gray-500 dark:text-gray-400">Today&apos;s charge</span>
               <span className="text-gray-900 dark:text-gray-200">{formatAmount(proration.charge)}</span>
             </div>
           )}
@@ -115,11 +115,25 @@ export function ProductSummary({
           </div>
 
           <div className="flex justify-between font-bold text-xs border-t border-gray-200 dark:border-[#2e2e30] pt-2 mt-0.5">
-            <span className="text-gray-900 dark:text-gray-100">Total</span>
-            <span className="text-gray-900 dark:text-gray-100">{formatAmount(totalAmount, displayCurrency)}</span>
+            <span className="text-gray-900 dark:text-gray-100">{proration ? 'Due today' : 'Total'}</span>
+            <span className="text-gray-900 dark:text-gray-100">
+              {proration && totalAmount <= 0
+                ? formatAmount(0, displayCurrency)
+                : formatAmount(totalAmount, displayCurrency)}
+            </span>
           </div>
         </div>
       </div>
+
+      {/* Remaining credit note — shown when proration credit exceeds charge */}
+      {proration && totalAmount <= 0 && proration.credit > proration.charge && (
+        <div className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+          <span className="text-sm flex-shrink-0 mt-px">💳</span>
+          <span className="text-xs text-green-700 dark:text-green-300">
+            {formatAmount(proration.credit - proration.charge)} in remaining credit will be applied to future invoices.
+          </span>
+        </div>
+      )}
 
       {/* What's Included — features list */}
       {product.features && product.features.length > 0 && (

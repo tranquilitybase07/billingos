@@ -14,6 +14,7 @@ import { StripeService } from '../../../stripe/stripe.service';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
 import { EntitlementService } from '../../entitlements/entitlement.service';
+import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
 
 /**
  * Handles `checkout.session.completed` webhook events.
@@ -211,12 +212,8 @@ export class CheckoutSessionCompletedHandler
           .from('subscriptions')
           .update({
             status: stripeSub.status,
-            current_period_start: stripeSub.current_period_start
-              ? new Date(stripeSub.current_period_start * 1000).toISOString()
-              : new Date().toISOString(),
-            current_period_end: stripeSub.current_period_end
-              ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            current_period_start: extractPeriodStart(stripeSub),
+            current_period_end: extractPeriodEnd(stripeSub),
           })
           .eq('id', existingByStripeId.id);
 
@@ -248,12 +245,8 @@ export class CheckoutSessionCompletedHandler
               stripe_subscription_id: stripeSubscriptionId,
               price_id: priceId,
               status: stripeSub.status,
-              current_period_start: stripeSub.current_period_start
-                ? new Date(stripeSub.current_period_start * 1000).toISOString()
-                : new Date().toISOString(),
-              current_period_end: stripeSub.current_period_end
-                ? new Date(stripeSub.current_period_end * 1000).toISOString()
-                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              current_period_start: extractPeriodStart(stripeSub),
+              current_period_end: extractPeriodEnd(stripeSub),
               amount: actualAmount,
               currency: actualCurrency,
               metadata: {
@@ -274,12 +267,8 @@ export class CheckoutSessionCompletedHandler
             price_id: priceId,
             stripe_subscription_id: stripeSubscriptionId,
             status: stripeSub.status,
-            current_period_start: stripeSub.current_period_start
-              ? new Date(stripeSub.current_period_start * 1000).toISOString()
-              : new Date().toISOString(),
-            current_period_end: stripeSub.current_period_end
-              ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            current_period_start: extractPeriodStart(stripeSub),
+            current_period_end: extractPeriodEnd(stripeSub),
             trial_end: stripeSub.trial_end
               ? new Date(stripeSub.trial_end * 1000).toISOString()
               : null,

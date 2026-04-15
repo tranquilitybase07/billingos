@@ -12,6 +12,7 @@ import { RedisService } from '../../redis/redis.service';
 import { CheckoutMetadataService } from '../../v1/checkout/checkout-metadata.service';
 import { DiscountContext } from '../context/types';
 import { StripeCouponParams } from '../plan/types';
+import { extractPeriodStart, extractPeriodEnd } from '../utils/period-end.helper';
 import type { Json } from '../../../../../packages/shared/types/database';
 
 // ── Response types ──
@@ -529,16 +530,8 @@ export class CheckoutDiscountService {
         stripe_subscription_id: newSubscription.id,
         amount: newAmount,
         status: newSubscription.status,
-        current_period_start: (subData.current_period_start as number)
-          ? new Date(
-              (subData.current_period_start as number) * 1000,
-            ).toISOString()
-          : new Date().toISOString(),
-        current_period_end: (subData.current_period_end as number)
-          ? new Date(
-              (subData.current_period_end as number) * 1000,
-            ).toISOString()
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        current_period_start: extractPeriodStart(subData),
+        current_period_end: extractPeriodEnd(subData),
       })
       .eq('id', subscriptionRecord.id);
 

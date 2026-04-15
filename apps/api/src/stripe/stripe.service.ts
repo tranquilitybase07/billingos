@@ -1192,6 +1192,7 @@ export class StripeService {
     stripeAccountId: string,
     options?: {
       prorationBehavior?: 'create_prorations' | 'always_invoice' | 'none';
+      billingCycleAnchor?: 'now' | 'unchanged';
     },
   ): Promise<Stripe.Subscription> {
     this.logger.log(
@@ -1221,7 +1222,7 @@ export class StripeService {
           },
         ],
         proration_behavior: options?.prorationBehavior ?? 'create_prorations',
-        billing_cycle_anchor: 'unchanged', // Keep existing billing cycle
+        billing_cycle_anchor: options?.billingCycleAnchor ?? 'unchanged',
       },
       {
         stripeAccount: stripeAccountId,

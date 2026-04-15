@@ -7,6 +7,7 @@ import { WebhookRouter } from '../webhook.router';
 import { StripeService } from '../../../stripe/stripe.service';
 import { RedisService } from '../../../redis/redis.service';
 import { EntitlementService } from '../../entitlements/entitlement.service';
+import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
 
 /**
  * Handles `setup_intent.succeeded` webhook events.
@@ -294,12 +295,12 @@ export class SetupIntentSucceededHandler
         price_id: priceId,
         stripe_subscription_id: stripeSubscription.id,
         status: stripeSubscription.status,
-        current_period_start: subData.current_period_start
-          ? new Date(subData.current_period_start * 1000).toISOString()
-          : new Date().toISOString(),
-        current_period_end: subData.current_period_end
-          ? new Date(subData.current_period_end * 1000).toISOString()
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        current_period_start: extractPeriodStart(
+          subData as unknown as Record<string, unknown>,
+        ),
+        current_period_end: extractPeriodEnd(
+          subData as unknown as Record<string, unknown>,
+        ),
         trial_end: subData.trial_end
           ? new Date(subData.trial_end * 1000).toISOString()
           : null,
