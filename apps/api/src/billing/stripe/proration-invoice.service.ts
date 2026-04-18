@@ -218,8 +218,32 @@ export class ProrationInvoiceService {
       );
     }
 
-    // 7. If finalize already paid the invoice (zero-amount), happy path.
+    // 7. If finalize already paid the invoice (zero-amount or negative), happy path.
     if (finalized.status === 'paid') {
+      // If the invoice total is negative, the customer has remaining credit.
+      // Stripe doesn't auto-credit the balance for standalone invoices —
+      // explicitly create a balance transaction so the credit applies to
+      // future invoices.
+      if (finalized.total < 0) {
+        try {
+          await this.stripeService.createCustomerBalanceTransaction(
+            stripeCustomerId,
+            finalized.total, // negative = credit
+            finalized.currency,
+            stripeAccountId,
+            'Remaining proration credit from plan upgrade',
+          );
+          this.logger.log(
+            `Credited customer ${stripeCustomerId} balance by ${finalized.total} ${finalized.currency} from proration invoice ${finalized.id}`,
+          );
+        } catch (err) {
+          // Non-fatal: the upgrade succeeded, but credit wasn't applied.
+          // Log for ops to reconcile manually.
+          this.logger.error(
+            `Failed to credit customer balance after negative proration invoice ${finalized.id}: ${this.errMsg(err)}`,
+          );
+        }
+      }
       return { kind: 'paid', updatedSub, invoice: finalized };
     }
 
@@ -231,6 +255,24 @@ export class ProrationInvoiceService {
         paymentMethodId ? { payment_method: paymentMethodId } : undefined,
       );
       if (paid.status === 'paid') {
+        if (paid.total < 0) {
+          try {
+            await this.stripeService.createCustomerBalanceTransaction(
+              stripeCustomerId,
+              paid.total,
+              paid.currency,
+              stripeAccountId,
+              'Remaining proration credit from plan upgrade',
+            );
+            this.logger.log(
+              `Credited customer ${stripeCustomerId} balance by ${paid.total} ${paid.currency} from proration invoice ${paid.id}`,
+            );
+          } catch (err) {
+            this.logger.error(
+              `Failed to credit customer balance after negative proration invoice ${paid.id}: ${this.errMsg(err)}`,
+            );
+          }
+        }
         return { kind: 'paid', updatedSub, invoice: paid };
       }
       // Pay returned without throwing but didn't reach `paid` (e.g. open/draft).

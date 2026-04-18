@@ -1359,4 +1359,22 @@ export class StripeService {
       stripeAccount: stripeAccountId,
     });
   }
+
+  async createCustomerBalanceTransaction(
+    stripeCustomerId: string,
+    amount: number,
+    currency: string,
+    stripeAccountId: string,
+    description?: string,
+  ): Promise<Stripe.CustomerBalanceTransaction> {
+    return this.stripe.customers.createBalanceTransaction(
+      stripeCustomerId,
+      {
+        amount, // negative = credit (reduces what customer owes)
+        currency,
+        description: description ?? 'Proration credit from plan change',
+      },
+      { stripeAccount: stripeAccountId },
+    );
+  }
 }
