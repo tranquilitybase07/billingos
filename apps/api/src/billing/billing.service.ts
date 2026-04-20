@@ -409,7 +409,7 @@ export class BillingService {
   // ── Helpers: status / loading ──
 
   private requiresExplicitExecution(ctx: BillingContext): boolean {
-    return ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade || ctx.isFreeProduct;
+    return ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade || ctx.isFreeProduct || ctx.isTrialToTrialDowngrade;
   }
 
   private async loadSessionForExecute(
@@ -729,6 +729,8 @@ export class BillingService {
     plan: BillingPlan,
   ): PipelineResult['checkoutMode'] {
     if (ctx.isFreeProduct) return 'free';
+    if (ctx.isTrialToTrialDowngrade) return 'upgrade';
+    if (ctx.isTrialUpgrade) return 'upgrade';
     if (ctx.isInPlaceUpgrade) return 'upgrade';
     if (ctx.isInPlaceDowngrade) return 'downgrade';
     if (plan.subscription.kind === 'setup_trial') return 'trial';

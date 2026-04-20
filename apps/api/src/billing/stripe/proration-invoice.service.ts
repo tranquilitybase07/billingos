@@ -36,6 +36,14 @@ export interface RunUpgradeParams {
   bosSubscriptionId?: string;
   /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
   intervalChanged?: boolean;
+  /** True when upgrading from a trialing subscription */
+  isTrialUpgrade?: boolean;
+  /** Amount to credit to customer balance before ending trial (minor units) */
+  trialCreditAmount?: number;
+  /** Currency for the trial credit */
+  trialCreditCurrency?: string;
+  /** Unix timestamp for the new trial end date (trial-to-trial upgrade) */
+  newTrialEnd?: number;
 }
 
 /**
@@ -112,19 +120,89 @@ export class ProrationInvoiceService {
       );
     }
 
-    // 2. Apply the item swap with `create_prorations`. This pushes the proration
-    //    line items into the customer's pending pool but does NOT create or pay
-    //    an invoice. `error_if_incomplete` ensures Stripe doesn't silently flip
-    //    the sub to `incomplete` if anything goes wrong.
+    // 2a-trial-to-trial. Trial-to-trial upgrade: swap the price item but keep
+    //     the subscription trialing with a fresh trial_end. No charge, no credit.
+    if (params.newTrialEnd) {
+      let updatedSub: Stripe.Subscription;
+      try {
+        updatedSub = await this.stripeService.updateSubscriptionWithParams(
+          stripeSubscriptionId,
+          {
+            items: [{ id: subscriptionItemId, price: newStripePriceId }],
+            trial_end: params.newTrialEnd,
+            proration_behavior: 'none',
+          },
+          stripeAccountId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Trial-to-trial subscriptions.update failed for ${stripeSubscriptionId}: ${this.errMsg(error)}`,
+        );
+        throw new BadRequestException(
+          `Failed to update subscription for trial-to-trial upgrade: ${this.errMsg(error)}`,
+        );
+      }
+      this.logger.log(
+        `Trial-to-trial upgrade: subscription ${stripeSubscriptionId} swapped to price ${newStripePriceId} with new trial_end ${params.newTrialEnd}`,
+      );
+      return { kind: 'no_proration', updatedSub };
+    }
+
+    // 2a. Trial upgrade: add a customer balance credit for the old plan amount
+    //     BEFORE the subscription update. This credit will be applied by Stripe
+    //     against the first invoice created when the trial ends.
+    let trialCreditApplied = false;
+    if (
+      params.isTrialUpgrade &&
+      params.trialCreditAmount &&
+      params.trialCreditAmount > 0
+    ) {
+      try {
+        await this.stripeService.createCustomerBalanceTransaction(
+          stripeCustomerId,
+          -params.trialCreditAmount, // negative = credit
+          params.trialCreditCurrency || 'usd',
+          stripeAccountId,
+          'Credit for trial plan value on upgrade',
+        );
+        trialCreditApplied = true;
+        this.logger.log(
+          `Applied trial credit of ${params.trialCreditAmount} ${params.trialCreditCurrency} to customer ${stripeCustomerId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to apply trial credit for customer ${stripeCustomerId}: ${this.errMsg(error)}`,
+        );
+        throw new BadRequestException(
+          `Failed to apply trial credit: ${this.errMsg(error)}`,
+        );
+      }
+    }
+
+    // 2b. Apply the item swap with `create_prorations`. This pushes the proration
+    //     line items into the customer's pending pool but does NOT create or pay
+    //     an invoice. `error_if_incomplete` ensures Stripe doesn't silently flip
+    //     the sub to `incomplete` if anything goes wrong.
+    //
+    //     For trial upgrades: `trial_end: 'now'` ends the trial immediately and
+    //     `billing_cycle_anchor: 'now'` starts a fresh billing period. Stripe
+    //     will generate an invoice for the new plan price, and the customer
+    //     balance credit applied above will offset it.
     let updatedSub: Stripe.Subscription;
     try {
       updatedSub = await this.stripeService.updateSubscriptionWithParams(
         stripeSubscriptionId,
         {
           items: [{ id: subscriptionItemId, price: newStripePriceId }],
-          proration_behavior: 'create_prorations',
+          proration_behavior: params.isTrialUpgrade
+            ? 'none'
+            : 'create_prorations',
           payment_behavior: 'error_if_incomplete',
-          billing_cycle_anchor: params.intervalChanged ? 'now' : 'unchanged',
+          billing_cycle_anchor:
+            params.isTrialUpgrade || params.intervalChanged
+              ? 'now'
+              : 'unchanged',
+          ...(params.isTrialUpgrade ? { trial_end: 'now' as const } : {}),
           expand: ['latest_invoice'],
         },
         stripeAccountId,
@@ -133,10 +211,36 @@ export class ProrationInvoiceService {
       this.logger.error(
         `subscriptions.update failed for ${stripeSubscriptionId}: ${this.errMsg(error)}`,
       );
-      // Stripe rejected the update outright — nothing to roll back.
+      // If we applied a trial credit, try to revert it
+      if (trialCreditApplied && params.trialCreditAmount) {
+        try {
+          await this.stripeService.createCustomerBalanceTransaction(
+            stripeCustomerId,
+            params.trialCreditAmount, // positive = debit (reverts credit)
+            params.trialCreditCurrency || 'usd',
+            stripeAccountId,
+            'Revert trial credit — subscription update failed',
+          );
+          this.logger.log(
+            `Reverted trial credit for customer ${stripeCustomerId}`,
+          );
+        } catch (revertErr) {
+          this.logger.error(
+            `Failed to revert trial credit for customer ${stripeCustomerId}: ${this.errMsg(revertErr)}`,
+          );
+        }
+      }
       throw new BadRequestException(
         `Failed to update subscription: ${this.errMsg(error)}`,
       );
+    }
+
+    // 2c. Trial upgrades skip the manual proration invoice flow entirely.
+    //     Stripe ends the trial → creates the first real invoice for the new
+    //     price → applies the customer balance credit automatically. We just
+    //     return the updated subscription.
+    if (params.isTrialUpgrade) {
+      return { kind: 'no_proration', updatedSub };
     }
 
     // 3. Idempotency recovery: if a previous run created a draft proration
@@ -364,7 +468,32 @@ export class ProrationInvoiceService {
     updatedSub: Stripe.Subscription,
     stripeAccountId: string,
     intervalChanged?: boolean,
+    trialCreditRevert?: {
+      stripeCustomerId: string;
+      amount: number;
+      currency: string;
+    },
   ): Promise<void> {
+    // Revert trial credit if one was applied before the subscription update
+    if (trialCreditRevert && trialCreditRevert.amount > 0) {
+      try {
+        await this.stripeService.createCustomerBalanceTransaction(
+          trialCreditRevert.stripeCustomerId,
+          trialCreditRevert.amount, // positive = debit (reverts credit)
+          trialCreditRevert.currency,
+          stripeAccountId,
+          'Revert trial credit — upgrade rolled back',
+        );
+        this.logger.log(
+          `Reverted trial credit for customer ${trialCreditRevert.stripeCustomerId} during rollback`,
+        );
+      } catch (err) {
+        // Non-fatal: credit stays on balance (harmless, applies to future invoices)
+        this.logger.error(
+          `Failed to revert trial credit during rollback: ${this.errMsg(err)}`,
+        );
+      }
+    }
     type ItemParam = Stripe.SubscriptionUpdateParams.Item;
 
     // Items present on the updated sub: restore old price/quantity if the item

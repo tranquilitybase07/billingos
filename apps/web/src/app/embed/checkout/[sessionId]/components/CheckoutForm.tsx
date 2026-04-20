@@ -328,13 +328,18 @@ function UpgradeCheckout({
     currency: displayCurrency.toUpperCase(),
   }).format(netAmount / 100)
 
+  // Trial-to-trial upgrade: new plan has a trial and net amount is $0
+  const isTrialToTrial = (session.trialDays ?? 0) > 0 && netAmount === 0
+
   return (
     <div ref={formRef} className="space-y-4">
       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
         <p className="text-xs text-blue-700 dark:text-blue-300">
-          {netAmount > 0
-            ? `Your payment method will be charged ${formattedAmount} for the prorated upgrade.`
-            : 'No charge today \u2014 you have credit from your previous plan that covers this upgrade.'}
+          {isTrialToTrial
+            ? `Your plan will be upgraded with a ${session.trialDays}-day free trial. You won\u2019t be charged until the trial ends.`
+            : netAmount > 0
+              ? `Your payment method will be charged ${formattedAmount} for the prorated upgrade.`
+              : 'No charge today \u2014 you have credit from your previous plan that covers this upgrade.'}
         </p>
       </div>
 
@@ -356,14 +361,18 @@ function UpgradeCheckout({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Upgrading...
+            {isTrialToTrial ? 'Starting trial...' : 'Upgrading...'}
           </span>
         ) : (
           <span className="flex items-center justify-center gap-2">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
             </svg>
-            {netAmount > 0 ? `Confirm Upgrade \u2014 ${formattedAmount}` : 'Confirm Upgrade \u2014 No charge'}
+            {isTrialToTrial
+              ? `Start ${session.trialDays}-day trial`
+              : netAmount > 0
+                ? `Confirm Upgrade \u2014 ${formattedAmount}`
+                : 'Confirm Upgrade \u2014 No charge'}
           </span>
         )}
       </button>
@@ -916,7 +925,7 @@ function CheckoutFormTrial({
   }
 
   const trialDays = session.trialDays || 0
-  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: session.currency.toUpperCase() }).format(session.totalAmount / 100)
+  const formattedTotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: session.currency.toUpperCase() }).format(session.amount / 100)
   const intervalLabels: Record<string, string> = { day: 'day', week: 'wk', month: 'month', year: 'year' }
   const intervalShort = intervalLabels[session.product?.interval || ''] || 'mo'
 

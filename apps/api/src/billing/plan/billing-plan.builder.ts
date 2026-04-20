@@ -35,14 +35,51 @@ export class BillingPlanBuilder {
     // 3. Plan entitlement changes
     const entitlements = this.entitlementPlanner.plan(ctx);
 
-    // 4. Calculate proration (in-place upgrade only)
+    // 4. Calculate proration (in-place upgrade/trial-to-trial downgrade)
     let proration: ProrationPreview | null = null;
-    if (ctx.isInPlaceUpgrade && ctx.transition) {
-      proration = await this.prorationCalculator.preview(
-        ctx.transition.oldSubscription.id,
-        ctx.price.stripePriceId,
-        ctx.organization.stripeAccountId,
-      );
+    if (ctx.isTrialToTrialDowngrade && ctx.transition) {
+      // Trial-to-trial downgrade: new plan also has a trial, so no charge.
+      // The old trial is discarded and a fresh trial starts on the new plan.
+      proration = {
+        creditAmount: 0,
+        newPlanCharge: 0,
+        proratedAmount: 0,
+        currency: ctx.price.currency,
+        immediateCharge: false,
+      };
+    } else if (ctx.isInPlaceUpgrade && ctx.transition) {
+      if (ctx.isTrialToTrialUpgrade) {
+        // Trial-to-trial: new plan also has a trial, so no charge.
+        // The old trial is discarded and a fresh trial starts on the new plan.
+        proration = {
+          creditAmount: 0,
+          newPlanCharge: 0,
+          proratedAmount: 0,
+          currency: ctx.price.currency,
+          immediateCharge: false,
+        };
+      } else if (ctx.isTrialUpgrade) {
+        // Trial→paid upgrades: Stripe won't generate proration line items for
+        // trial periods, so we calculate manually. The old plan amount
+        // becomes a credit (applied as a customer balance transaction
+        // before the subscription update), and the new plan is charged
+        // in full. Net = new - old.
+        const creditAmount = ctx.transition.oldSubscription.amount;
+        const newPlanCharge = ctx.price.amount;
+        proration = {
+          creditAmount,
+          newPlanCharge,
+          proratedAmount: newPlanCharge - creditAmount,
+          currency: ctx.price.currency,
+          immediateCharge: true,
+        };
+      } else {
+        proration = await this.prorationCalculator.preview(
+          ctx.transition.oldSubscription.id,
+          ctx.price.stripePriceId,
+          ctx.organization.stripeAccountId,
+        );
+      }
     }
 
     // 5. Build discount plan (if discount in context)
@@ -66,6 +103,18 @@ export class BillingPlanBuilder {
   }
 
   private buildSubscriptionAction(ctx: BillingContext): SubscriptionAction {
+    // Trial-to-trial downgrade → update existing subscription in-place with fresh trial
+    if (ctx.isTrialToTrialDowngrade && ctx.transition) {
+      return {
+        kind: 'update_subscription',
+        existingBosSubId: ctx.transition.oldSubscription.id,
+        newStripePriceId: ctx.price.stripePriceId,
+        newAmount: ctx.price.amount,
+        newProductId: ctx.product.id,
+        newPriceId: ctx.price.id,
+      };
+    }
+
     // In-place upgrade → update existing subscription (with proration)
     // Proration is handled by ProrationInvoiceService via the manual invoice
     // flow; the planner does not need to specify proration_behavior here.
@@ -153,7 +202,7 @@ export class BillingPlanBuilder {
     }
 
     // In-place upgrade/downgrade doesn't cancel — it updates
-    if (ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade) {
+    if (ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade || ctx.isTrialToTrialDowngrade) {
       return { kind: 'no_transition' };
     }
 

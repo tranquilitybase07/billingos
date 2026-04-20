@@ -48,6 +48,14 @@ export interface UpdateStripeSubscriptionAction {
   checkoutSessionId: string;
   /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
   intervalChanged: boolean;
+  /** True when upgrading from a trialing subscription */
+  isTrialUpgrade?: boolean;
+  /** Amount to credit to customer balance before ending trial (minor units) */
+  trialCreditAmount?: number;
+  /** Currency for the trial credit */
+  trialCreditCurrency?: string;
+  /** Unix timestamp for the new trial end date (trial-to-trial upgrade) */
+  newTrialEnd?: number;
 }
 
 export interface NoStripeAction {

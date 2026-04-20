@@ -369,11 +369,85 @@ export class SetupIntentSucceededHandler
         productId,
       );
 
+      // Capture card country
+      this.logger.log(
+        `[CardCountry] setup-intent path -- customerId=${customerId}, pmId=${paymentMethodId}, acct=${stripeAccountId}`,
+      );
+      await this.tryUpdateCustomerCardCountry(
+        ctx,
+        customerId,
+        paymentMethodId,
+        stripeAccountId,
+      );
+
       this.logger.log(
         `Trial subscription flow completed for setup intent ${setupIntent.id}`,
       );
     } catch (error) {
       this.logger.error('Error handling setup_intent.succeeded:', error);
+    }
+  }
+
+  /**
+   * Best-effort: update customer's billing country from their card.
+   * Non-critical -- must never fail the parent flow.
+   */
+  private async tryUpdateCustomerCardCountry(
+    ctx: WebhookContext,
+    customerId: string,
+    paymentMethodId: string | null | undefined,
+    stripeAccountId: string | null | undefined,
+  ): Promise<void> {
+    if (!paymentMethodId || !stripeAccountId) {
+      this.logger.log(
+        `[CardCountry] skipping -- paymentMethodId=${paymentMethodId}, stripeAccountId=${stripeAccountId}`,
+      );
+      return;
+    }
+
+    try {
+      const supabase = ctx.supabase;
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, billing_address')
+        .eq('id', customerId)
+        .single();
+
+      if (!customer) return;
+
+      const existingAddress =
+        (customer.billing_address as Record<string, unknown>) || {};
+      if (existingAddress.country) return;
+
+      const paymentMethod = await this.stripeService
+        .getClient()
+        .paymentMethods.retrieve(paymentMethodId, {
+          stripeAccount: stripeAccountId,
+        });
+
+      const cardCountry = paymentMethod.card?.country;
+      this.logger.log(
+        `[CardCountry] retrieved PM ${paymentMethodId} -- type=${paymentMethod.type}, ` +
+          `card.country=${cardCountry}, card.brand=${paymentMethod.card?.brand}`,
+      );
+      if (!cardCountry) return;
+
+      await supabase
+        .from('customers')
+        .update({
+          billing_address: { ...existingAddress, country: cardCountry },
+        })
+        .eq('id', customerId);
+
+      this.logger.log(
+        `Updated customer ${customerId} billing country to ${cardCountry}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Non-critical: failed to update card country for customer ${customerId}:`,
+        error,
+      );
     }
   }
 }

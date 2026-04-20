@@ -44,6 +44,23 @@ export class StripePlanBuilder {
           intervalChanged:
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
+          // Trial-to-trial (upgrade or downgrade): grant fresh trial, no credit/charge
+          ...(ctx.isTrialToTrialUpgrade || ctx.isTrialToTrialDowngrade
+            ? {
+                newTrialEnd: Math.floor(
+                  (Date.now() + ctx.product.trialDays * 86400000) / 1000,
+                ),
+                trialCreditAmount: 0,
+              }
+            : {
+                isTrialUpgrade: ctx.isTrialUpgrade || undefined,
+                trialCreditAmount: ctx.isTrialUpgrade
+                  ? ctx.transition!.oldSubscription.amount
+                  : undefined,
+                trialCreditCurrency: ctx.isTrialUpgrade
+                  ? ctx.price.currency
+                  : undefined,
+              }),
         };
 
       case 'setup_trial':

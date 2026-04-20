@@ -207,6 +207,10 @@ export class StripePlanExecutor {
       newStripePriceId: action.newStripePriceId,
       checkoutSessionId: action.checkoutSessionId,
       intervalChanged: action.intervalChanged,
+      isTrialUpgrade: action.isTrialUpgrade,
+      trialCreditAmount: action.trialCreditAmount,
+      trialCreditCurrency: action.trialCreditCurrency,
+      newTrialEnd: action.newTrialEnd,
     });
 
     switch (result.kind) {
