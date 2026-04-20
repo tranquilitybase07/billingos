@@ -40,8 +40,6 @@ export class BillingContextBuilder {
     externalUserId: string,
     dto: CreateCheckoutDto,
   ): Promise<BillingContext> {
-    const supabase = this.supabaseService.getClient();
-
     // 1. Resolve organization + Stripe account
     const organization = await this.resolveOrganization(organizationId);
 
@@ -88,8 +86,7 @@ export class BillingContextBuilder {
 
     // 6a. Trial upgrade: in-place upgrade from a trialing subscription
     const isTrialUpgrade =
-      isInPlaceUpgrade &&
-      transition!.oldSubscription.status === 'trialing';
+      isInPlaceUpgrade && transition.oldSubscription.status === 'trialing';
 
     // 6a2. Trial-to-trial: upgrading from trial AND new product also has a trial period.
     //      Grants a fresh trial on the new plan instead of ending trial + charging.
@@ -105,12 +102,17 @@ export class BillingContextBuilder {
       (product.trialDays || 0) > 0 &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
-    // 6c. Determine if in-place downgrade (existing paid Stripe sub + new lower price)
+    // 6c. Determine if in-place downgrade (existing Stripe sub + new lower price).
+    //     Non-trialing subs always route here. A trialing sub routes here only
+    //     when downgrading to a free product — otherwise isTrialToTrialDowngrade
+    //     (paid→paid trial) claims it above. Without this, trialing→free would
+    //     fall through to free_activation and orphan the Stripe trial sub.
     const isInPlaceDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
-      transition.oldSubscription.status !== 'trialing' &&
-      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
+      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
+      (transition.oldSubscription.status !== 'trialing' || isFreeProduct) &&
+      !isTrialToTrialDowngrade;
 
     // 7. Determine trial eligibility (trial product + no transition)
     const isTrialEligible = (product.trialDays || 0) > 0 && transition === null;

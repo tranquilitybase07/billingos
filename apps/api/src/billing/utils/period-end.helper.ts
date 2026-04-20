@@ -1,6 +1,9 @@
 import { Logger } from '@nestjs/common';
+import type Stripe from 'stripe';
 
 const logger = new Logger('PeriodEndHelper');
+
+type StripeSubLike = Stripe.Subscription | Record<string, unknown>;
 
 /**
  * Extracts `current_period_end` from Stripe subscription data as an ISO string.
@@ -12,9 +15,8 @@ const logger = new Logger('PeriodEndHelper');
  * 4. Computed from `current_period_start` + interval (legacy)
  * 5. Last resort: 30-day fallback (should never happen with valid Stripe subs)
  */
-export function extractPeriodEnd(
-  subData: Record<string, unknown>,
-): string {
+export function extractPeriodEnd(input: StripeSubLike): string {
+  const subData = input as Record<string, unknown>;
   // 1. Items-level value (Stripe API v2025-12-15+)
   const itemPeriodEnd = resolveItemPeriodEnd(subData);
   if (itemPeriodEnd) {
@@ -41,9 +43,7 @@ export function extractPeriodEnd(
 
   // 4. Compute from legacy top-level start + interval
   if (subData.current_period_start) {
-    const start = new Date(
-      (subData.current_period_start as number) * 1000,
-    );
+    const start = new Date((subData.current_period_start as number) * 1000);
     const interval = resolveInterval(subData);
     const intervalCount = resolveIntervalCount(subData);
     if (interval) {
@@ -66,9 +66,8 @@ export function extractPeriodEnd(
  * 2. `current_period_start` (legacy top-level)
  * 3. `new Date()` fallback
  */
-export function extractPeriodStart(
-  subData: Record<string, unknown>,
-): string {
+export function extractPeriodStart(input: StripeSubLike): string {
+  const subData = input as Record<string, unknown>;
   // 1. Items-level value (Stripe API v2025-12-15+)
   const itemPeriodStart = resolveItemPeriodStart(subData);
   if (itemPeriodStart) {
@@ -103,7 +102,9 @@ function resolveItemPeriodEnd(subData: Record<string, unknown>): number | null {
 /**
  * Resolves `current_period_start` from `items.data[0]`.
  */
-function resolveItemPeriodStart(subData: Record<string, unknown>): number | null {
+function resolveItemPeriodStart(
+  subData: Record<string, unknown>,
+): number | null {
   const items = subData.items as
     | { data?: Array<{ current_period_start?: number }> }
     | undefined;
@@ -112,12 +113,16 @@ function resolveItemPeriodStart(subData: Record<string, unknown>): number | null
 
 type Interval = 'day' | 'week' | 'month' | 'year';
 
-function resolveInterval(
-  subData: Record<string, unknown>,
-): Interval | null {
+function resolveInterval(subData: Record<string, unknown>): Interval | null {
   // Stripe subscription object: items.data[0].price.recurring.interval
   const items = subData.items as
-    | { data?: Array<{ price?: { recurring?: { interval?: string; interval_count?: number } } }> }
+    | {
+        data?: Array<{
+          price?: {
+            recurring?: { interval?: string; interval_count?: number };
+          };
+        }>;
+      }
     | undefined;
   const recurring = items?.data?.[0]?.price?.recurring;
   if (recurring?.interval) {
@@ -135,9 +140,7 @@ function resolveInterval(
   return null;
 }
 
-function resolveIntervalCount(
-  subData: Record<string, unknown>,
-): number {
+function resolveIntervalCount(subData: Record<string, unknown>): number {
   const items = subData.items as
     | { data?: Array<{ price?: { recurring?: { interval_count?: number } } }> }
     | undefined;
@@ -154,7 +157,7 @@ function resolveIntervalCount(
   return 1;
 }
 
-function addInterval(
+export function addInterval(
   start: Date,
   interval: Interval,
   count: number,

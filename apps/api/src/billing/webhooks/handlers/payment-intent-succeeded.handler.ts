@@ -16,7 +16,10 @@ import { SubscriptionTransitionService } from '../../../subscriptions/subscripti
 import { EntitlementService } from '../../entitlements/entitlement.service';
 import { RedisService } from '../../../redis/redis.service';
 import { RefundService } from '../../../stripe/refund.service';
-import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
+import {
+  extractPeriodStart,
+  extractPeriodEnd,
+} from '../../utils/period-end.helper';
 
 /**
  * Handles `payment_intent.succeeded` webhook events.
@@ -696,7 +699,7 @@ export class PaymentIntentSucceededHandler
     // Create Stripe subscription
     let stripeSubscription;
     try {
-      const idempotencyKey = `legacy-sub:${customerId}:${productId}:${Date.now()}`;
+      const idempotencyKey = `legacy-sub:${paymentIntent.id}`;
       stripeSubscription = await this.stripeService.createSubscription(
         subscriptionParams,
         stripeAccountId,
@@ -725,12 +728,8 @@ export class PaymentIntentSucceededHandler
       price_id: priceId,
       stripe_subscription_id: stripeSubscription.id,
       status: stripeSubscription.status,
-      current_period_start: extractPeriodStart(
-        stripeSubscription as unknown as Record<string, unknown>,
-      ),
-      current_period_end: extractPeriodEnd(
-        stripeSubscription as unknown as Record<string, unknown>,
-      ),
+      current_period_start: extractPeriodStart(stripeSubscription),
+      current_period_end: extractPeriodEnd(stripeSubscription),
       trial_end: stripeSubscription.trial_end
         ? new Date(stripeSubscription.trial_end * 1000).toISOString()
         : null,

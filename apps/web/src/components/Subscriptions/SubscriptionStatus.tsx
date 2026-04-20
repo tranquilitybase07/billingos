@@ -34,7 +34,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 }
 
 export const SubscriptionStatus = ({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) => {
-  const effectiveStatus = (status === 'active' && cancelAtPeriodEnd) ? 'cancelling' : status
+  const effectiveStatus =
+    (status === 'active' || status === 'trialing') && cancelAtPeriodEnd
+      ? 'cancelling'
+      : status
   const config = statusConfig[effectiveStatus] ?? {
     label: status,
     className: 'bg-gray-100 text-gray-700',

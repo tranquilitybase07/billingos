@@ -75,14 +75,12 @@ export class SubscriptionDeletedHandler
     // Get subscription with metadata to detect downgrade completions
     const { data: existing, error: fetchError } = await ctx.supabase
       .from('subscriptions')
-      .select('id, product_id, metadata')
+      .select('id, organization_id, product_id, metadata')
       .eq('stripe_subscription_id', subscription.id)
       .single();
 
     if (fetchError || !existing) {
-      this.logger.warn(
-        `Subscription ${subscription.id} not found in database`,
-      );
+      this.logger.warn(`Subscription ${subscription.id} not found in database`);
       return;
     }
 
@@ -96,7 +94,8 @@ export class SubscriptionDeletedHandler
       .select('id')
       .eq('subscription_id', existing.id)
       .eq('status', 'scheduled')
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (pendingChange) {
       // Clear the Stripe link (sub is gone) and make the change immediately due
@@ -108,7 +107,8 @@ export class SubscriptionDeletedHandler
           cancel_at_period_end: false,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existing.id);
+        .eq('id', existing.id)
+        .eq('organization_id', existing.organization_id);
 
       await ctx.supabase
         .from('subscription_changes')
@@ -116,11 +116,14 @@ export class SubscriptionDeletedHandler
           scheduled_for: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', pendingChange.id);
+        .eq('id', pendingChange.id)
+        .eq('organization_id', existing.organization_id);
 
       // Invalidate cache (non-critical)
       if (existing.product_id) {
-        await this.cacheManager.del(`product-metrics:${existing.product_id}`).catch(() => {});
+        await this.cacheManager
+          .del(`product-metrics:${existing.product_id}`)
+          .catch(() => {});
       }
 
       this.logger.log(
@@ -136,7 +139,8 @@ export class SubscriptionDeletedHandler
         status: 'canceled',
         canceled_at: new Date().toISOString(),
       })
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .eq('organization_id', existing.organization_id);
 
     if (updateError) {
       throw new Error(

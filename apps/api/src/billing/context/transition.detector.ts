@@ -60,7 +60,7 @@ export class TransitionDetector {
     const { data: oldSub } = await supabase
       .from('subscriptions')
       .select(
-        'id, stripe_subscription_id, product_id, price_id, amount, status, cancel_at_period_end, current_period_end, metadata',
+        'id, organization_id, stripe_subscription_id, product_id, price_id, amount, status, cancel_at_period_end, current_period_end, metadata',
       )
       .eq('id', oldSubId)
       .single();
@@ -73,12 +73,14 @@ export class TransitionDetector {
     }
 
     // Fetch the old price's recurring interval
-    let oldRecurringInterval: OldSubscriptionInfo['recurringInterval'] = 'month';
+    let oldRecurringInterval: OldSubscriptionInfo['recurringInterval'] =
+      'month';
     if (oldSub.price_id) {
       const { data: oldPrice } = await supabase
         .from('product_prices')
         .select('recurring_interval')
         .eq('id', oldSub.price_id)
+        .eq('organization_id', oldSub.organization_id)
         .single();
 
       if (oldPrice?.recurring_interval) {
@@ -133,11 +135,16 @@ export class TransitionDetector {
    * Reconciles the DB if Stripe and DB values differ.
    */
   private async resolveAuthoritativePeriodEnd(
-    oldSub: Record<string, unknown>,
+    oldSub: {
+      id: string;
+      organization_id: string;
+      stripe_subscription_id: string | null;
+      current_period_end: string | null;
+    },
     stripeAccountId?: string,
   ): Promise<Date | undefined> {
     const dbPeriodEnd = oldSub.current_period_end
-      ? new Date(oldSub.current_period_end as string)
+      ? new Date(oldSub.current_period_end)
       : undefined;
 
     if (!oldSub.stripe_subscription_id || !stripeAccountId) {
@@ -147,10 +154,9 @@ export class TransitionDetector {
     try {
       const stripeSub = await this.stripeService
         .getClient()
-        .subscriptions.retrieve(
-          oldSub.stripe_subscription_id as string,
-          { stripeAccount: stripeAccountId },
-        );
+        .subscriptions.retrieve(oldSub.stripe_subscription_id, {
+          stripeAccount: stripeAccountId,
+        });
       const stripeSubData = stripeSub as unknown as Record<string, unknown>;
 
       // Stripe API v2025-12-15 moved current_period_end to items.data[0]
@@ -179,7 +185,8 @@ export class TransitionDetector {
             .update({
               current_period_end: stripePeriodEnd.toISOString(),
             })
-            .eq('id', oldSub.id as string);
+            .eq('id', oldSub.id)
+            .eq('organization_id', oldSub.organization_id);
         }
 
         return stripePeriodEnd;

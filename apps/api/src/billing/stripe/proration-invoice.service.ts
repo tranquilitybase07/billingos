@@ -288,7 +288,12 @@ export class ProrationInvoiceService {
         );
         // No invoice exists — nothing to clean up. The pending items remain on
         // the customer; a retry will pick them up.
-        await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, params.intervalChanged);
+        await this.undoSubUpdate(
+          curSub,
+          updatedSub,
+          stripeAccountId,
+          params.intervalChanged,
+        );
         throw new BadRequestException(
           `Failed to create proration invoice: ${this.errMsg(error)}`,
         );
@@ -316,7 +321,12 @@ export class ProrationInvoiceService {
           `Failed to void draft invoice ${invoice.id}: ${this.errMsg(voidErr)}`,
         );
       }
-      await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, params.intervalChanged);
+      await this.undoSubUpdate(
+        curSub,
+        updatedSub,
+        stripeAccountId,
+        params.intervalChanged,
+      );
       throw new BadRequestException(
         `Failed to finalize proration invoice: ${this.errMsg(error)}`,
       );
@@ -327,7 +337,9 @@ export class ProrationInvoiceService {
       // If the invoice total is negative, the customer has remaining credit.
       // Stripe doesn't auto-credit the balance for standalone invoices —
       // explicitly create a balance transaction so the credit applies to
-      // future invoices.
+      // future invoices. No double-credit risk: the trial credit applied
+      // pre-update is already consumed as a line item on `finalized`, so
+      // `finalized.total` is the residual after that credit.
       if (finalized.total < 0) {
         try {
           await this.stripeService.createCustomerBalanceTransaction(
@@ -449,7 +461,12 @@ export class ProrationInvoiceService {
         `Failed to void invoice ${invoice.id}: ${this.errMsg(voidErr)}`,
       );
     }
-    await this.undoSubUpdate(curSub, updatedSub, stripeAccountId, intervalChanged);
+    await this.undoSubUpdate(
+      curSub,
+      updatedSub,
+      stripeAccountId,
+      intervalChanged,
+    );
     throw new BadRequestException(
       'Proration invoice could not be paid; subscription reverted to previous plan.',
     );
@@ -463,37 +480,16 @@ export class ProrationInvoiceService {
    * BOS subscriptions are single-item, so this collapses to a one-entry update.
    * The diff logic handles the general case in case we ever support multi-item.
    */
+  // Known gap: if the subscription update succeeds but a later step
+  // (invoice create/finalize/pay) fails, the trial credit applied in
+  // `runUpgrade` stays on the customer's balance. It's benign — applied to
+  // future invoices — so we don't reverse it here.
   private async undoSubUpdate(
     curSub: Stripe.Subscription,
     updatedSub: Stripe.Subscription,
     stripeAccountId: string,
     intervalChanged?: boolean,
-    trialCreditRevert?: {
-      stripeCustomerId: string;
-      amount: number;
-      currency: string;
-    },
   ): Promise<void> {
-    // Revert trial credit if one was applied before the subscription update
-    if (trialCreditRevert && trialCreditRevert.amount > 0) {
-      try {
-        await this.stripeService.createCustomerBalanceTransaction(
-          trialCreditRevert.stripeCustomerId,
-          trialCreditRevert.amount, // positive = debit (reverts credit)
-          trialCreditRevert.currency,
-          stripeAccountId,
-          'Revert trial credit — upgrade rolled back',
-        );
-        this.logger.log(
-          `Reverted trial credit for customer ${trialCreditRevert.stripeCustomerId} during rollback`,
-        );
-      } catch (err) {
-        // Non-fatal: credit stays on balance (harmless, applies to future invoices)
-        this.logger.error(
-          `Failed to revert trial credit during rollback: ${this.errMsg(err)}`,
-        );
-      }
-    }
     type ItemParam = Stripe.SubscriptionUpdateParams.Item;
 
     // Items present on the updated sub: restore old price/quantity if the item

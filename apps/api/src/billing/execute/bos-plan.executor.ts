@@ -7,7 +7,11 @@ import { BillingContext } from '../context/types';
 import { BillingPlan } from '../plan/types';
 import { StripeResult, PipelineResult } from '../stripe/types';
 import { EntitlementExecutor } from './entitlement.executor';
-import { extractPeriodStart, extractPeriodEnd } from '../utils/period-end.helper';
+import {
+  addInterval,
+  extractPeriodEnd,
+  extractPeriodStart,
+} from '../utils/period-end.helper';
 import type {
   Json,
   Database,
@@ -252,7 +256,6 @@ export class BosPlanExecutor {
     }
 
     // Store subscription record
-    const subData = subscription as unknown as Record<string, unknown>;
     const { error: subError } = await supabase.from('subscriptions').insert({
       customer_id: ctx.customer.id,
       organization_id: ctx.organization.id,
@@ -260,8 +263,8 @@ export class BosPlanExecutor {
       price_id: ctx.price.id,
       stripe_subscription_id: subscription.id,
       status: subscription.status,
-      current_period_start: extractPeriodStart(subData),
-      current_period_end: extractPeriodEnd(subData),
+      current_period_start: extractPeriodStart(subscription),
+      current_period_end: extractPeriodEnd(subscription),
       cancel_at_period_end: false,
       amount: ctx.price.amount,
       currency: ctx.price.currency,
@@ -409,7 +412,6 @@ export class BosPlanExecutor {
     }
 
     // Update BOS subscription record
-    const stripeSub = result.subscription as unknown as Record<string, unknown>;
     const { error: updateError } = await supabase
       .from('subscriptions')
       .update({
@@ -418,20 +420,8 @@ export class BosPlanExecutor {
         amount: sub.newAmount,
         status: result.subscription.status,
         updated_at: new Date().toISOString(),
-        ...(stripeSub.current_period_start
-          ? {
-              current_period_start: new Date(
-                (stripeSub.current_period_start as number) * 1000,
-              ).toISOString(),
-            }
-          : {}),
-        ...(stripeSub.current_period_end
-          ? {
-              current_period_end: new Date(
-                (stripeSub.current_period_end as number) * 1000,
-              ).toISOString(),
-            }
-          : {}),
+        current_period_start: extractPeriodStart(result.subscription),
+        current_period_end: extractPeriodEnd(result.subscription),
         metadata: {
           ...ctx.transition!.oldSubscription.metadata,
           upgradedAt: new Date().toISOString(),
@@ -664,22 +654,22 @@ export class BosPlanExecutor {
           ctx.organization.stripeAccountId,
           true, // cancel at period end
         );
-        this.logger.log(
-          `Set cancel_at_period_end on Stripe sub ${ctx.transition.oldSubscription.stripeSubscriptionId}`,
-        );
       } catch (error) {
         this.logger.error('Failed to set cancel_at_period_end:', error);
-        // Non-fatal: scheduler still handles it as backup
+        throw new BadRequestException(
+          'Failed to schedule subscription cancellation in Stripe',
+        );
       }
 
-      // Update BOS subscription to reflect the pending cancellation
+      // Stripe accepted the cancellation — mirror it in BOS.
       await supabase
         .from('subscriptions')
         .update({
           cancel_at_period_end: true,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', sub.existingBosSubId);
+        .eq('id', sub.existingBosSubId)
+        .eq('organization_id', ctx.organization.id);
     }
 
     const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
@@ -732,11 +722,11 @@ export class BosPlanExecutor {
       .maybeSingle();
 
     let subscriptionId: string;
-    const periodEnd = this.calculatePeriodEnd(
+    const periodEnd = addInterval(
       now,
       ctx.price.recurringInterval,
       ctx.price.recurringIntervalCount,
-    );
+    ).toISOString();
 
     if (
       existing &&
@@ -977,30 +967,5 @@ export class BosPlanExecutor {
     if (plan.subscription.kind === 'setup_trial') return 'trial';
     if (plan.useAdaptivePricing) return 'adaptive';
     return 'standard';
-  }
-
-  private calculatePeriodEnd(
-    startDate: Date,
-    interval: 'day' | 'week' | 'month' | 'year',
-    intervalCount: number,
-  ): string {
-    const endDate = new Date(startDate);
-    switch (interval) {
-      case 'day':
-        endDate.setDate(endDate.getDate() + intervalCount);
-        break;
-      case 'week':
-        endDate.setDate(endDate.getDate() + 7 * intervalCount);
-        break;
-      case 'month':
-        endDate.setMonth(endDate.getMonth() + intervalCount);
-        break;
-      case 'year':
-        endDate.setFullYear(endDate.getFullYear() + intervalCount);
-        break;
-      default:
-        endDate.setMonth(endDate.getMonth() + 1);
-    }
-    return endDate.toISOString();
   }
 }

@@ -163,7 +163,12 @@ export class V1ProductsService {
               | 'canceled',
             currentPeriodEnd: subscription.current_period_end,
             cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-            interval: (price?.recurring_interval as 'month' | 'year' | 'week' | 'day') || null,
+            interval:
+              (price?.recurring_interval as
+                | 'month'
+                | 'year'
+                | 'week'
+                | 'day') || null,
             amount: subscription.amount ?? null,
           };
         }
@@ -185,6 +190,7 @@ export class V1ProductsService {
         .from('products')
         .select('name')
         .eq('id', currentProductId)
+        .eq('organization_id', organizationId)
         .single();
 
       if (supersededProduct) {
