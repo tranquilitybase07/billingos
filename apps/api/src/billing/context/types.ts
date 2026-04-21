@@ -76,6 +76,7 @@ export interface OldSubscriptionInfo {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   metadata: Record<string, unknown>;
+  recurringInterval: 'day' | 'week' | 'month' | 'year';
 }
 
 // ── Discount ──
@@ -116,8 +117,16 @@ export interface BillingContext {
   isAdaptivePricing: boolean;
   /** True when upgrading in-place via subscription.update() */
   isInPlaceUpgrade: boolean;
+  /** True when upgrading in-place from a trialing subscription */
+  isTrialUpgrade: boolean;
+  /** True when trial→trial upgrade: old sub is trialing AND new product has trialDays > 0.
+   *  Grants a fresh trial on the new plan instead of ending trial + charging. */
+  isTrialToTrialUpgrade: boolean;
   /** True when downgrading in-place via subscription.update() with no proration */
   isInPlaceDowngrade: boolean;
+  /** True when trial→trial downgrade: old sub is trialing AND new product has trialDays > 0.
+   *  Grants a fresh trial on the new (lower) plan instead of cancel + recreate. */
+  isTrialToTrialDowngrade: boolean;
 
   /** Caller-provided metadata to pass through to Stripe + BOS records */
   metadata: Record<string, unknown>;

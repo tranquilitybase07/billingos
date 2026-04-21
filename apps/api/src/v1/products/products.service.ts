@@ -39,6 +39,8 @@ export interface PricingCurrentSubscription {
   status: 'active' | 'trialing' | 'past_due' | 'canceled';
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
+  interval: 'month' | 'year' | 'week' | 'day' | null;
+  amount: number | null;
 }
 
 export interface GetProductsResponse {
@@ -138,7 +140,7 @@ export class V1ProductsService {
         // Then fetch their active subscription
         const { data: subscription, error: subscriptionError } = await supabase
           .from('subscriptions')
-          .select('*')
+          .select('*, price:product_prices(recurring_interval)')
           .eq('customer_id', customer.id)
           .in('status', ['active', 'trialing', 'past_due'])
           .order('created_at', { ascending: false })
@@ -147,10 +149,13 @@ export class V1ProductsService {
 
         if (!subscriptionError && subscription) {
           currentProductId = subscription.product_id;
+          const price = subscription.price as unknown as {
+            recurring_interval: string;
+          } | null;
           currentSubscription = {
             id: subscription.id,
             productId: subscription.product_id,
-            priceId: subscription.product_id, // Note: We might need to add price_id to subscriptions table
+            priceId: subscription.price_id || subscription.product_id,
             status: subscription.status as
               | 'active'
               | 'trialing'
@@ -158,7 +163,48 @@ export class V1ProductsService {
               | 'canceled',
             currentPeriodEnd: subscription.current_period_end,
             cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+            interval:
+              (price?.recurring_interval as
+                | 'month'
+                | 'year'
+                | 'week'
+                | 'day') || null,
+            amount: subscription.amount ?? null,
           };
+        }
+      }
+    }
+
+    // 2b. Resolve currentProductId to the current version if it points to a superseded version.
+    // This happens when a product is edited (versioned) while a subscription is active —
+    // the subscription still references the old (superseded) product_id.
+    // Uses name-based resolution: all versions share the same name (enforced by
+    // UNIQUE(organization_id, name, version) constraint), so one PK lookup on the
+    // superseded product + an in-memory find resolves any chain depth (V1→V100).
+    if (
+      currentProductId &&
+      products &&
+      !products.some((p) => p.id === currentProductId)
+    ) {
+      const { data: supersededProduct } = await supabase
+        .from('products')
+        .select('name')
+        .eq('id', currentProductId)
+        .eq('organization_id', organizationId)
+        .single();
+
+      if (supersededProduct) {
+        const currentVersion = products.find(
+          (p) => p.name === supersededProduct.name,
+        );
+        if (currentVersion) {
+          this.logger.log(
+            `Resolved subscription product ${currentProductId} → current version ${currentVersion.id} (matched by name "${supersededProduct.name}")`,
+          );
+          currentProductId = currentVersion.id;
+          if (currentSubscription) {
+            currentSubscription.productId = currentVersion.id;
+          }
         }
       }
     }

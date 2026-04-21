@@ -223,6 +223,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         churnRisk: getChurnRisk(primarySub),
         primarySubscriptionId: primarySub?.id ?? null,
         subscriptions: customerSubs,
+        cancelAtPeriodEnd: primarySub?.cancel_at_period_end ?? false,
         pendingDowngrade,
       };
     });
@@ -329,7 +330,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
           if (!status) return <span className="text-sm text-muted-foreground">—</span>;
           return (
             <div className="flex items-center gap-1.5">
-              <SubscriptionStatus status={status} />
+              <SubscriptionStatus status={status} cancelAtPeriodEnd={c.cancelAtPeriodEnd} />
               {c.pendingDowngrade && (
                 <PendingChangeBadge
                   variant="compact"

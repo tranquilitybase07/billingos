@@ -75,18 +75,62 @@ export class SubscriptionDeletedHandler
     // Get subscription with metadata to detect downgrade completions
     const { data: existing, error: fetchError } = await ctx.supabase
       .from('subscriptions')
-      .select('id, product_id, metadata')
+      .select('id, organization_id, product_id, metadata')
       .eq('stripe_subscription_id', subscription.id)
       .single();
 
     if (fetchError || !existing) {
-      this.logger.warn(
-        `Subscription ${subscription.id} not found in database`,
-      );
+      this.logger.warn(`Subscription ${subscription.id} not found in database`);
       return;
     }
 
     const subMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
+
+    // Check for pending scheduled downgrade before marking as canceled.
+    // If a paid→free downgrade is scheduled, the Stripe sub deletion is expected —
+    // keep the BOS sub alive and let the scheduler complete the transition.
+    const { data: pendingChange } = await ctx.supabase
+      .from('subscription_changes')
+      .select('id')
+      .eq('subscription_id', existing.id)
+      .eq('status', 'scheduled')
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingChange) {
+      // Clear the Stripe link (sub is gone) and make the change immediately due
+      // so the scheduler picks it up on the next tick.
+      await ctx.supabase
+        .from('subscriptions')
+        .update({
+          stripe_subscription_id: null,
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .eq('organization_id', existing.organization_id);
+
+      await ctx.supabase
+        .from('subscription_changes')
+        .update({
+          scheduled_for: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pendingChange.id)
+        .eq('organization_id', existing.organization_id);
+
+      // Invalidate cache (non-critical)
+      if (existing.product_id) {
+        await this.cacheManager
+          .del(`product-metrics:${existing.product_id}`)
+          .catch(() => {});
+      }
+
+      this.logger.log(
+        `Subscription ${subscription.id} deleted (scheduled downgrade pending) — scheduler will complete transition`,
+      );
+      return;
+    }
 
     // Update subscription status — critical write, must succeed
     const { error: updateError } = await ctx.supabase
@@ -95,7 +139,8 @@ export class SubscriptionDeletedHandler
         status: 'canceled',
         canceled_at: new Date().toISOString(),
       })
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .eq('organization_id', existing.organization_id);
 
     if (updateError) {
       throw new Error(

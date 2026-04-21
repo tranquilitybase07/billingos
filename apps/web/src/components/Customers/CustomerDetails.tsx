@@ -345,7 +345,18 @@ export function CustomerDetails({ customer, organizationId, variant: _variant = 
                       <DataTableColumnHeader column={column} title="Status" />
                     ),
                     cell: ({ row: { original: sub } }) => (
-                      <SubscriptionStatus status={sub.status} />
+                      <div className="flex items-center gap-1.5">
+                        <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} />
+                        {sub.pending_downgrade && (
+                          <PendingChangeBadge
+                            variant="compact"
+                            newPlanName={sub.pending_downgrade.newProductName}
+                            scheduledFor={sub.pending_downgrade.scheduledFor}
+                            newAmount={sub.pending_downgrade.newAmount}
+                            newCurrency={sub.currency}
+                          />
+                        )}
+                      </div>
                     ),
                   },
                   {

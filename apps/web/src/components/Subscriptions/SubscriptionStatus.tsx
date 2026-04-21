@@ -7,6 +7,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     label: 'Active',
     className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
   },
+  cancelling: {
+    label: 'Cancelling',
+    className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400',
+  },
   trialing: {
     label: 'Trialing',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
@@ -29,8 +33,12 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   },
 }
 
-export const SubscriptionStatus = ({ status }: { status: string }) => {
-  const config = statusConfig[status] ?? {
+export const SubscriptionStatus = ({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) => {
+  const effectiveStatus =
+    (status === 'active' || status === 'trialing') && cancelAtPeriodEnd
+      ? 'cancelling'
+      : status
+  const config = statusConfig[effectiveStatus] ?? {
     label: status,
     className: 'bg-gray-100 text-gray-700',
   }

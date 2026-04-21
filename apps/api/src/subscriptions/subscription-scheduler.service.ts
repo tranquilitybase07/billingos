@@ -3,6 +3,25 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
 import { EntitlementService } from '../billing/entitlements/entitlement.service';
+import type { Database } from '../../../../packages/shared/types/database';
+
+type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row'];
+type ProductPriceRow = Database['public']['Tables']['product_prices']['Row'];
+type SubscriptionChangeRow =
+  Database['public']['Tables']['subscription_changes']['Row'];
+
+type ScheduledChange = SubscriptionChangeRow & {
+  subscription:
+    | (SubscriptionRow & {
+        customer: {
+          id: string;
+          stripe_customer_id: string | null;
+          organization_id: string;
+        } | null;
+      })
+    | null;
+  to_price: ProductPriceRow | null;
+};
 
 @Injectable()
 export class SubscriptionSchedulerService {
@@ -22,9 +41,6 @@ export class SubscriptionSchedulerService {
   async processScheduledChanges() {
     // Prevent concurrent execution
     if (this.isProcessing) {
-      this.logger.log(
-        'Skipping scheduled changes processing - already running',
-      );
       return;
     }
 
@@ -77,12 +93,12 @@ export class SubscriptionSchedulerService {
     }
 
     if (scheduledChanges.length === 0) {
-      return; // Nothing to process
+      return;
     }
 
     this.logger.log(`Processing ${scheduledChanges.length} scheduled changes`);
 
-    for (const change of scheduledChanges) {
+    for (const change of scheduledChanges as unknown as ScheduledChange[]) {
       try {
         await this.executeDowngrade(change);
       } catch (error) {
@@ -107,7 +123,7 @@ export class SubscriptionSchedulerService {
   /**
    * Execute a single scheduled downgrade
    */
-  private async executeDowngrade(change: any) {
+  private async executeDowngrade(change: ScheduledChange) {
     const supabase = this.supabaseService.getClient();
     const { subscription, to_price: newPrice } = change;
 
@@ -153,13 +169,11 @@ export class SubscriptionSchedulerService {
     }
 
     // Get organization's Stripe account and currency
-    const { data: orgRaw } = await supabase
+    const { data: org } = await supabase
       .from('organizations')
       .select('account_id, default_currency')
-      .eq('id', subscription.customer.organization_id)
+      .eq('id', subscription.organization_id)
       .single();
-
-    const org = orgRaw as any;
 
     const { data: account } = await supabase
       .from('accounts')
@@ -167,22 +181,72 @@ export class SubscriptionSchedulerService {
       .eq('id', org?.account_id || '')
       .single();
 
-    // Update Stripe subscription price if it exists
+    // Update Stripe subscription price if it exists (paid→paid downgrade)
     if (
       subscription.stripe_subscription_id &&
       newPrice.stripe_price_id &&
       account?.stripe_id
     ) {
       try {
+        // Detect interval change (yearly→monthly, etc.)
+        let intervalChanged = false;
+        if (subscription.price_id) {
+          const { data: oldPrice } = await supabase
+            .from('product_prices')
+            .select('recurring_interval')
+            .eq('id', subscription.price_id)
+            .eq('organization_id', subscription.organization_id)
+            .single();
+
+          if (
+            oldPrice &&
+            oldPrice.recurring_interval !== newPrice.recurring_interval
+          ) {
+            intervalChanged = true;
+            this.logger.log(
+              `Interval change detected: ${oldPrice.recurring_interval} → ${newPrice.recurring_interval}`,
+            );
+          }
+        }
+
         await this.stripeService.updateSubscriptionPrice(
           subscription.stripe_subscription_id,
           newPrice.stripe_price_id,
           account.stripe_id,
-          { prorationBehavior: 'none' },
+          {
+            prorationBehavior: 'none',
+            billingCycleAnchor: intervalChanged ? 'now' : 'unchanged',
+          },
         );
-      } catch (stripeError: any) {
+      } catch (stripeError) {
         this.logger.error('Failed to update Stripe subscription:', stripeError);
-        throw new Error(`Stripe update failed: ${stripeError.message}`);
+        const msg =
+          stripeError instanceof Error ? stripeError.message : 'unknown';
+        throw new Error(`Stripe update failed: ${msg}`);
+      }
+    }
+
+    // Downgrading to free product — cancel Stripe subscription immediately
+    // (the billing period has already ended at this point)
+    if (
+      subscription.stripe_subscription_id &&
+      !newPrice.stripe_price_id &&
+      account?.stripe_id
+    ) {
+      try {
+        await this.stripeService.cancelSubscription(
+          subscription.stripe_subscription_id,
+          account.stripe_id,
+          false, // immediate cancel — period already ended
+        );
+      } catch (stripeError) {
+        this.logger.error(
+          'Failed to cancel Stripe subscription for free downgrade:',
+          stripeError,
+        );
+        const msg =
+          stripeError instanceof Error ? stripeError.message : 'unknown';
+        throw new Error(`Stripe cancellation failed: ${msg}`);
       }
     }
 
@@ -194,6 +258,10 @@ export class SubscriptionSchedulerService {
         price_id: newPrice.id,
         amount: newPrice.price_amount || 0,
         currency: newPrice.price_currency || org?.default_currency || 'usd',
+        // Clear Stripe link when downgrading to free
+        stripe_subscription_id: newPrice.stripe_price_id
+          ? subscription.stripe_subscription_id
+          : null,
         updated_at: new Date().toISOString(),
         metadata: {
           ...((subscription.metadata ?? {}) as Record<string, unknown>),
@@ -202,7 +270,8 @@ export class SubscriptionSchedulerService {
           downgradeMethod: 'scheduled',
         },
       })
-      .eq('id', subscription.id);
+      .eq('id', subscription.id)
+      .eq('organization_id', subscription.organization_id);
 
     if (subUpdateError) {
       throw new Error('Failed to update subscription in database');

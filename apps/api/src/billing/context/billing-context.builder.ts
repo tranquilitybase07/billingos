@@ -40,8 +40,6 @@ export class BillingContextBuilder {
     externalUserId: string,
     dto: CreateCheckoutDto,
   ): Promise<BillingContext> {
-    const supabase = this.supabaseService.getClient();
-
     // 1. Resolve organization + Stripe account
     const organization = await this.resolveOrganization(organizationId);
 
@@ -76,28 +74,53 @@ export class BillingContextBuilder {
       product.id,
       price.amount,
       dto.existingSubscriptionId,
+      organization.stripeAccountId,
     );
 
-    // 6. Determine if in-place upgrade (existing paid Stripe sub + new paid price)
+    // 6. Determine if in-place upgrade (existing Stripe sub + new paid price)
     const isInPlaceUpgrade =
       transition !== null &&
       transition.type === 'upgrade' &&
       !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
-    // 6b. Determine if in-place downgrade (existing paid Stripe sub + new lower price)
+    // 6a. Trial upgrade: in-place upgrade from a trialing subscription
+    const isTrialUpgrade =
+      isInPlaceUpgrade && transition.oldSubscription.status === 'trialing';
+
+    // 6a2. Trial-to-trial: upgrading from trial AND new product also has a trial period.
+    //      Grants a fresh trial on the new plan instead of ending trial + charging.
+    const isTrialToTrialUpgrade =
+      isTrialUpgrade && (product.trialDays || 0) > 0;
+
+    // 6b. Trial-to-trial downgrade: old sub is trialing AND new product also has a trial period.
+    //     Grants a fresh trial on the new (lower) plan — same pattern as isTrialToTrialUpgrade.
+    const isTrialToTrialDowngrade =
+      transition !== null &&
+      transition.type === 'downgrade' &&
+      transition.oldSubscription.status === 'trialing' &&
+      (product.trialDays || 0) > 0 &&
+      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
+
+    // 6c. Determine if in-place downgrade (existing Stripe sub + new lower price).
+    //     Non-trialing subs always route here. A trialing sub routes here only
+    //     when downgrading to a free product — otherwise isTrialToTrialDowngrade
+    //     (paid→paid trial) claims it above. Without this, trialing→free would
+    //     fall through to free_activation and orphan the Stripe trial sub.
     const isInPlaceDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
-      !isFreeProduct &&
-      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
+      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
+      (transition.oldSubscription.status !== 'trialing' || isFreeProduct) &&
+      !isTrialToTrialDowngrade;
 
     // 7. Determine trial eligibility (trial product + no transition)
     const isTrialEligible = (product.trialDays || 0) > 0 && transition === null;
 
-    // 8. Determine adaptive pricing (disabled for in-place upgrades and downgrades)
-    const isAdaptivePricing =
-      dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
+    // 8. Adaptive pricing bypassed for MVP
+    const isAdaptivePricing = false;
+    // const isAdaptivePricing =
+    //   dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
 
     // 9. Fetch product features for display
     const features = await this.resolveProductFeatures(product.id);
@@ -123,7 +146,10 @@ export class BillingContextBuilder {
       isTrialEligible,
       isAdaptivePricing,
       isInPlaceUpgrade,
+      isTrialUpgrade,
+      isTrialToTrialUpgrade,
       isInPlaceDowngrade,
+      isTrialToTrialDowngrade,
       metadata: dto.metadata || {},
     };
   }

@@ -18,6 +18,7 @@ export interface EnrichedCustomer {
   subscriptionStatus: Subscription["status"] | null;
   mrr: number;
   churnRisk: "Low" | "Medium" | "High" | "Churned" | "N/A";
+  cancelAtPeriodEnd: boolean;
   primarySubscriptionId: string | null;
   subscriptions: Subscription[];
   pendingDowngrade: {
