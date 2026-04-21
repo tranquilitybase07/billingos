@@ -429,7 +429,8 @@ export class BosPlanExecutor {
           upgradeMethod: 'in_place',
         } as Json,
       })
-      .eq('id', sub.existingBosSubId);
+      .eq('id', sub.existingBosSubId)
+      .eq('organization_id', ctx.organization.id);
 
     if (updateError) {
       this.logger.error(
@@ -454,7 +455,8 @@ export class BosPlanExecutor {
         updated_at: new Date().toISOString(),
       })
       .eq('subscription_id', sub.existingBosSubId)
-      .eq('status', 'scheduled');
+      .eq('status', 'scheduled')
+      .eq('organization_id', ctx.organization.id);
 
     // Create / update checkout session for tracking
     const prorationInvoiceId = result.prorationInvoice?.id;
@@ -613,7 +615,8 @@ export class BosPlanExecutor {
         updated_at: new Date().toISOString(),
       })
       .eq('subscription_id', sub.existingBosSubId)
-      .eq('status', 'scheduled');
+      .eq('status', 'scheduled')
+      .eq('organization_id', ctx.organization.id);
 
     // Insert new scheduled downgrade
     const { error: insertError } = await supabase

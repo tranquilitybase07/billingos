@@ -20,6 +20,14 @@ import {
   extractPeriodStart,
   extractPeriodEnd,
 } from '../../utils/period-end.helper';
+import type { Database } from '../../../../../../packages/shared/types/database';
+
+type PaymentIntentRow = Database['public']['Tables']['payment_intents']['Row'];
+type CheckoutSessionRow =
+  Database['public']['Tables']['checkout_sessions']['Row'];
+type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row'];
+type SubscriptionUpdate =
+  Database['public']['Tables']['subscriptions']['Update'];
 
 /**
  * Handles `payment_intent.succeeded` webhook events.
@@ -209,17 +217,19 @@ export class PaymentIntentSucceededHandler
   private async handleDirectSubscriptionPaymentSuccess(
     ctx: WebhookContext,
     paymentIntent: Stripe.PaymentIntent,
-    paymentIntentRecord: any,
-    checkoutSession: any,
+    paymentIntentRecord: PaymentIntentRow,
+    checkoutSession: CheckoutSessionRow | null,
     stripeSubscriptionId: string,
   ): Promise<void> {
     const supabase = ctx.supabase;
     const metadata = paymentIntent.metadata || {};
-    const checkoutMetadata = checkoutSession?.metadata;
+    const checkoutMetadata =
+      (checkoutSession?.metadata as Record<string, unknown> | null) || null;
     const organizationId = metadata.organizationId;
     const productId = metadata.productId;
     const priceId = metadata.priceId;
-    const customerId = metadata.customerId || paymentIntentRecord.customer_id;
+    const customerId =
+      metadata.customerId || (paymentIntentRecord.customer_id ?? undefined);
 
     this.logger.log(
       `Direct subscription flow: updating subscription ${stripeSubscriptionId} to active`,
@@ -228,23 +238,36 @@ export class PaymentIntentSucceededHandler
     // Get the Stripe account ID
     const stripeAccountId =
       paymentIntentRecord.stripe_account_id ||
-      checkoutMetadata?.stripeAccountId;
+      (checkoutMetadata?.stripeAccountId as string | undefined);
+
+    if (!customerId || !organizationId || !productId || !priceId) {
+      this.logger.error(
+        `Missing required identifiers for PI ${paymentIntent.id} ` +
+          `(customerId=${customerId}, organizationId=${organizationId}, ` +
+          `productId=${productId}, priceId=${priceId}) — aborting`,
+      );
+      return;
+    }
+    if (!stripeAccountId) {
+      this.logger.error(
+        `Missing stripeAccountId for PI ${paymentIntent.id} — aborting`,
+      );
+      return;
+    }
 
     // Fetch the updated subscription from Stripe to get current status and period data
     let stripeSubscription: Stripe.Subscription | null = null;
-    if (stripeAccountId) {
-      try {
-        stripeSubscription = await this.stripeService
-          .getClient()
-          .subscriptions.retrieve(stripeSubscriptionId, {
-            stripeAccount: stripeAccountId,
-          });
-      } catch (e) {
-        this.logger.warn(
-          `Could not fetch subscription ${stripeSubscriptionId} from Stripe:`,
-          e,
-        );
-      }
+    try {
+      stripeSubscription = await this.stripeService
+        .getClient()
+        .subscriptions.retrieve(stripeSubscriptionId, {
+          stripeAccount: stripeAccountId,
+        });
+    } catch (e) {
+      this.logger.warn(
+        `Could not fetch subscription ${stripeSubscriptionId} from Stripe:`,
+        e,
+      );
     }
 
     // Find existing subscription record in our DB
@@ -255,36 +278,31 @@ export class PaymentIntentSucceededHandler
       .single();
 
     // Build update data from Stripe subscription (or use defaults)
-    const subData = stripeSubscription as any;
     const newStatus = stripeSubscription?.status || 'active';
-    const updateData: any = {
+    const updateData: SubscriptionUpdate = {
       status: newStatus,
       payment_intent_id: paymentIntentRecord.id,
       updated_at: new Date().toISOString(),
     };
 
-    if (subData?.current_period_start) {
-      updateData.current_period_start = new Date(
-        subData.current_period_start * 1000,
-      ).toISOString();
-    }
-    if (subData?.current_period_end) {
-      updateData.current_period_end = new Date(
-        subData.current_period_end * 1000,
-      ).toISOString();
+    if (stripeSubscription) {
+      updateData.current_period_start = extractPeriodStart(stripeSubscription);
+      updateData.current_period_end = extractPeriodEnd(stripeSubscription);
     }
 
     // Apply discount info from checkout metadata
     if (checkoutMetadata?.appliedDiscountId) {
-      updateData.discount_id = checkoutMetadata.appliedDiscountId;
+      updateData.discount_id = checkoutMetadata.appliedDiscountId as string;
       updateData.discount_amount = checkoutMetadata.discountAmount
         ? parseInt(String(checkoutMetadata.discountAmount), 10)
         : null;
-      updateData.discount_code = checkoutMetadata.appliedDiscountCode || null;
+      updateData.discount_code =
+        (checkoutMetadata.appliedDiscountCode as string | null) || null;
     }
 
     // Update metadata
-    const existingMeta = (existingSubscription?.metadata as any) || {};
+    const existingMeta =
+      (existingSubscription?.metadata as Record<string, unknown> | null) || {};
     updateData.metadata = {
       ...existingMeta,
       payment_intent_id: paymentIntentRecord.id,
@@ -292,15 +310,19 @@ export class PaymentIntentSucceededHandler
     };
 
     // -- HANDLE UPGRADE/DOWNGRADE BEFORE creating/updating subscription --
+    const stripeSubMeta = (stripeSubscription?.metadata ?? {}) as Record<
+      string,
+      unknown
+    >;
     const existingSubId =
-      checkoutMetadata?.existingSubscriptionId ||
-      (stripeSubscription as any)?.metadata?.existingSubscriptionId ||
+      (checkoutMetadata?.existingSubscriptionId as string | undefined) ||
+      (stripeSubMeta.existingSubscriptionId as string | undefined) ||
       null;
 
     if (existingSubId) {
       const newAmount = paymentIntentRecord.amount || 0;
       await this.transitionService.handleTransition(
-        existingSubId as string,
+        existingSubId,
         stripeAccountId,
         newAmount,
         checkoutSession?.id,
@@ -308,7 +330,7 @@ export class PaymentIntentSucceededHandler
     }
 
     // -- NOW create/update subscription in DB --
-    let subscription: any;
+    let subscription: SubscriptionRow | null = null;
 
     if (existingSubscription) {
       // Update existing subscription record
@@ -370,6 +392,13 @@ export class PaymentIntentSucceededHandler
       subscription = data;
     }
 
+    if (!subscription) {
+      this.logger.error(
+        `No subscription resolved for PI ${paymentIntent.id} — aborting grant/update`,
+      );
+      return;
+    }
+
     // Invalidate product revenue metrics cache
     const cacheKey = `product-metrics:${productId}`;
     await this.cacheManager.del(cacheKey);
@@ -393,7 +422,7 @@ export class PaymentIntentSucceededHandler
     // Best-effort: populate customer country from card
     const directPmRaw = paymentIntent.payment_method;
     const directPmId =
-      typeof directPmRaw === 'string' ? directPmRaw : (directPmRaw as any)?.id;
+      typeof directPmRaw === 'string' ? directPmRaw : directPmRaw?.id;
     this.logger.log(
       `[CardCountry] direct-sub path -- customerId=${customerId}, ` +
         `payment_method=${JSON.stringify(directPmRaw)}, pmId=${directPmId}, ` +
@@ -418,8 +447,8 @@ export class PaymentIntentSucceededHandler
   private async handleLegacyPaymentIntentSuccess(
     ctx: WebhookContext,
     paymentIntent: Stripe.PaymentIntent,
-    paymentIntentRecord: any,
-    checkoutSession: any,
+    paymentIntentRecord: PaymentIntentRow,
+    checkoutSession: CheckoutSessionRow | null,
   ): Promise<void> {
     const supabase = ctx.supabase;
     const metadata = paymentIntent.metadata || {};
@@ -753,8 +782,8 @@ export class PaymentIntentSucceededHandler
       },
     };
 
-    let subscription: any;
-    let subError: any;
+    let subscription: SubscriptionRow | null = null;
+    let subError: { message: string } | null = null;
 
     if (reactivatedSubscriptionId) {
       const { data, error } = await supabase
@@ -783,12 +812,12 @@ export class PaymentIntentSucceededHandler
       subError = error;
     }
 
-    if (subError) {
+    if (subError || !subscription) {
       this.logger.error('Failed to save subscription:', subError);
       await this.refundService.refundPaymentOnFailure({
         paymentIntentId: paymentIntent.id,
         stripeAccountId,
-        reason: `subscription_creation_failed: ${subError.message}`,
+        reason: `subscription_creation_failed: ${subError?.message ?? 'unknown'}`,
       });
       try {
         await this.stripeService.cancelSubscription(
