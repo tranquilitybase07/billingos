@@ -60,7 +60,7 @@ export interface RunUpgradeParams {
  *
  * This service walks the steps manually so we can classify the result and
  * either roll back the item swap (decline) or hand the customer a hosted URL
- * (SCA). Modeled after Autumn V1's upgrade orchestration.
+ * (SCA).
  */
 @Injectable()
 export class ProrationInvoiceService {

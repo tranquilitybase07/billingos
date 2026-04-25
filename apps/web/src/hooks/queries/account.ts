@@ -75,6 +75,15 @@ export function useGetDashboardLink(accountId: string) {
   })
 }
 
+// Start Stripe Connect OAuth flow. Returns the authorize URL the caller
+// should redirect the browser to.
+export function useGetOAuthUrl() {
+  return useMutation({
+    mutationFn: (data: { organization_id: string }) =>
+      api.post<{ url: string }>('/accounts/oauth/authorize', data),
+  })
+}
+
 // Sync Account from Stripe
 export function useSyncAccount(accountId: string) {
   const queryClient = useQueryClient()
@@ -86,6 +95,25 @@ export function useSyncAccount(accountId: string) {
       // Also invalidate organization payment status
       queryClient.invalidateQueries({
         queryKey: organizationKeys.paymentStatus(accountId),
+      })
+    },
+  })
+}
+
+// Disconnect a Stripe account from its organization. The user lands back in
+// State C (no account) and can pick a fresh connection mode.
+export function useDisconnectAccount(organizationId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (accountId: string) =>
+      api.delete<{ success: true }>(`/accounts/${accountId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: accountKeys.byOrganization(organizationId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: organizationKeys.paymentStatus(organizationId),
       })
     },
   })

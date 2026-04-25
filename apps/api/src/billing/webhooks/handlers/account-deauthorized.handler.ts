@@ -39,7 +39,10 @@ export class AccountDeauthorizedHandler
 
       const supabase = ctx.supabase;
 
-      // Update account status to blocked
+      // Update account status to blocked. Use maybeSingle() because the row
+      // may already be soft-deleted if the merchant clicked our own Disconnect
+      // (in which case Stripe fires this webhook as confirmation), or if the
+      // account was never tracked in BOS — both are no-ops, not errors.
       const { data, error } = await supabase
         .from('accounts')
         .update({
@@ -47,13 +50,21 @@ export class AccountDeauthorizedHandler
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_id', accountId)
+        .is('deleted_at', null)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
         this.logger.error(
           `Failed to update deauthorized account ${accountId}:`,
           error,
+        );
+        return;
+      }
+
+      if (!data) {
+        this.logger.log(
+          `Deauthorize webhook for ${accountId}: no active account row — already disconnected from BOS, skipping`,
         );
         return;
       }

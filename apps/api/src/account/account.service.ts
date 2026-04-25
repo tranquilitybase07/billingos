@@ -7,20 +7,25 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { RedisService } from '../redis/redis.service';
 import { User } from '../user/entities/user.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
-import { Account } from './entities/account.entity';
+import { GetOAuthUrlDto } from './dto/connect-oauth.dto';
+import { Account, STRIPE_CONNECTION_TYPE } from './entities/account.entity';
 import { getCurrencyForCountry } from '../common/constants/currencies';
 
 @Injectable()
 export class AccountService {
   private readonly logger = new Logger(AccountService.name);
+  private static readonly OAUTH_STATE_TTL_SECONDS = 600;
 
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -30,42 +35,10 @@ export class AccountService {
   async create(user: User, createDto: CreateAccountDto): Promise<Account> {
     const supabase = this.supabaseService.getClient();
 
-    // Verify organization exists and user is a member
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
-      .select('id, account_id')
-      .eq('id', createDto.organization_id)
-      .is('deleted_at', null)
-      .single();
-
-    if (orgError || !org) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    // Check if organization already has an account
-    if (org.account_id) {
-      throw new ConflictException('Organization already has a Stripe account');
-    }
-
-    // Verify user is a member of the organization
-    const { data: membership } = await supabase
-      .from('user_organizations')
-      .select('user_id')
-      .eq('organization_id', createDto.organization_id)
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .single();
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this organization');
-    }
-
-    // Fetch org name for auto-creation metadata
-    const { data: orgData } = await supabase
-      .from('organizations')
-      .select('name')
-      .eq('id', createDto.organization_id)
-      .single();
+    const org = await this.verifyOrgConnectAccess(
+      createDto.organization_id,
+      user.id,
+    );
 
     try {
       // Use smart creation: auto-verifies in sandbox, normal flow in production
@@ -74,7 +47,7 @@ export class AccountService {
           email: createDto.email,
           country: createDto.country,
           businessType: createDto.business_type as any,
-          organizationName: orgData?.name,
+          organizationName: org.name,
         });
 
       // Auto-created sandbox accounts are immediately active
@@ -284,6 +257,12 @@ export class AccountService {
       throw new BadRequestException('Account does not have a Stripe ID');
     }
 
+    if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {
+      throw new BadRequestException(
+        'OAuth-connected accounts do not require onboarding',
+      );
+    }
+
     const appUrl =
       this.configService.get<string>('APP_URL') || 'http://localhost:3000';
 
@@ -331,6 +310,12 @@ export class AccountService {
 
     if (!account.stripe_id) {
       throw new BadRequestException('Account does not have a Stripe ID');
+    }
+
+    // Standard (OAuth) accounts use the merchant's own Stripe dashboard;
+    // Express login links only work for platform-created Express accounts.
+    if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {
+      return { url: 'https://dashboard.stripe.com' };
     }
 
     try {
@@ -403,5 +388,414 @@ export class AccountService {
       this.logger.error('Error syncing account from Stripe:', error);
       throw new BadRequestException('Failed to sync account from Stripe');
     }
+  }
+
+  /**
+   * Disconnect a Stripe account from its organization. Standard (OAuth)
+   * accounts are deauthorized; Express accounts are deleted on Stripe.
+   * Always soft-deletes the BOS row and unlinks the organization so the
+   * user can choose a fresh connection mode.
+   *
+   * Restricted to the original account creator (admin_id). Refuses if
+   * any active subscriptions exist on the org — those would lose their
+   * Stripe-side billing relationship.
+   */
+  async disconnect(
+    accountId: string,
+    userId: string,
+  ): Promise<{ success: true }> {
+    const account = await this.findOne(accountId, userId);
+
+    if (account.admin_id !== userId) {
+      throw new ForbiddenException(
+        'Only the account admin can disconnect Stripe',
+      );
+    }
+
+    if (!account.stripe_id) {
+      throw new BadRequestException('Account has no Stripe ID to disconnect');
+    }
+
+    const supabase = this.supabaseService.getClient();
+
+    // Resolve the linked org so we can audit-log and check active subs.
+    const { data: linkedOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('account_id', accountId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!linkedOrg) {
+      throw new NotFoundException('Linked organization not found');
+    }
+
+    // Block disconnect when active subscriptions exist — these would lose
+    // their Stripe-side billing relationship and orphan customer payments.
+    const { count: activeSubs } = await supabase
+      .from('subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', linkedOrg.id)
+      .in('status', ['active', 'trialing', 'past_due']);
+
+    if ((activeSubs ?? 0) > 0) {
+      throw new BadRequestException(
+        `Cannot disconnect: ${activeSubs} active subscription(s) on this account. Cancel or migrate them first.`,
+      );
+    }
+
+    let stripeError: Error | null = null;
+    try {
+      if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {
+        await this.stripeService.deauthorizeOAuthAccount(account.stripe_id);
+      } else {
+        await this.stripeService.deleteConnectAccount(account.stripe_id);
+      }
+    } catch (err) {
+      stripeError = err instanceof Error ? err : new Error(String(err));
+      // Stripe-side cleanup failed (already revoked, network blip). Log to
+      // sync events so the failure is auditable, then continue with BOS
+      // cleanup so the user isn't permanently stuck.
+      this.logger.warn(
+        `Stripe-side disconnect failed for ${account.stripe_id} (continuing):`,
+        err,
+      );
+      await this.logSyncEvent({
+        organizationId: linkedOrg.id,
+        entityId: account.id,
+        stripeObjectId: account.stripe_id,
+        operation: 'delete',
+        status: 'failure',
+        errorMessage: stripeError.message,
+        triggeredBy: userId,
+      });
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: orgErr } = await supabase
+      .from('organizations')
+      .update({
+        account_id: null,
+        status: 'created',
+        status_updated_at: now,
+      })
+      .eq('account_id', accountId);
+
+    if (orgErr) {
+      this.logger.error('Failed to unlink org during disconnect:', orgErr);
+      throw new BadRequestException(
+        'Failed to unlink account from organization',
+      );
+    }
+
+    const { error: acctErr } = await supabase
+      .from('accounts')
+      .update({ deleted_at: now })
+      .eq('id', accountId);
+
+    if (acctErr) {
+      this.logger.error('Failed to soft-delete account row:', acctErr);
+      throw new BadRequestException('Failed to remove account record');
+    }
+
+    if (!stripeError) {
+      await this.logSyncEvent({
+        organizationId: linkedOrg.id,
+        entityId: account.id,
+        stripeObjectId: account.stripe_id,
+        operation: 'delete',
+        status: 'success',
+        triggeredBy: userId,
+      });
+    }
+
+    this.logger.log(
+      `Disconnected account ${accountId} (stripe=${account.stripe_id}, type=${account.stripe_connection_type}) for user ${userId}`,
+    );
+
+    return { success: true };
+  }
+
+  /**
+   * Start the Stripe Connect OAuth flow for an organization.
+   * Generates a state token, stores it in Redis, and returns the authorize URL.
+   */
+  async getOAuthUrl(
+    dto: GetOAuthUrlDto,
+    userId: string,
+  ): Promise<{ url: string }> {
+    await this.verifyOrgConnectAccess(dto.organization_id, userId);
+
+    const clientId = this.configService.get<string>('STRIPE_CLIENT_ID');
+    if (!clientId) {
+      throw new BadRequestException('STRIPE_CLIENT_ID is not configured');
+    }
+
+    const apiUrl =
+      this.configService.get<string>('API_URL') || 'http://localhost:3001';
+    const redirectUri = `${apiUrl}/accounts/oauth/callback`;
+
+    const state = randomUUID();
+    await this.redisService.set(
+      `oauth:state:${state}`,
+      JSON.stringify({
+        organization_id: dto.organization_id,
+        user_id: userId,
+      }),
+      AccountService.OAUTH_STATE_TTL_SECONDS,
+    );
+
+    const url = this.stripeService.getOAuthAuthorizeUrl({
+      clientId,
+      state,
+      redirectUri,
+    });
+
+    return { url };
+  }
+
+  /**
+   * Handle the OAuth callback from Stripe. Exchanges the code for a connected
+   * account, persists it to BOS, and returns the organization slug for redirect.
+   */
+  async handleOAuthCallback({
+    code,
+    state,
+  }: {
+    code: string;
+    state: string;
+  }): Promise<{ organizationSlug: string }> {
+    const stateKey = `oauth:state:${state}`;
+    const raw = await this.redisService.get(stateKey);
+    if (!raw) {
+      throw new BadRequestException('state_expired');
+    }
+    // One-time use
+    await this.redisService.delete(stateKey);
+
+    let parsed: { organization_id: string; user_id: string };
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new BadRequestException('invalid_state');
+    }
+
+    // Re-verify org + membership + no existing account (guards against
+    // state replay after the org was modified between authorize + callback).
+    const org = await this.verifyOrgConnectAccess(
+      parsed.organization_id,
+      parsed.user_id,
+    );
+
+    const supabase = this.supabaseService.getClient();
+
+    // Exchange the authorization code for the connected Stripe account.
+    const { stripeUserId } = await this.stripeService.exchangeOAuthCode(code);
+
+    // Dedup: the same Stripe account cannot be connected to multiple BOS orgs.
+    const { data: existing } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('stripe_id', stripeUserId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (existing) {
+      // Revert the Stripe-side authorization so the user can retry with a
+      // different account.
+      await this.safeDeauthorize(stripeUserId);
+      await this.logSyncEvent({
+        organizationId: org.id,
+        entityId: existing.id,
+        stripeObjectId: stripeUserId,
+        operation: 'create',
+        status: 'failure',
+        errorMessage: 'account_already_connected',
+        triggeredBy: parsed.user_id,
+      });
+      throw new ConflictException('account_already_connected');
+    }
+
+    try {
+      const stripeAccount =
+        await this.stripeService.getConnectAccount(stripeUserId);
+
+      const chargesEnabled = stripeAccount.charges_enabled ?? false;
+      const payoutsEnabled = stripeAccount.payouts_enabled ?? false;
+      const isActive = chargesEnabled && payoutsEnabled;
+
+      const { data: account, error: insertError } = await supabase
+        .from('accounts')
+        .insert({
+          account_type: 'stripe',
+          admin_id: parsed.user_id,
+          stripe_id: stripeUserId,
+          stripe_connection_type: STRIPE_CONNECTION_TYPE.STANDARD,
+          oauth_stripe_user_id: stripeUserId,
+          email: stripeAccount.email || null,
+          country: stripeAccount.country || 'US',
+          currency: stripeAccount.default_currency || null,
+          is_details_submitted: stripeAccount.details_submitted ?? false,
+          is_charges_enabled: chargesEnabled,
+          is_payouts_enabled: payoutsEnabled,
+          business_type: stripeAccount.business_type || null,
+          status: isActive ? 'active' : 'onboarding_started',
+          auto_created: false,
+          test_mode: this.stripeService.isTestMode(),
+          data: stripeAccount as any,
+          platform_fee_percent:
+            this.configService.get<number>('PLATFORM_FEE_PERCENT') || 60,
+          platform_fee_fixed:
+            this.configService.get<number>('PLATFORM_FEE_FIXED') || 10,
+        })
+        .select()
+        .single();
+
+      if (insertError || !account) {
+        this.logger.error('Failed to insert OAuth account:', insertError);
+        throw new Error('Failed to insert account');
+      }
+
+      const { error: updateError } = await supabase
+        .from('organizations')
+        .update({
+          account_id: account.id,
+          status: isActive ? 'active' : 'onboarding_started',
+          status_updated_at: new Date().toISOString(),
+          default_currency: getCurrencyForCountry(
+            stripeAccount.country || 'US',
+          ),
+        })
+        .eq('id', org.id);
+
+      if (updateError) {
+        // Roll back the account row and Stripe authorization.
+        await supabase.from('accounts').delete().eq('id', account.id);
+        throw new Error('Failed to link account to organization');
+      }
+
+      this.logger.log(
+        `OAuth Stripe account connected: ${account.id} (stripe=${stripeUserId}) for organization ${org.id}`,
+      );
+
+      await this.logSyncEvent({
+        organizationId: org.id,
+        entityId: account.id,
+        stripeObjectId: stripeUserId,
+        operation: 'create',
+        status: 'success',
+        triggeredBy: parsed.user_id,
+      });
+
+      return { organizationSlug: org.slug };
+    } catch (error) {
+      this.logger.error('OAuth callback failed; deauthorizing:', error);
+      await this.safeDeauthorize(stripeUserId);
+      await this.logSyncEvent({
+        organizationId: org.id,
+        entityId: stripeUserId, // BOS account row never persisted; use stripe id as entity ref
+        stripeObjectId: stripeUserId,
+        operation: 'create',
+        status: 'failure',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        triggeredBy: parsed.user_id,
+      });
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException('oauth_connect_failed');
+    }
+  }
+
+  /**
+   * Append an entry to stripe_sync_events for audit. Failures here never
+   * propagate — audit logging must not break the primary operation.
+   */
+  private async logSyncEvent(params: {
+    organizationId: string;
+    entityId: string;
+    stripeObjectId: string | null;
+    operation: 'create' | 'update' | 'delete' | 'backfill' | 'webhook';
+    status: 'success' | 'failure' | 'partial';
+    errorMessage?: string;
+    triggeredBy?: string;
+  }): Promise<void> {
+    try {
+      const supabase = this.supabaseService.getClient();
+      await supabase.from('stripe_sync_events').insert({
+        organization_id: params.organizationId,
+        entity_type: 'account',
+        entity_id: params.entityId,
+        stripe_object_id: params.stripeObjectId,
+        operation: params.operation,
+        status: params.status,
+        error_message: params.errorMessage,
+        triggered_by: params.triggeredBy ?? 'api',
+      });
+    } catch (err) {
+      this.logger.error('Failed to log stripe_sync_events row:', err);
+    }
+  }
+
+  private async safeDeauthorize(stripeUserId: string): Promise<void> {
+    try {
+      await this.stripeService.deauthorizeOAuthAccount(stripeUserId);
+    } catch (err) {
+      this.logger.error(
+        `Failed to deauthorize ${stripeUserId} (continuing):`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Verify the org exists, has no Stripe account yet, and the user is a member.
+   * Used by every Connect entry point (Express create + OAuth authorize/callback).
+   */
+  private async verifyOrgConnectAccess(
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    id: string;
+    account_id: string | null;
+    slug: string;
+    name: string;
+  }> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: org, error } = await supabase
+      .from('organizations')
+      .select('id, account_id, slug, name')
+      .eq('id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (error || !org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (org.account_id) {
+      throw new ConflictException('Organization already has a Stripe account');
+    }
+
+    const { data: membership } = await supabase
+      .from('user_organizations')
+      .select('user_id')
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this organization');
+    }
+
+    return org;
   }
 }

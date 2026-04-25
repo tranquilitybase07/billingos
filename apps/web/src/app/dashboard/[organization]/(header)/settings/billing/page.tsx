@@ -1,15 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import {
   usePaymentStatus,
   useSubmitBusinessDetails,
 } from '@/hooks/queries/organization'
 import {
+  accountKeys,
   useAccountByOrganization,
   useCreateAccount,
+  useDisconnectAccount,
+  useGetOAuthUrl,
 } from '@/hooks/queries/account'
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,15 +35,25 @@ import {
   Loading03Icon,
   ArrowUpRight01Icon,
   CreditCardIcon,
+  ConnectIcon,
 } from 'hugeicons-react'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { SettingsTabNav } from '../_components/SettingsTabNav'
 import { InfoRow } from './_components/InfoRow'
 import { CurrencySelector } from './_components/CurrencySelector'
+import { DisconnectAccountDialog } from './_components/DisconnectAccountDialog'
+
+type ConnectMode = 'managed' | 'oauth'
 
 export default function BillingPage() {
   const { organization } = useOrganization()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const oauthHandledRef = useRef(false)
   const [businessDetails, setBusinessDetails] = useState({
     business_name: organization.name,
     country: (organization.details as Record<string, string>)?.country || 'US',
@@ -47,11 +61,33 @@ export default function BillingPage() {
     product_description: '',
     intended_use: '',
   })
+  const [connectMode, setConnectMode] = useState<ConnectMode>('managed')
 
   const { data: paymentStatus, isLoading: isLoadingStatus } = usePaymentStatus(organization.id)
   const { data: account, isLoading: isLoadingAccount } = useAccountByOrganization(organization.id)
   const submitBusinessDetails = useSubmitBusinessDetails(organization.id)
   const createAccount = useCreateAccount()
+  const getOAuthUrl = useGetOAuthUrl()
+  const disconnectAccount = useDisconnectAccount(organization.id)
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+
+  const handleDisconnect = async () => {
+    if (!account) return
+    try {
+      await disconnectAccount.mutateAsync(account.id)
+      setDisconnectOpen(false)
+      toast({
+        title: 'Disconnected',
+        description: 'You can connect another Stripe account now.',
+      })
+    } catch (err) {
+      toast({
+        title: 'Disconnect failed',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      })
+    }
+  }
 
   // Simple products count check for currency lock
   const { data: productCount } = useQuery({
@@ -69,6 +105,36 @@ export default function BillingPage() {
   const hasBusinessDetails = paymentStatus?.is_details_submitted ?? false
   const hasAccount = !!account
   const isAccountActive = account?.is_charges_enabled && account?.is_payouts_enabled
+  const isStandardConnection = account?.stripe_connection_type === 'standard'
+
+  // Handle OAuth callback flash (?oauth=success|error&message=...).
+  // Guarded by a ref + URL strip so the effect can't re-enter and loop.
+  useEffect(() => {
+    if (oauthHandledRef.current) return
+    const status = searchParams.get('oauth')
+    if (status !== 'success' && status !== 'error') return
+    oauthHandledRef.current = true
+
+    if (status === 'success') {
+      toast({
+        title: 'Stripe account connected',
+        description: 'Your existing Stripe account is now linked.',
+      })
+      queryClient.invalidateQueries({
+        queryKey: accountKeys.byOrganization(organization.id),
+      })
+    } else {
+      const message = searchParams.get('message') || 'Please try again.'
+      toast({
+        title: 'Connection failed',
+        description: decodeURIComponent(message),
+        variant: 'destructive',
+      })
+    }
+
+    // Remove ?oauth=... from the URL so reloads / re-renders don't re-trigger.
+    router.replace(pathname, { scroll: false })
+  }, [searchParams, toast, queryClient, organization.id, router, pathname])
 
   const handleSubmitBusinessDetails = async () => {
     try {
@@ -105,6 +171,22 @@ export default function BillingPage() {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to create account',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleConnectExistingStripe = async () => {
+    try {
+      const { url } = await getOAuthUrl.mutateAsync({
+        organization_id: organization.id,
+      })
+      window.location.href = url
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description:
+          error instanceof Error ? error.message : 'Failed to start Stripe connection',
         variant: 'destructive',
       })
     }
@@ -152,17 +234,27 @@ export default function BillingPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Payment Account</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle>Payment Account</CardTitle>
+                <Badge
+                  variant="outline"
+                  className="border-muted-foreground/30 text-muted-foreground text-[10px] font-medium uppercase tracking-wide"
+                >
+                  {isStandardConnection ? 'Connected via OAuth' : 'Managed by BillingOS'}
+                </Badge>
+              </div>
               <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30">
                 <CheckmarkCircle01Icon size={14} className="mr-1" />
                 Active
               </Badge>
             </div>
             <CardDescription>
-              Your payment account is set up and ready to accept payments.
+              {isStandardConnection
+                ? 'Your Stripe account is connected. Manage it at dashboard.stripe.com.'
+                : 'Your payment account is set up and ready to accept payments.'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="divide-y">
               <InfoRow label="Charges Enabled" value={<span className="text-green-600 dark:text-green-400">Enabled</span>} />
               <InfoRow label="Payouts Enabled" value={<span className="text-green-600 dark:text-green-400">Enabled</span>} />
@@ -173,8 +265,26 @@ export default function BillingPage() {
                 value={<CurrencySelector hasProducts={(productCount ?? 0) > 0} />}
               />
             </div>
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDisconnectOpen(true)}
+              >
+                Disconnect
+              </Button>
+            </div>
           </CardContent>
         </Card>
+
+        <DisconnectAccountDialog
+          open={disconnectOpen}
+          onOpenChange={setDisconnectOpen}
+          onConfirm={handleDisconnect}
+          isPending={disconnectAccount.isPending}
+          connectionType={isStandardConnection ? 'standard' : 'express'}
+        />
 
         {organization.details && (
           <Card>
@@ -244,17 +354,49 @@ export default function BillingPage() {
               {account.country && <InfoRow label="Country" value={account.country.toUpperCase()} />}
             </div>
 
-            <Button onClick={handleContinueSetup}>
-              Continue Setup
-              <ArrowUpRight01Icon size={16} className="ml-2" />
-            </Button>
+            {isStandardConnection ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Finish verification in your Stripe dashboard. Status will sync automatically.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <a href="https://dashboard.stripe.com" target="_blank" rel="noreferrer">
+                      Complete in Stripe
+                      <ArrowUpRight01Icon size={16} className="ml-2" />
+                    </a>
+                  </Button>
+                  <Button variant="outline" onClick={() => setDisconnectOpen(true)}>
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleContinueSetup}>
+                  Continue Setup
+                  <ArrowUpRight01Icon size={16} className="ml-2" />
+                </Button>
+                <Button variant="outline" onClick={() => setDisconnectOpen(true)}>
+                  Disconnect
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        <DisconnectAccountDialog
+          open={disconnectOpen}
+          onOpenChange={setDisconnectOpen}
+          onConfirm={handleDisconnect}
+          isPending={disconnectAccount.isPending}
+          connectionType={isStandardConnection ? 'standard' : 'express'}
+        />
       </DashboardBody>
     )
   }
 
-  // State C: No Account (setup needed)
+  // State C: No Account — choose a connection mode
   return (
     <DashboardBody className="gap-6">
       <SettingsTabNav activeTab="billing" />
@@ -268,118 +410,193 @@ export default function BillingPage() {
             <div>
               <CardTitle>Set Up Payment Account</CardTitle>
               <CardDescription>
-                Complete these steps to start accepting payments from your customers.
+                Choose how you'd like to accept payments. You can always change this later by starting fresh.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Step 1: Business Details */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${hasBusinessDetails
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-primary/10 text-primary'
-                }`}>
-                {hasBusinessDetails ? <CheckmarkCircle01Icon size={14} /> : '1'}
-              </div>
-              <h3 className="text-sm font-medium">Business Details</h3>
-            </div>
-
-            {!hasBusinessDetails ? (
-              <div className="ml-8 space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="business_name">Business Name</Label>
-                    <Input
-                      id="business_name"
-                      value={businessDetails.business_name}
-                      onChange={(e) =>
-                        setBusinessDetails({ ...businessDetails, business_name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Select
-                      value={businessDetails.country}
-                      onValueChange={(value) =>
-                        setBusinessDetails({ ...businessDetails, country: value })
-                      }
-                    >
-                      <SelectTrigger id="country">
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STRIPE_SUPPORTED_COUNTRIES.map((c) => (
-                          <SelectItem key={c.code} value={c.code}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+          {/* Mode selector */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setConnectMode('managed')}
+              className={cn(
+                'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
+                connectMode === 'managed'
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border hover:border-primary/50 hover:bg-muted/30',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div className="rounded-md bg-primary/10 p-1.5">
+                  <CreditCardIcon size={16} className="text-primary" />
                 </div>
-                <Button
-                  onClick={handleSubmitBusinessDetails}
-                  disabled={submitBusinessDetails.isPending}
-                  size="sm"
-                >
-                  {submitBusinessDetails.isPending ? (
-                    <>
-                      <Loading03Icon size={14} className="mr-1.5 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit Details'
-                  )}
-                </Button>
+                <p className="text-sm font-semibold">BillingOS Managed</p>
               </div>
-            ) : (
-              <p className="ml-8 text-sm text-muted-foreground">
-                Business details submitted.
+              <p className="text-xs text-muted-foreground">
+                We'll create a new Stripe account for you. Best if you're new to Stripe.
               </p>
-            )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setConnectMode('oauth')}
+              className={cn(
+                'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
+                connectMode === 'oauth'
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border hover:border-primary/50 hover:bg-muted/30',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div className="rounded-md bg-primary/10 p-1.5">
+                  <ConnectIcon size={16} className="text-primary" />
+                </div>
+                <p className="text-sm font-semibold">Connect Your Stripe Account</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Link an existing Stripe account. Keep your dashboard, customers, and payment history.
+              </p>
+            </button>
           </div>
 
           <Separator />
 
-          {/* Step 2: Create Account */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                2
-              </div>
-              <h3 className="text-sm font-medium">Create Payment Account</h3>
-            </div>
+          {connectMode === 'managed' ? (
+            <>
+              {/* Step 1: Business Details */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${hasBusinessDetails
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-primary/10 text-primary'
+                    }`}>
+                    {hasBusinessDetails ? <CheckmarkCircle01Icon size={14} /> : '1'}
+                  </div>
+                  <h3 className="text-sm font-medium">Business Details</h3>
+                </div>
 
-            <div className="ml-8 space-y-3">
+                {!hasBusinessDetails ? (
+                  <div className="ml-8 space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="business_name">Business Name</Label>
+                        <Input
+                          id="business_name"
+                          value={businessDetails.business_name}
+                          onChange={(e) =>
+                            setBusinessDetails({ ...businessDetails, business_name: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Country</Label>
+                        <Select
+                          value={businessDetails.country}
+                          onValueChange={(value) =>
+                            setBusinessDetails({ ...businessDetails, country: value })
+                          }
+                        >
+                          <SelectTrigger id="country">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STRIPE_SUPPORTED_COUNTRIES.map((c) => (
+                              <SelectItem key={c.code} value={c.code}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleSubmitBusinessDetails}
+                      disabled={submitBusinessDetails.isPending}
+                      size="sm"
+                    >
+                      {submitBusinessDetails.isPending ? (
+                        <>
+                          <Loading03Icon size={14} className="mr-1.5 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        'Submit Details'
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="ml-8 text-sm text-muted-foreground">
+                    Business details submitted.
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Step 2: Create Account */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                    2
+                  </div>
+                  <h3 className="text-sm font-medium">Create Payment Account</h3>
+                </div>
+
+                <div className="ml-8 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    You'll be redirected to complete your payment account setup and connect your bank account.
+                  </p>
+                  <Button
+                    onClick={handleCreateAccount}
+                    disabled={!hasBusinessDetails || createAccount.isPending}
+                  >
+                    {createAccount.isPending ? (
+                      <>
+                        <Loading03Icon size={16} className="mr-2 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : (
+                      <>
+                        Create Account
+                        <ArrowUpRight01Icon size={16} className="ml-2" />
+                      </>
+                    )}
+                  </Button>
+                  {!hasBusinessDetails && (
+                    <p className="text-xs text-muted-foreground">
+                      Complete Step 1 first.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            // OAuth flow: single button, Stripe handles everything
+            <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                You'll be redirected to complete your payment account setup and connect your bank account.
+                You'll be sent to Stripe to authorize BillingOS to access your existing account.
+                BillingOS will be able to create products, subscriptions, and customers on your behalf.
               </p>
               <Button
-                onClick={handleCreateAccount}
-                disabled={!hasBusinessDetails || createAccount.isPending}
+                onClick={handleConnectExistingStripe}
+                disabled={getOAuthUrl.isPending}
               >
-                {createAccount.isPending ? (
+                {getOAuthUrl.isPending ? (
                   <>
                     <Loading03Icon size={16} className="mr-2 animate-spin" />
-                    Creating account...
+                    Redirecting to Stripe...
                   </>
                 ) : (
                   <>
-                    Create Account
+                    Continue to Stripe
                     <ArrowUpRight01Icon size={16} className="ml-2" />
                   </>
                 )}
               </Button>
-              {!hasBusinessDetails && (
-                <p className="text-xs text-muted-foreground">
-                  Complete Step 1 first.
-                </p>
-              )}
             </div>
-          </div>
+          )}
 
           <div className="mt-4 rounded-lg border bg-muted/50 px-4 py-3">
             <p className="text-xs text-muted-foreground">
