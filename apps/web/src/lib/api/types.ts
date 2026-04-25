@@ -79,6 +79,8 @@ export interface Account {
   is_payouts_enabled: boolean
   business_type: string | null
   status: string
+  stripe_connection_type: 'express' | 'standard'
+  oauth_stripe_user_id: string | null
   processor_fees_applicable: boolean
   platform_fee_percent: number | null
   platform_fee_fixed: number | null

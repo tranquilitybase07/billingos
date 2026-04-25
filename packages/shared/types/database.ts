@@ -30,10 +30,12 @@ export type Database = {
           is_charges_enabled: boolean
           is_details_submitted: boolean
           is_payouts_enabled: boolean
+          oauth_stripe_user_id: string | null
           platform_fee_fixed: number | null
           platform_fee_percent: number | null
           processor_fees_applicable: boolean
           status: string
+          stripe_connection_type: string
           stripe_id: string | null
           test_mode: boolean | null
           updated_at: string
@@ -53,10 +55,12 @@ export type Database = {
           is_charges_enabled?: boolean
           is_details_submitted?: boolean
           is_payouts_enabled?: boolean
+          oauth_stripe_user_id?: string | null
           platform_fee_fixed?: number | null
           platform_fee_percent?: number | null
           processor_fees_applicable?: boolean
           status?: string
+          stripe_connection_type?: string
           stripe_id?: string | null
           test_mode?: boolean | null
           updated_at?: string
@@ -76,10 +80,12 @@ export type Database = {
           is_charges_enabled?: boolean
           is_details_submitted?: boolean
           is_payouts_enabled?: boolean
+          oauth_stripe_user_id?: string | null
           platform_fee_fixed?: number | null
           platform_fee_percent?: number | null
           processor_fees_applicable?: boolean
           status?: string
+          stripe_connection_type?: string
           stripe_id?: string | null
           test_mode?: boolean | null
           updated_at?: string

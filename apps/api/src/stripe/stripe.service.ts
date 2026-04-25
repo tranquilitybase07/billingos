@@ -258,6 +258,60 @@ export class StripeService {
   }
 
   /**
+   * Build the Stripe Connect OAuth authorization URL (read_write scope).
+   */
+  getOAuthAuthorizeUrl(params: {
+    clientId: string;
+    state: string;
+    redirectUri: string;
+  }): string {
+    const url = new URL('https://connect.stripe.com/oauth/authorize');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', params.clientId);
+    url.searchParams.set('scope', 'read_write');
+    url.searchParams.set('state', params.state);
+    url.searchParams.set('redirect_uri', params.redirectUri);
+    return url.toString();
+  }
+
+  /**
+   * Exchange an OAuth authorization code for the connected Stripe account ID.
+   */
+  async exchangeOAuthCode(code: string): Promise<{
+    stripeUserId: string;
+    scope: string;
+  }> {
+    const response = await this.stripe.oauth.token({
+      grant_type: 'authorization_code',
+      code,
+    });
+
+    if (!response.stripe_user_id) {
+      throw new Error('Stripe OAuth response missing stripe_user_id');
+    }
+
+    return {
+      stripeUserId: response.stripe_user_id,
+      scope: response.scope ?? 'read_write',
+    };
+  }
+
+  /**
+   * Revoke the platform's OAuth access to a connected Standard account.
+   */
+  async deauthorizeOAuthAccount(stripeAccountId: string): Promise<void> {
+    const clientId = this.configService.get<string>('STRIPE_CLIENT_ID');
+    if (!clientId) {
+      throw new Error('STRIPE_CLIENT_ID is not configured');
+    }
+    this.logger.log(`Deauthorizing OAuth account ${stripeAccountId}`);
+    await this.stripe.oauth.deauthorize({
+      client_id: clientId,
+      stripe_user_id: stripeAccountId,
+    });
+  }
+
+  /**
    * Create Stripe Identity Verification Session
    */
   async createIdentityVerificationSession(params: {

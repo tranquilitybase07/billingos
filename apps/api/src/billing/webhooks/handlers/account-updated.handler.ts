@@ -81,7 +81,10 @@ export class AccountUpdatedHandler implements WebhookHandler, OnModuleInit {
 
       const supabase = ctx.supabase;
 
-      // Update account in database
+      // Update account in database. Use maybeSingle() because lingering
+      // account.updated / capability.updated events can arrive after the
+      // merchant has been disconnected — there's no active row to update,
+      // and that's expected, not an error.
       const { data, error } = await supabase
         .from('accounts')
         .update({
@@ -96,8 +99,9 @@ export class AccountUpdatedHandler implements WebhookHandler, OnModuleInit {
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_id', stripeAccountId)
+        .is('deleted_at', null)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
         this.logger.error(
@@ -107,50 +111,55 @@ export class AccountUpdatedHandler implements WebhookHandler, OnModuleInit {
         return;
       }
 
+      if (!data) {
+        this.logger.log(
+          `Account update webhook for ${stripeAccountId}: no active account row — likely disconnected, skipping`,
+        );
+        return;
+      }
+
       this.logger.log(`Account ${stripeAccountId} synced successfully`);
 
       // Update organization status based on account state
-      if (data) {
-        if (account.charges_enabled && account.payouts_enabled) {
-          // Fully enabled - mark as active
-          await this.updateOrganizationStatus(ctx, data.id, 'active', true);
-        } else if (account.details_submitted) {
-          // Details submitted but not fully enabled yet
-          await this.updateOrganizationStatus(
-            ctx,
-            data.id,
-            'onboarding_started',
-            false,
-          );
-        }
+      if (account.charges_enabled && account.payouts_enabled) {
+        // Fully enabled - mark as active
+        await this.updateOrganizationStatus(ctx, data.id, 'active', true);
+      } else if (account.details_submitted) {
+        // Details submitted but not fully enabled yet
+        await this.updateOrganizationStatus(
+          ctx,
+          data.id,
+          'onboarding_started',
+          false,
+        );
+      }
 
-        // Sync default_currency from Stripe country if org has no products yet
-        if (account.country) {
-          const { data: org } = await supabase
-            .from('organizations')
-            .select('id')
-            .eq('account_id', data.id)
-            .single();
+      // Sync default_currency from Stripe country if org has no products yet
+      if (account.country) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('id')
+          .eq('account_id', data.id)
+          .single();
 
-          if (org) {
-            const { count } = await supabase
-              .from('products')
-              .select('id', { count: 'exact', head: true })
-              .eq('organization_id', org.id)
-              .is('is_archived', false);
+        if (org) {
+          const { count } = await supabase
+            .from('products')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', org.id)
+            .is('is_archived', false);
 
-            if (count === 0) {
-              await supabase
-                .from('organizations')
-                .update({
-                  default_currency: getCurrencyForCountry(account.country),
-                })
-                .eq('id', org.id);
+          if (count === 0) {
+            await supabase
+              .from('organizations')
+              .update({
+                default_currency: getCurrencyForCountry(account.country),
+              })
+              .eq('id', org.id);
 
-              this.logger.log(
-                `Updated org ${org.id} default_currency to ${getCurrencyForCountry(account.country)} from Stripe country ${account.country}`,
-              );
-            }
+            this.logger.log(
+              `Updated org ${org.id} default_currency to ${getCurrencyForCountry(account.country)} from Stripe country ${account.country}`,
+            );
           }
         }
       }
