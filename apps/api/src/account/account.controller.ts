@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
@@ -24,10 +25,32 @@ import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
+// Allowlist of OAuth callback error codes safe to forward in the redirect URL.
+// Anything not in this set is logged server-side and surfaced as 'unknown_error'
+// to avoid leaking internal exception messages (Supabase errors, stack hints, etc.).
+const ALLOWED_OAUTH_ERROR_CODES = new Set<string>([
+  // BOS-internal codes
+  'state_expired',
+  'invalid_state',
+  'account_already_connected',
+  'oauth_connect_failed',
+  'missing_code_or_state',
+  // Stripe OAuth error codes (RFC 6749 + Stripe extensions)
+  'access_denied',
+  'invalid_request',
+  'invalid_scope',
+  'unauthorized_client',
+  'unsupported_response_type',
+  'server_error',
+  'temporarily_unavailable',
+]);
+
 @ApiTags('Accounts')
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
 export class AccountController {
+  private readonly logger = new Logger(AccountController.name);
+
   constructor(
     private readonly accountService: AccountService,
     private readonly configService: ConfigService,
@@ -62,7 +85,6 @@ export class AccountController {
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
     @Query('error') error: string | undefined,
-    @Query('error_description') errorDescription: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const appUrl =
@@ -70,7 +92,9 @@ export class AccountController {
 
     try {
       if (error) {
-        throw new BadRequestException(errorDescription || error);
+        // Stripe sends standard OAuth error codes here; the free-form
+        // error_description is intentionally NOT forwarded to the user.
+        throw new BadRequestException(error);
       }
       if (!code || !state) {
         throw new BadRequestException('missing_code_or_state');
@@ -83,11 +107,22 @@ export class AccountController {
         `${appUrl}/dashboard/${organizationSlug}/settings/billing?oauth=success`,
       );
     } catch (e) {
-      const message = encodeURIComponent(
-        (e as Error)?.message || 'unknown_error',
-      );
+      const rawMessage = (e as Error)?.message ?? '';
+      const code = ALLOWED_OAUTH_ERROR_CODES.has(rawMessage)
+        ? rawMessage
+        : 'unknown_error';
+
+      if (code === 'unknown_error') {
+        this.logger.error(
+          'Unrecognized OAuth callback error (forwarded as unknown_error):',
+          e,
+        );
+      }
+
       // We may not have the slug if lookup failed; fall back to /dashboard.
-      res.redirect(`${appUrl}/dashboard?oauth=error&message=${message}`);
+      res.redirect(
+        `${appUrl}/dashboard?oauth=error&message=${encodeURIComponent(code)}`,
+      );
     }
   }
 
