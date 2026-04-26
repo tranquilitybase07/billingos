@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOrganization } from '@/providers/OrganizationProvider'
+import { useEnvironment } from '@/providers/EnvironmentProvider'
 import {
   usePaymentStatus,
   useSubmitBusinessDetails,
@@ -48,12 +49,14 @@ type ConnectMode = 'managed' | 'oauth'
 
 export default function BillingPage() {
   const { organization } = useOrganization()
+  const { environment } = useEnvironment()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
   const oauthHandledRef = useRef(false)
+  const isSandbox = environment === 'sandbox'
   const [businessDetails, setBusinessDetails] = useState({
     business_name: organization.name,
     country: (organization.details as Record<string, string>)?.country || 'US',
@@ -61,7 +64,10 @@ export default function BillingPage() {
     product_description: '',
     intended_use: '',
   })
-  const [connectMode, setConnectMode] = useState<ConnectMode>('managed')
+  // Sandbox: managed default for fast test setup. Production: OAuth only —
+  const [connectMode, setConnectMode] = useState<ConnectMode>(
+    isSandbox ? 'managed' : 'oauth',
+  )
 
   const { data: paymentStatus, isLoading: isLoadingStatus } = usePaymentStatus(organization.id)
   const { data: account, isLoading: isLoadingAccount } = useAccountByOrganization(organization.id)
@@ -410,58 +416,64 @@ export default function BillingPage() {
             <div>
               <CardTitle>Set Up Payment Account</CardTitle>
               <CardDescription>
-                Choose how you'd like to accept payments. You can always change this later by starting fresh.
+                {isSandbox
+                  ? "Choose how you'd like to accept payments. You can always change this later by starting fresh."
+                  : 'Connect your Stripe account to start accepting live payments.'}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Mode selector */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setConnectMode('managed')}
-              className={cn(
-                'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
-                connectMode === 'managed'
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border hover:border-primary/50 hover:bg-muted/30',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <div className="rounded-md bg-primary/10 p-1.5">
-                  <CreditCardIcon size={16} className="text-primary" />
-                </div>
-                <p className="text-sm font-semibold">BillingOS Managed</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                We'll create a new Stripe account for you. Best if you're new to Stripe.
-              </p>
-            </button>
+          {/* Mode selector — sandbox only. In production, OAuth is the only path. */}
+          {isSandbox && (
+            <>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setConnectMode('managed')}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
+                    connectMode === 'managed'
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-border hover:border-primary/50 hover:bg-muted/30',
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-md bg-primary/10 p-1.5">
+                      <CreditCardIcon size={16} className="text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold">BillingOS Managed</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    We'll create a new test Stripe account for you. Fastest way to start building.
+                  </p>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => setConnectMode('oauth')}
-              className={cn(
-                'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
-                connectMode === 'oauth'
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border hover:border-primary/50 hover:bg-muted/30',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <div className="rounded-md bg-primary/10 p-1.5">
-                  <ConnectIcon size={16} className="text-primary" />
-                </div>
-                <p className="text-sm font-semibold">Connect Your Stripe Account</p>
+                <button
+                  type="button"
+                  onClick={() => setConnectMode('oauth')}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-lg border p-4 text-left transition-all',
+                    connectMode === 'oauth'
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-border hover:border-primary/50 hover:bg-muted/30',
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-md bg-primary/10 p-1.5">
+                      <ConnectIcon size={16} className="text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold">Connect Your Stripe Account</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Link an existing Stripe account. Keep your dashboard, customers, and payment history.
+                  </p>
+                </button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Link an existing Stripe account. Keep your dashboard, customers, and payment history.
-              </p>
-            </button>
-          </div>
 
-          <Separator />
+              <Separator />
+            </>
+          )}
 
           {connectMode === 'managed' ? (
             <>
@@ -469,8 +481,8 @@ export default function BillingPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${hasBusinessDetails
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      : 'bg-primary/10 text-primary'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-primary/10 text-primary'
                     }`}>
                     {hasBusinessDetails ? <CheckmarkCircle01Icon size={14} /> : '1'}
                   </div>

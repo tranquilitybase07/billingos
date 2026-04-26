@@ -30,9 +30,16 @@ export class AccountService {
   ) {}
 
   /**
-   * Create a Stripe Connect account for an organization
+   * Create a Stripe Connect account for an organization (managed/Express).
+   * Restricted to sandbox — production merchants must connect via OAuth
    */
   async create(user: User, createDto: CreateAccountDto): Promise<Account> {
+    if (!this.stripeService.isSandboxEnvironment()) {
+      throw new BadRequestException(
+        'Managed accounts are sandbox-only. Connect your Stripe account via OAuth to go live.',
+      );
+    }
+
     const supabase = this.supabaseService.getClient();
 
     const org = await this.verifyOrgConnectAccess(
