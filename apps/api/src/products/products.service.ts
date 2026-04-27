@@ -474,17 +474,20 @@ export class ProductsService {
     );
 
     // If no active subscriptions, no versioning needed
-    if (subscriptionCount.count === 0) {
+    if (subscriptionCount.activeOrPastDue === 0) {
       return { requiresVersioning: false, reasons: [] };
     }
 
     // Check price changes
-    if (updateDto.prices?.create || updateDto.prices?.archive) {
+    if (
+      (updateDto.prices?.create?.length ?? 0) > 0 ||
+      (updateDto.prices?.archive?.length ?? 0) > 0
+    ) {
       requiresVersioning = true;
-      if (updateDto.prices.create) {
+      if (updateDto.prices?.create?.length) {
         reasons.push(`Adding ${updateDto.prices.create.length} new price(s)`);
       }
-      if (updateDto.prices.archive) {
+      if (updateDto.prices?.archive?.length) {
         reasons.push(`Archiving ${updateDto.prices.archive.length} price(s)`);
       }
     }
@@ -1436,6 +1439,19 @@ export class ProductsService {
       );
     }
 
+    const { count: activeOrPastDue, error: activeOrPastDueError } =
+      await supabase
+        .from('subscriptions')
+        .select('*', { count: 'exact', head: true })
+        .eq('product_id', id)
+        .in('status', ['active', 'trialing', 'past_due']);
+
+    if (activeOrPastDueError) {
+      throw new BadRequestException(
+        'Failed to fetch active subscription count',
+      );
+    }
+
     // Count canceled subscriptions
     const { count: canceled, error: canceledError } = await supabase
       .from('subscriptions')
@@ -1452,6 +1468,7 @@ export class ProductsService {
     return {
       count: total || 0,
       active: active || 0,
+      activeOrPastDue: activeOrPastDue || 0,
       canceled: canceled || 0,
     };
   }
@@ -1554,7 +1571,7 @@ export class ProductsService {
       will_version: analysis.requiresVersioning,
       current_version: currentVersion,
       new_version: newVersion,
-      affected_subscriptions: subscriptionCount.active || 0,
+      affected_subscriptions: subscriptionCount.activeOrPastDue || 0,
       reason: analysis.reasons.join('; '),
       changes: analysis.reasons,
     };
