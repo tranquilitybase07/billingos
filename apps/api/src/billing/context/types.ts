@@ -127,6 +127,10 @@ export interface BillingContext {
   /** True when trial→trial downgrade: old sub is trialing AND new product has trialDays > 0.
    *  Grants a fresh trial on the new (lower) plan instead of cancel + recreate. */
   isTrialToTrialDowngrade: boolean;
+  /** True when same-price plan switch: different product, identical price + interval,
+   *  existing Stripe sub. Routes through subscriptions.update() with proration_behavior:'none'
+   *  — no card entry, no proration, no destructive cancel + recreate. */
+  isInPlaceSwap: boolean;
 
   /** Caller-provided metadata to pass through to Stripe + BOS records */
   metadata: Record<string, unknown>;

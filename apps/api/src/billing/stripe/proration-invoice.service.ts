@@ -30,7 +30,7 @@ export interface RunUpgradeParams {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   newStripePriceId: string;
-  /** BOS checkout session ID — used as Stripe idempotency key */
+  /** BOS checkout session ID — used as Stripe idempotency key. Empty for plain swaps. */
   checkoutSessionId: string;
   /** BOS subscription ID — recorded on invoice metadata for webhook lookup */
   bosSubscriptionId?: string;
@@ -44,6 +44,8 @@ export interface RunUpgradeParams {
   trialCreditCurrency?: string;
   /** Unix timestamp for the new trial end date (trial-to-trial upgrade) */
   newTrialEnd?: number;
+  /** True when same-price plan swap: items-only update, proration_behavior:'none' */
+  isPlainSwap?: boolean;
 }
 
 /**
@@ -118,6 +120,35 @@ export class ProrationInvoiceService {
       this.logger.warn(
         `No default_payment_method found on subscription ${stripeSubscriptionId} or customer ${stripeCustomerId}; invoices.pay() may fail`,
       );
+    }
+
+    // 2a-plain-swap. Same-price plan swap: rotate the price item with no
+    //     proration. No charge, no credit, no invoice generated. Mirrors what
+    //     Autumn does for plan changes at identical price (single
+    //     subscriptions.update with proration_behavior:'none').
+    if (params.isPlainSwap) {
+      let updatedSub: Stripe.Subscription;
+      try {
+        updatedSub = await this.stripeService.updateSubscriptionWithParams(
+          stripeSubscriptionId,
+          {
+            items: [{ id: subscriptionItemId, price: newStripePriceId }],
+            proration_behavior: 'none',
+          },
+          stripeAccountId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Plain-swap subscriptions.update failed for ${stripeSubscriptionId}: ${this.errMsg(error)}`,
+        );
+        throw new BadRequestException(
+          `Failed to update subscription for plan swap: ${this.errMsg(error)}`,
+        );
+      }
+      this.logger.log(
+        `Plain swap: subscription ${stripeSubscriptionId} swapped to price ${newStripePriceId} (no proration)`,
+      );
+      return { kind: 'no_proration', updatedSub };
     }
 
     // 2a-trial-to-trial. Trial-to-trial upgrade: swap the price item but keep

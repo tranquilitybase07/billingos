@@ -22,8 +22,10 @@ export class EntitlementPlanner {
       return { grant: null, revoke: null, swap: null };
     }
 
-    // In-place upgrade: swap features on the existing subscription
-    if (ctx.isInPlaceUpgrade && ctx.transition) {
+    // In-place upgrade or same-price swap: swap features on the existing subscription.
+    // Both keep the subscription alive and rotate the feature set in place — the only
+    // difference is whether Stripe charges proration (upgrade) or not (swap).
+    if ((ctx.isInPlaceUpgrade || ctx.isInPlaceSwap) && ctx.transition) {
       return {
         grant: null,
         revoke: null,

@@ -114,6 +114,19 @@ export class BillingContextBuilder {
       (transition.oldSubscription.status !== 'trialing' || isFreeProduct) &&
       !isTrialToTrialDowngrade;
 
+    // 6d. Same-price plan switch: different product but identical price amount AND
+    //     identical billing interval. Routed through subscriptions.update() with
+    //     proration_behavior:'none' — no card entry, no proration math, no
+    //     destructive cancel + recreate. The interval guard is critical because
+    //     transition.detector.ts classifies on amount alone, so two products at
+    //     $10/mo and $10/yr would both report 'swap' without it.
+    const isInPlaceSwap =
+      transition !== null &&
+      transition.type === 'swap' &&
+      !isFreeProduct &&
+      !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
+      transition.oldSubscription.recurringInterval === price.recurringInterval;
+
     // 7. Determine trial eligibility (trial product + no transition)
     const isTrialEligible = (product.trialDays || 0) > 0 && transition === null;
 
@@ -150,6 +163,7 @@ export class BillingContextBuilder {
       isTrialToTrialUpgrade,
       isInPlaceDowngrade,
       isTrialToTrialDowngrade,
+      isInPlaceSwap,
       metadata: dto.metadata || {},
     };
   }

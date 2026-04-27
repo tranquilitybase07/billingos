@@ -84,9 +84,11 @@ export class BillingService {
       return this.persistPendingCheckout(ctx, plan, dto);
     }
 
-    return this.runExecutionPhase(ctx, plan, {
-      persistAs: 'awaiting_payment',
-    });
+    const persistAs: 'completed' | 'awaiting_payment' = ctx.isInPlaceSwap
+      ? 'completed'
+      : 'awaiting_payment';
+
+    return this.runExecutionPhase(ctx, plan, { persistAs });
   }
 
   // ── Phase B: execute ──
@@ -409,7 +411,12 @@ export class BillingService {
   // ── Helpers: status / loading ──
 
   private requiresExplicitExecution(ctx: BillingContext): boolean {
-    return ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade || ctx.isFreeProduct || ctx.isTrialToTrialDowngrade;
+    return (
+      ctx.isInPlaceUpgrade ||
+      ctx.isInPlaceDowngrade ||
+      ctx.isFreeProduct ||
+      ctx.isTrialToTrialDowngrade
+    );
   }
 
   private async loadSessionForExecute(
@@ -732,6 +739,7 @@ export class BillingService {
     if (ctx.isTrialToTrialDowngrade) return 'upgrade';
     if (ctx.isTrialUpgrade) return 'upgrade';
     if (ctx.isInPlaceUpgrade) return 'upgrade';
+    if (ctx.isInPlaceSwap) return 'upgrade';
     if (ctx.isInPlaceDowngrade) return 'downgrade';
     if (plan.subscription.kind === 'setup_trial') return 'trial';
     if (plan.useAdaptivePricing) return 'adaptive';
