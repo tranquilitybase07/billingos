@@ -42,11 +42,11 @@ export class StripePlanBuilder {
             ctx.transition!.oldSubscription.stripeSubscriptionId!,
           stripeCustomerId: ctx.customer.stripeCustomerId,
           newStripePriceId: plan.subscription.newStripePriceId,
-          checkoutSessionId: ctx.existingCheckoutSessionId || '',
+          checkoutSessionId: ctx.existingCheckoutSessionId,
           intervalChanged:
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
-          ...(ctx.isInPlaceSwap ? { isPlainSwap: true } : {}),
+          isPlainSwap: ctx.isInPlaceSwap,
           // Trial-to-trial (upgrade or downgrade): grant fresh trial, no credit/charge
           ...(ctx.isTrialToTrialUpgrade || ctx.isTrialToTrialDowngrade
             ? {
@@ -159,7 +159,8 @@ export class StripePlanBuilder {
       },
     };
 
-    const stableKey = ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
+    const stableKey =
+      ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
     const idempotencyKey = `sub-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
 
     return {

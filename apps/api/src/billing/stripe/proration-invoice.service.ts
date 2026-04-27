@@ -30,8 +30,8 @@ export interface RunUpgradeParams {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   newStripePriceId: string;
-  /** BOS checkout session ID — used as Stripe idempotency key. Empty for plain swaps. */
-  checkoutSessionId: string;
+  /** BOS checkout session ID — used as Stripe idempotency key */
+  checkoutSessionId?: string;
   /** BOS subscription ID — recorded on invoice metadata for webhook lookup */
   bosSubscriptionId?: string;
   /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
@@ -92,6 +92,37 @@ export class ProrationInvoiceService {
     }
     const subscriptionItemId = curSub.items.data[0].id;
 
+    // 2a-plain-swap. Same-price plan swap: rotate the price item with no
+    //     proration. No charge, no credit, no invoice generated — so we
+    //     deliberately exit BEFORE the payment-method lookup below to avoid
+    //     1–2 wasted Stripe API calls on a path that will never use them.
+    //     Mirrors Autumn's plan-change semantics (single subscriptions.update
+    //     with proration_behavior:'none').
+    if (params.isPlainSwap) {
+      let updatedSub: Stripe.Subscription;
+      try {
+        updatedSub = await this.stripeService.updateSubscriptionWithParams(
+          stripeSubscriptionId,
+          {
+            items: [{ id: subscriptionItemId, price: newStripePriceId }],
+            proration_behavior: 'none',
+          },
+          stripeAccountId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Plain-swap subscriptions.update failed for ${stripeSubscriptionId}: ${this.errMsg(error)}`,
+        );
+        throw new BadRequestException(
+          `Failed to update subscription for plan swap: ${this.errMsg(error)}`,
+        );
+      }
+      this.logger.log(
+        `Plain swap: subscription ${stripeSubscriptionId} swapped to price ${newStripePriceId} (no proration)`,
+      );
+      return { kind: 'no_proration', updatedSub };
+    }
+
     // 1b. Extract payment method for the proration invoice. The invoice is
     //     created standalone (not linked to the subscription), so Stripe won't
     //     fall back to the subscription's default_payment_method automatically.
@@ -120,35 +151,6 @@ export class ProrationInvoiceService {
       this.logger.warn(
         `No default_payment_method found on subscription ${stripeSubscriptionId} or customer ${stripeCustomerId}; invoices.pay() may fail`,
       );
-    }
-
-    // 2a-plain-swap. Same-price plan swap: rotate the price item with no
-    //     proration. No charge, no credit, no invoice generated. Mirrors what
-    //     Autumn does for plan changes at identical price (single
-    //     subscriptions.update with proration_behavior:'none').
-    if (params.isPlainSwap) {
-      let updatedSub: Stripe.Subscription;
-      try {
-        updatedSub = await this.stripeService.updateSubscriptionWithParams(
-          stripeSubscriptionId,
-          {
-            items: [{ id: subscriptionItemId, price: newStripePriceId }],
-            proration_behavior: 'none',
-          },
-          stripeAccountId,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Plain-swap subscriptions.update failed for ${stripeSubscriptionId}: ${this.errMsg(error)}`,
-        );
-        throw new BadRequestException(
-          `Failed to update subscription for plan swap: ${this.errMsg(error)}`,
-        );
-      }
-      this.logger.log(
-        `Plain swap: subscription ${stripeSubscriptionId} swapped to price ${newStripePriceId} (no proration)`,
-      );
-      return { kind: 'no_proration', updatedSub };
     }
 
     // 2a-trial-to-trial. Trial-to-trial upgrade: swap the price item but keep
@@ -272,6 +274,15 @@ export class ProrationInvoiceService {
     //     return the updated subscription.
     if (params.isTrialUpgrade) {
       return { kind: 'no_proration', updatedSub };
+    }
+
+    // From here on we're on the paid in-place upgrade path, which uses
+    // checkoutSessionId as the Stripe idempotency key + invoice metadata.
+    // Plain swap and trial branches above already returned, so it must be set.
+    if (!checkoutSessionId) {
+      throw new BadRequestException(
+        'In-place upgrade requires checkoutSessionId for the proration invoice flow',
+      );
     }
 
     // 3. Idempotency recovery: if a previous run created a draft proration

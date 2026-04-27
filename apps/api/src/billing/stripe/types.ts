@@ -45,8 +45,8 @@ export interface UpdateStripeSubscriptionAction {
   stripeCustomerId: string;
   newStripePriceId: string;
   /** BOS checkout session ID — used as Stripe idempotency key + invoice metadata.
-   *  Empty string is allowed for plain swaps (no proration invoice is created). */
-  checkoutSessionId: string;
+   *  Optional because plain swaps don't create an invoice and don't need it. */
+  checkoutSessionId?: string;
   /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
   intervalChanged: boolean;
   /** True when upgrading from a trialing subscription */
