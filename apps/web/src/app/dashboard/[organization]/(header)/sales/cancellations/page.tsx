@@ -1,0 +1,27 @@
+import { Metadata } from 'next'
+import { getOrganizationBySlug } from '@/lib/organization'
+import CancellationsPage from './CancellationsPage'
+
+export const metadata: Metadata = {
+  title: 'Churn',
+}
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ organization: string }>
+}) {
+  const { organization: orgSlug } = await params
+  const organization = await getOrganizationBySlug(orgSlug)
+
+  if (!organization) {
+    return <div>Organization not found</div>
+  }
+
+  return (
+    <CancellationsPage
+      organizationId={organization.id}
+      organizationSlug={orgSlug}
+    />
+  )
+}
