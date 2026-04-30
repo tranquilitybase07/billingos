@@ -177,6 +177,21 @@ export class SubscriptionDeletedHandler
       this.logger.log(
         `Subscription ${subscription.id} canceled and features revoked`,
       );
+
+      // End the usage period for the cancelled subscription so its rows stop
+      // appearing in getUsageMetrics (which filters period_end >= now). Keeps
+      // the rows for audit (consumed_units preserved); just shifts period_end
+      // to the cancellation moment so the read filter naturally hides them.
+      const { error: usageEndError } = await ctx.supabase
+        .from('usage_records')
+        .update({ period_end: new Date().toISOString() })
+        .eq('subscription_id', existing.id);
+
+      if (usageEndError) {
+        this.logger.warn(
+          `Failed to end usage_records for cancelled subscription ${existing.id}: ${usageEndError.message}`,
+        );
+      }
     }
   }
 }

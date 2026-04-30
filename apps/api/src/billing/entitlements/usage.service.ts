@@ -43,7 +43,11 @@ export class UsageService {
       }
     }
 
-    // Get active subscription with the feature
+    // Get active subscription with the feature.
+    // We pull `properties` off feature_grants (the per-grant snapshot of the
+    // resolved feature config taken at grant time) — that's where the limit
+    // lives. `features.properties` is the global feature registry (unit,
+    // reset_period) and intentionally does NOT carry per-product limits.
     const { data: grants } = await supabase
       .from('feature_grants')
       .select(
@@ -51,6 +55,7 @@ export class UsageService {
         id,
         subscription_id,
         feature_id,
+        properties,
         features (
           id,
           name,
@@ -91,63 +96,65 @@ export class UsageService {
       throw new BadRequestException('Feature is not a usage quota type');
     }
 
-    // Get or create usage record for current period
-    const { data: existingRecord, error: fetchError } = await supabase
-      .from('usage_records')
-      .select('*')
-      .eq('customer_id', trackDto.customer_id)
-      .eq('feature_id', grant.feature_id)
-      .eq('subscription_id', grant.subscription_id)
-      .gte('period_end', new Date().toISOString())
-      .single();
+    // Atomic upsert + increment + limit check via Postgres RPC.
+    //
+    // Replaces a prior multi-step SELECT-then-INSERT-then-UPDATE flow that
+    // had two production-impacting races:
+    //   1. The fetch filtered by subscription_id, but the table's unique
+    //      constraint is (customer_id, feature_id, period_start) — no
+    //      subscription_id. A mid-period upgrade/swap meant the SELECT
+    //      missed the existing row and the INSERT hit a 23505.
+    //   2. Two concurrent calls both read consumed_units, both wrote
+    //      read+units, and one increment was silently lost.
+    // The RPC does the upsert + increment in a single statement (row-locked
+    // by Postgres) and surfaces quota overflow via the existing CHECK
+    // constraint, returning exceeded=TRUE instead of a DB error.
+    const periodStart =
+      (grant as any).subscriptions?.current_period_start ||
+      new Date().toISOString();
+    const periodEnd =
+      (grant as any).subscriptions?.current_period_end ||
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Read the limit from the grant's snapshot (set at grant time).
+    // Falling back to null = unlimited, matching the schema's NULL semantics
+    // on usage_records.limit_units. The previous default of 0 made every
+    // call exceed quota when the limit was missing — the opposite of what
+    // an unconfigured feature should mean.
+    const grantProperties = (grant as any).properties as Record<
+      string,
+      unknown
+    > | null;
+    const limitUnits =
+      (grantProperties?.limit as number | null | undefined) ?? null;
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      // PGRST116 = not found
-      this.logger.error('Error fetching usage record:', fetchError);
-      throw new BadRequestException('Failed to fetch usage record');
+    const { data: rpcRows, error: rpcError } = await (
+      supabase.rpc as CallableFunction
+    )('track_feature_usage', {
+      p_customer_id: trackDto.customer_id,
+      p_feature_id: grant.feature_id,
+      p_subscription_id: grant.subscription_id,
+      p_period_start: periodStart,
+      p_period_end: periodEnd,
+      p_units: trackDto.units,
+      p_limit_units: limitUnits,
+    });
+
+    if (rpcError) {
+      this.logger.error('Failed to track usage:', rpcError);
+      throw new BadRequestException('Failed to track usage');
     }
 
-    let usageRecord = existingRecord;
-
+    const usageRecord = (rpcRows as Array<Record<string, unknown>>)?.[0];
     if (!usageRecord) {
-      // Auto-create usage record for the current billing period
-      const periodStart =
-        (grant as any).subscriptions?.current_period_start ||
-        new Date().toISOString();
-      const periodEnd =
-        (grant as any).subscriptions?.current_period_end ||
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const featureProperties = grant.features.properties as any;
-      const limitUnits = featureProperties?.limit ?? 0;
-
-      const { data: newRecord, error: createError } = await supabase
-        .from('usage_records')
-        .insert({
-          customer_id: trackDto.customer_id,
-          feature_id: grant.feature_id,
-          subscription_id: grant.subscription_id,
-          consumed_units: 0,
-          limit_units: limitUnits,
-          period_start: periodStart,
-          period_end: periodEnd,
-        })
-        .select()
-        .single();
-
-      if (createError || !newRecord) {
-        this.logger.error('Failed to auto-create usage record:', createError);
-        throw new BadRequestException('Failed to create usage record');
-      }
-
-      usageRecord = newRecord;
-      this.logger.log(
-        `Auto-created usage record for customer ${trackDto.customer_id}, feature ${trackDto.feature_name}`,
-      );
+      this.logger.error('track_feature_usage returned no row');
+      throw new BadRequestException('Failed to track usage');
     }
 
-    // Check if adding units would exceed limit
-    const newConsumed = Number(usageRecord.consumed_units) + trackDto.units;
-    if (newConsumed > Number(usageRecord.limit_units)) {
+    // The RPC returns columns prefixed with `out_` so they don't shadow the
+    // same-named columns of usage_records inside the function body (Postgres
+    // error 42702). The wire shape of the BillingOS API response is unaffected
+    // — we re-expose the unprefixed names below.
+    if (usageRecord.out_exceeded === true) {
       throw new BadRequestException('quota_exceeded', {
         cause: {
           error: 'quota_exceeded',
@@ -158,29 +165,14 @@ export class UsageService {
               type: grant.features.type,
             },
             usage: {
-              consumed_units: usageRecord.consumed_units,
-              limit_units: usageRecord.limit_units,
+              consumed_units: usageRecord.out_consumed_units,
+              limit_units: usageRecord.out_limit_units,
               remaining_units: 0,
-              resets_at: usageRecord.period_end,
+              resets_at: usageRecord.out_period_end,
             },
           },
         },
       });
-    }
-
-    // Atomically increment usage
-    const { data: updated, error: updateError } = await supabase
-      .from('usage_records')
-      .update({
-        consumed_units: newConsumed,
-      })
-      .eq('id', usageRecord.id)
-      .select()
-      .single();
-
-    if (updateError || !updated) {
-      this.logger.error('Failed to update usage record:', updateError);
-      throw new BadRequestException('Failed to track usage');
     }
 
     const result = {
@@ -190,12 +182,13 @@ export class UsageService {
         type: grant.features.type,
       },
       usage: {
-        consumed_units: updated.consumed_units,
-        limit_units: updated.limit_units,
+        consumed_units: usageRecord.out_consumed_units,
+        limit_units: usageRecord.out_limit_units,
         remaining_units:
-          Number(updated.limit_units) - Number(updated.consumed_units),
-        period_start: updated.period_start,
-        period_end: updated.period_end,
+          Number(usageRecord.out_limit_units) -
+          Number(usageRecord.out_consumed_units),
+        period_start: usageRecord.out_period_start,
+        period_end: usageRecord.out_period_end,
       },
     };
 

@@ -105,14 +105,20 @@ export class PaymentIntentSucceededHandler
         string,
         unknown
       >;
-      const organizationId = metadata.organizationId;
-      const productId = metadata.productId;
-      const priceId = metadata.priceId;
+      // Stripe doesn't propagate subscription.metadata onto the auto-generated
+      // payment_intent for `default_incomplete` flows, so paymentIntent.metadata
+      // is often {} for fresh-subscription PIs. Fall back to the BOS payment
+      // intents row, which has organization_id / product_id / price_id stored
+      // as columns at creation time (see BosPlanExecutor.handleSubscriptionCreated).
+      const organizationId =
+        metadata.organizationId || paymentIntentRecord.organization_id;
+      const productId = metadata.productId || paymentIntentRecord.product_id;
+      const priceId = metadata.priceId || paymentIntentRecord.price_id;
 
       if (!organizationId || !productId || !priceId) {
         this.logger.error(
-          'Missing required metadata in payment intent:',
-          metadata,
+          'Missing required IDs (neither Stripe metadata nor BOS row supplied them):',
+          { metadata, paymentIntentRecordId: paymentIntentRecord.id },
         );
         return;
       }

@@ -2308,6 +2308,25 @@ export type Database = {
         }
         Returns: string
       }
+      track_feature_usage: {
+        Args: {
+          p_customer_id: string
+          p_feature_id: string
+          p_limit_units: number
+          p_period_end: string
+          p_period_start: string
+          p_subscription_id: string
+          p_units: number
+        }
+        Returns: {
+          out_consumed_units: number
+          out_exceeded: boolean
+          out_id: string
+          out_limit_units: number
+          out_period_end: string
+          out_period_start: string
+        }[]
+      }
       upsert_customer_atomic: {
         Args: {
           p_email: string
