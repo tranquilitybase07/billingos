@@ -231,9 +231,16 @@ export class PaymentIntentSucceededHandler
     const metadata = paymentIntent.metadata || {};
     const checkoutMetadata =
       (checkoutSession?.metadata as Record<string, unknown> | null) || null;
-    const organizationId = metadata.organizationId;
-    const productId = metadata.productId;
-    const priceId = metadata.priceId;
+    // Same fallback as handle(): default_incomplete PIs have empty metadata,
+    // so read from the BOS payment_intents row when Stripe didn't propagate it.
+    // payment_intents columns are nullable; coerce null → undefined so the
+    // downstream `if (!productId)` check narrows the type cleanly.
+    const organizationId =
+      metadata.organizationId || paymentIntentRecord.organization_id;
+    const productId =
+      metadata.productId || paymentIntentRecord.product_id || undefined;
+    const priceId =
+      metadata.priceId || paymentIntentRecord.price_id || undefined;
     const customerId =
       metadata.customerId || (paymentIntentRecord.customer_id ?? undefined);
 
@@ -462,11 +469,27 @@ export class PaymentIntentSucceededHandler
       string,
       unknown
     >;
-    const organizationId = metadata.organizationId;
+    // Same fallback as handle(): default_incomplete PIs have empty metadata,
+    // so read from the BOS payment_intents row when Stripe didn't propagate it.
+    // payment_intents columns are nullable; coerce null → undefined so the
+    // downstream `if (!productId)` check narrows the type cleanly.
+    const organizationId =
+      metadata.organizationId || paymentIntentRecord.organization_id;
     const externalUserId = metadata.externalUserId;
-    const productId = metadata.productId;
-    const priceId = metadata.priceId;
+    const productId =
+      metadata.productId || paymentIntentRecord.product_id || undefined;
+    const priceId =
+      metadata.priceId || paymentIntentRecord.price_id || undefined;
     const trialDays = parseInt(metadata.trialDays || '0', 10);
+
+    if (!organizationId || !productId || !priceId) {
+      this.logger.error(
+        `Legacy flow missing required identifiers for PI ${paymentIntent.id} ` +
+          `(organizationId=${organizationId}, productId=${productId}, ` +
+          `priceId=${priceId}) — aborting`,
+      );
+      return;
+    }
 
     // Ensure customer exists
     let customerId = paymentIntentRecord.customer_id as string | undefined;

@@ -103,11 +103,16 @@ export class EntitlementService {
     const usagePeriodStart = subPeriodStart ?? periodStart.toISOString();
     const usagePeriodEnd = subPeriodEnd ?? periodEnd.toISOString();
 
-    // Build usage records for USAGE_QUOTA features
+    // Build usage records for USAGE_QUOTA features.
+    // limit_units defaults to null (= unlimited) when no limit is configured,
+    // matching the schema's nullable semantics and usage.service.ts's fallback
+    // in trackUsage. Using 0 as the default would silently fail every call.
     const usageRows = productFeatures
       .filter((pf) => pf.features!.type === FeatureType.USAGE_QUOTA)
       .map((pf) => {
         const merged = this.mergeProperties(pf.features!.properties, pf.config);
+        const rawLimit = merged.limit;
+        const limitUnits = typeof rawLimit === 'number' ? rawLimit : null;
         return {
           customer_id: customerId,
           feature_id: pf.features!.id,
@@ -115,7 +120,7 @@ export class EntitlementService {
           period_start: usagePeriodStart,
           period_end: usagePeriodEnd,
           consumed_units: 0,
-          limit_units: (merged as Record<string, number>).limit || 0,
+          limit_units: limitUnits,
         };
       });
 
@@ -317,6 +322,8 @@ export class EntitlementService {
       .filter((pf) => pf.features!.type === FeatureType.USAGE_QUOTA)
       .map((pf) => {
         const merged = this.mergeProperties(pf.features!.properties, pf.config);
+        const rawLimit = merged.limit;
+        const limitUnits = typeof rawLimit === 'number' ? rawLimit : null;
         return {
           customer_id: customerId,
           feature_id: pf.features!.id,
@@ -324,7 +331,7 @@ export class EntitlementService {
           period_start: periodStart,
           period_end: periodEnd,
           consumed_units: 0,
-          limit_units: (merged as Record<string, number>).limit || 0,
+          limit_units: limitUnits,
         };
       });
 
