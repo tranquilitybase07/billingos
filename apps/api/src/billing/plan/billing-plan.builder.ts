@@ -129,6 +129,20 @@ export class BillingPlanBuilder {
       };
     }
 
+    // Same-price plan swap → update existing subscription in-place with no
+    // proration. Routed through ProrationInvoiceService (which dispatches on
+    // isPlainSwap to a no-op invoice path)
+    if (ctx.isInPlaceSwap && ctx.transition) {
+      return {
+        kind: 'update_subscription',
+        existingBosSubId: ctx.transition.oldSubscription.id,
+        newStripePriceId: ctx.price.stripePriceId,
+        newAmount: ctx.price.amount,
+        newProductId: ctx.product.id,
+        newPriceId: ctx.price.id,
+      };
+    }
+
     // In-place downgrade → schedule for end of billing period (paid→paid OR paid→free)
     if (ctx.isInPlaceDowngrade && ctx.transition) {
       const scheduledFor = ctx.transition.oldPeriodEnd || new Date();
@@ -201,8 +215,13 @@ export class BillingPlanBuilder {
       return { kind: 'no_transition' };
     }
 
-    // In-place upgrade/downgrade doesn't cancel — it updates
-    if (ctx.isInPlaceUpgrade || ctx.isInPlaceDowngrade || ctx.isTrialToTrialDowngrade) {
+    // In-place upgrade/downgrade/swap doesn't cancel — it updates
+    if (
+      ctx.isInPlaceUpgrade ||
+      ctx.isInPlaceDowngrade ||
+      ctx.isTrialToTrialDowngrade ||
+      ctx.isInPlaceSwap
+    ) {
       return { kind: 'no_transition' };
     }
 

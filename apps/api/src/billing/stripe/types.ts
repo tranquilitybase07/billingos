@@ -44,8 +44,9 @@ export interface UpdateStripeSubscriptionAction {
   /** Stripe customer ID — needed to list pending invoice items during upgrade */
   stripeCustomerId: string;
   newStripePriceId: string;
-  /** BOS checkout session ID — used as Stripe idempotency key + invoice metadata */
-  checkoutSessionId: string;
+  /** BOS checkout session ID — used as Stripe idempotency key + invoice metadata.
+   *  Optional because plain swaps don't create an invoice and don't need it. */
+  checkoutSessionId?: string;
   /** True when the billing interval changes (e.g. monthly→yearly) — requires billing_cycle_anchor: 'now' */
   intervalChanged: boolean;
   /** True when upgrading from a trialing subscription */
@@ -56,6 +57,9 @@ export interface UpdateStripeSubscriptionAction {
   trialCreditCurrency?: string;
   /** Unix timestamp for the new trial end date (trial-to-trial upgrade) */
   newTrialEnd?: number;
+  /** True when same-price plan swap: subscriptions.update items only,
+   *  proration_behavior: 'none', no invoice generation. */
+  isPlainSwap?: boolean;
 }
 
 export interface NoStripeAction {

@@ -80,36 +80,66 @@ export class EntitlementService {
       return { granted: [], usageRecordsCreated: 0 };
     }
 
-    // Build usage records for USAGE_QUOTA features
+    let subPeriodStart: string | null = null;
+    let subPeriodEnd: string | null = null;
+    {
+      const { data: subRow } = await supabase
+        .from('subscriptions')
+        .select('current_period_start, current_period_end')
+        .eq('id', subscriptionId)
+        .single();
+      subPeriodStart = subRow?.current_period_start ?? null;
+      subPeriodEnd = subRow?.current_period_end ?? null;
+    }
+    const usagePeriodStart = subPeriodStart ?? periodStart.toISOString();
+    const usagePeriodEnd = subPeriodEnd ?? periodEnd.toISOString();
+
+    // Build usage records for USAGE_QUOTA features.
+    // limit_units defaults to null (= unlimited) when no limit is configured,
+    // matching the schema's nullable semantics and usage.service.ts's fallback
+    // in trackUsage. Using 0 as the default would silently fail every call.
     const usageRows = productFeatures
       .filter((pf) => pf.features!.type === FeatureType.USAGE_QUOTA)
       .map((pf) => {
         const merged = this.mergeProperties(pf.features!.properties, pf.config);
+        const rawLimit = merged.limit;
+        const limitUnits = typeof rawLimit === 'number' ? rawLimit : null;
         return {
           customer_id: customerId,
           feature_id: pf.features!.id,
           subscription_id: subscriptionId,
-          period_start: periodStart.toISOString(),
-          period_end: periodEnd.toISOString(),
+          period_start: usagePeriodStart,
+          period_end: usagePeriodEnd,
           consumed_units: 0,
-          limit_units: (merged as Record<string, number>).limit || 0,
+          limit_units: limitUnits,
         };
       });
 
     let usageRecordsCreated = 0;
     if (usageRows.length > 0) {
+      // Upsert (not plain insert) so that on plan upgrade — where Stripe
+      // preserves current_period_start, making (customer_id, feature_id,
+      // period_start) collide with the prior plan's row — we RESET the
+      // existing row's consumed_units to 0 and update limit_units to the
+      // new plan's value. This is the standard SaaS upgrade behavior:
+      // customer paid more, gets fresh quota. A plain INSERT would 23505
+      // and the error would be swallowed below, leaving the customer
+      // stuck at the old consumed/limit.
       const { error: usageError } = await supabase
         .from('usage_records')
-        .insert(usageRows);
+        .upsert(usageRows, {
+          onConflict: 'customer_id,feature_id,period_start',
+          ignoreDuplicates: false,
+        });
 
       if (usageError) {
         this.logger.error(
-          `Failed to create usage records for subscription ${subscriptionId}: ${usageError.message}`,
+          `Failed to upsert usage records for subscription ${subscriptionId}: ${usageError.message}`,
         );
       } else {
         usageRecordsCreated = usageRows.length;
         this.logger.log(
-          `Created ${usageRecordsCreated} usage records for subscription ${subscriptionId}`,
+          `Upserted ${usageRecordsCreated} usage records for subscription ${subscriptionId} (resets consumed_units on plan change)`,
         );
       }
     }
@@ -256,6 +286,61 @@ export class EntitlementService {
       } else {
         this.logger.log(
           `Ensured grants for subscription ${subscriptionId}: ${existingFeatureIds.size} existing, ${newGrants.length} new`,
+        );
+      }
+    }
+
+    // Also upsert usage_records for USAGE_QUOTA features. Without this, fresh
+    // paid subscriptions (which reach this method via the payment_intent.succeeded
+    // webhook → ensureGrantsForSubscription path, NOT through the swap path that
+    // calls grantForSubscription) would have feature_grants but no usage_records,
+    // so getUsageMetrics either shows nothing or surfaces a stale row from a prior
+    // cancelled subscription. Aligns with the subscription's authoritative
+    // current_period_start/end so the upsert key matches what trackUsage will
+    // look up via track_feature_usage.
+    const { data: subRow } = await supabase
+      .from('subscriptions')
+      .select('current_period_start, current_period_end')
+      .eq('id', subscriptionId)
+      .single();
+    const periodStart =
+      subRow?.current_period_start ?? new Date().toISOString();
+    const periodEnd =
+      subRow?.current_period_end ??
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const usageRows = productFeatures
+      .filter((pf) => pf.features!.type === FeatureType.USAGE_QUOTA)
+      .map((pf) => {
+        const merged = this.mergeProperties(pf.features!.properties, pf.config);
+        const rawLimit = merged.limit;
+        const limitUnits = typeof rawLimit === 'number' ? rawLimit : null;
+        return {
+          customer_id: customerId,
+          feature_id: pf.features!.id,
+          subscription_id: subscriptionId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          consumed_units: 0,
+          limit_units: limitUnits,
+        };
+      });
+
+    if (usageRows.length > 0) {
+      const { error: usageError } = await supabase
+        .from('usage_records')
+        .upsert(usageRows, {
+          onConflict: 'customer_id,feature_id,period_start',
+          ignoreDuplicates: false,
+        });
+
+      if (usageError) {
+        this.logger.error(
+          `Failed to upsert usage records for subscription ${subscriptionId}: ${usageError.message}`,
+        );
+      } else {
+        this.logger.log(
+          `Upserted ${usageRows.length} usage records for subscription ${subscriptionId} (ensureGrants path)`,
         );
       }
     }

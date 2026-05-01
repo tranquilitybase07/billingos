@@ -211,6 +211,7 @@ export class StripePlanExecutor {
       trialCreditAmount: action.trialCreditAmount,
       trialCreditCurrency: action.trialCreditCurrency,
       newTrialEnd: action.newTrialEnd,
+      isPlainSwap: action.isPlainSwap,
     });
 
     switch (result.kind) {

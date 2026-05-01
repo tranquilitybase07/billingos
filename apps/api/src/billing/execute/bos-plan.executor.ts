@@ -412,6 +412,7 @@ export class BosPlanExecutor {
     }
 
     // Update BOS subscription record
+    const transitionLabel = ctx.isInPlaceSwap ? 'plan_swapped' : 'upgraded';
     const { error: updateError } = await supabase
       .from('subscriptions')
       .update({
@@ -424,9 +425,11 @@ export class BosPlanExecutor {
         current_period_end: extractPeriodEnd(result.subscription),
         metadata: {
           ...ctx.transition!.oldSubscription.metadata,
-          upgradedAt: new Date().toISOString(),
+          [ctx.isInPlaceSwap ? 'swappedAt' : 'upgradedAt']:
+            new Date().toISOString(),
           previousProductId: ctx.transition!.oldSubscription.productId,
           upgradeMethod: 'in_place',
+          transitionReason: transitionLabel,
         } as Json,
       })
       .eq('id', sub.existingBosSubId)
@@ -966,6 +969,7 @@ export class BosPlanExecutor {
   ): PipelineResult['checkoutMode'] {
     if (ctx.isFreeProduct) return 'free';
     if (ctx.isInPlaceUpgrade) return 'upgrade';
+    if (ctx.isInPlaceSwap) return 'upgrade';
     if (ctx.isInPlaceDowngrade) return 'downgrade';
     if (plan.subscription.kind === 'setup_trial') return 'trial';
     if (plan.useAdaptivePricing) return 'adaptive';

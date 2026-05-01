@@ -29,7 +29,9 @@ export class StripePlanBuilder {
         return { kind: 'no_stripe_action' };
 
       case 'update_subscription':
-        if (!ctx.existingCheckoutSessionId) {
+        // Plain swaps don't go through the proration-invoice flow, so they
+        // don't need a checkout session ID. All other in-place updates do.
+        if (!ctx.isInPlaceSwap && !ctx.existingCheckoutSessionId) {
           throw new BadRequestException(
             'In-place upgrade requires an existing checkout session ID',
           );
@@ -44,6 +46,7 @@ export class StripePlanBuilder {
           intervalChanged:
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
+          isPlainSwap: ctx.isInPlaceSwap,
           // Trial-to-trial (upgrade or downgrade): grant fresh trial, no credit/charge
           ...(ctx.isTrialToTrialUpgrade || ctx.isTrialToTrialDowngrade
             ? {
@@ -156,7 +159,8 @@ export class StripePlanBuilder {
       },
     };
 
-    const stableKey = ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
+    const stableKey =
+      ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
     const idempotencyKey = `sub-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
 
     return {
