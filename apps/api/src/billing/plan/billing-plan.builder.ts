@@ -131,8 +131,7 @@ export class BillingPlanBuilder {
 
     // Same-price plan swap → update existing subscription in-place with no
     // proration. Routed through ProrationInvoiceService (which dispatches on
-    // isPlainSwap to a no-op invoice path) so we share the same Stripe
-    // execution code path as upgrades.
+    // isPlainSwap to a no-op invoice path)
     if (ctx.isInPlaceSwap && ctx.transition) {
       return {
         kind: 'update_subscription',

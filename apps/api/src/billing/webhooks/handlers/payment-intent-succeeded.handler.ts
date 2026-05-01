@@ -105,11 +105,7 @@ export class PaymentIntentSucceededHandler
         string,
         unknown
       >;
-      // Stripe doesn't propagate subscription.metadata onto the auto-generated
-      // payment_intent for `default_incomplete` flows, so paymentIntent.metadata
-      // is often {} for fresh-subscription PIs. Fall back to the BOS payment
-      // intents row, which has organization_id / product_id / price_id stored
-      // as columns at creation time (see BosPlanExecutor.handleSubscriptionCreated).
+
       const organizationId =
         metadata.organizationId || paymentIntentRecord.organization_id;
       const productId = metadata.productId || paymentIntentRecord.product_id;
@@ -231,10 +227,7 @@ export class PaymentIntentSucceededHandler
     const metadata = paymentIntent.metadata || {};
     const checkoutMetadata =
       (checkoutSession?.metadata as Record<string, unknown> | null) || null;
-    // Same fallback as handle(): default_incomplete PIs have empty metadata,
-    // so read from the BOS payment_intents row when Stripe didn't propagate it.
-    // payment_intents columns are nullable; coerce null → undefined so the
-    // downstream `if (!productId)` check narrows the type cleanly.
+
     const organizationId =
       metadata.organizationId || paymentIntentRecord.organization_id;
     const productId =
@@ -469,10 +462,7 @@ export class PaymentIntentSucceededHandler
       string,
       unknown
     >;
-    // Same fallback as handle(): default_incomplete PIs have empty metadata,
-    // so read from the BOS payment_intents row when Stripe didn't propagate it.
-    // payment_intents columns are nullable; coerce null → undefined so the
-    // downstream `if (!productId)` check narrows the type cleanly.
+
     const organizationId =
       metadata.organizationId || paymentIntentRecord.organization_id;
     const externalUserId = metadata.externalUserId;

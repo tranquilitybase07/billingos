@@ -44,10 +44,6 @@ export class UsageService {
     }
 
     // Get active subscription with the feature.
-    // We pull `properties` off feature_grants (the per-grant snapshot of the
-    // resolved feature config taken at grant time) — that's where the limit
-    // lives. `features.properties` is the global feature registry (unit,
-    // reset_period) and intentionally does NOT carry per-product limits.
     const { data: grants } = await supabase
       .from('feature_grants')
       .select(
@@ -97,18 +93,6 @@ export class UsageService {
     }
 
     // Atomic upsert + increment + limit check via Postgres RPC.
-    //
-    // Replaces a prior multi-step SELECT-then-INSERT-then-UPDATE flow that
-    // had two production-impacting races:
-    //   1. The fetch filtered by subscription_id, but the table's unique
-    //      constraint is (customer_id, feature_id, period_start) — no
-    //      subscription_id. A mid-period upgrade/swap meant the SELECT
-    //      missed the existing row and the INSERT hit a 23505.
-    //   2. Two concurrent calls both read consumed_units, both wrote
-    //      read+units, and one increment was silently lost.
-    // The RPC does the upsert + increment in a single statement (row-locked
-    // by Postgres) and surfaces quota overflow via the existing CHECK
-    // constraint, returning exceeded=TRUE instead of a DB error.
     const periodStart =
       (grant as any).subscriptions?.current_period_start ||
       new Date().toISOString();
@@ -116,10 +100,6 @@ export class UsageService {
       (grant as any).subscriptions?.current_period_end ||
       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     // Read the limit from the grant's snapshot (set at grant time).
-    // Falling back to null = unlimited, matching the schema's NULL semantics
-    // on usage_records.limit_units. The previous default of 0 made every
-    // call exceed quota when the limit was missing — the opposite of what
-    // an unconfigured feature should mean.
     const grantProperties = (grant as any).properties as Record<
       string,
       unknown
@@ -150,10 +130,6 @@ export class UsageService {
       throw new BadRequestException('Failed to track usage');
     }
 
-    // The RPC returns columns prefixed with `out_` so they don't shadow the
-    // same-named columns of usage_records inside the function body (Postgres
-    // error 42702). The wire shape of the BillingOS API response is unaffected
-    // — we re-expose the unprefixed names below.
     if (usageRecord.out_exceeded === true) {
       throw new BadRequestException('quota_exceeded', {
         cause: {

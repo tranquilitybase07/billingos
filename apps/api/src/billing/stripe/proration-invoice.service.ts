@@ -95,9 +95,6 @@ export class ProrationInvoiceService {
     // 2a-plain-swap. Same-price plan swap: rotate the price item with no
     //     proration. No charge, no credit, no invoice generated — so we
     //     deliberately exit BEFORE the payment-method lookup below to avoid
-    //     1–2 wasted Stripe API calls on a path that will never use them.
-    //     Mirrors Autumn's plan-change semantics (single subscriptions.update
-    //     with proration_behavior:'none').
     if (params.isPlainSwap) {
       let updatedSub: Stripe.Subscription;
       try {

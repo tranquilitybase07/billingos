@@ -80,15 +80,6 @@ export class EntitlementService {
       return { granted: [], usageRecordsCreated: 0 };
     }
 
-    // For usage_records we MUST align with the subscription's authoritative
-    // current_period_start/end (the ones Stripe just confirmed and
-    // handleSubscriptionUpdated has already mirrored into the BOS subscriptions
-    // row). The caller's `periodStart` is `new Date()` from EntitlementPlanner,
-    // which on an in-place upgrade is later than the subscription's preserved
-    // billing period. Trusting it would create a SECOND usage_record at a
-    // different period_start, leaving the original (consumed=quota, limit=old)
-    // intact — the next track-usage call would resolve to the old row and fire
-    // quota_exceeded.
     let subPeriodStart: string | null = null;
     let subPeriodEnd: string | null = null;
     {
