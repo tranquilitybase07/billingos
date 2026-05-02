@@ -28,7 +28,7 @@ export const DashboardLayout = ({ children }: PropsWithChildren) => {
         <DashboardSidebar />
 
         {/* Main content area — offset by banner height when in sandbox */}
-        <SidebarInset className={cn('flex w-full flex-col', isSandbox && 'pt-9')}>
+        <SidebarInset className={cn('flex w-full flex-col overflow-y-auto', isSandbox && 'pt-9')}>
           {children}
         </SidebarInset>
       </div>
