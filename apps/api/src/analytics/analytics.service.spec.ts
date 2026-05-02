@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { AnalyticsService } from './analytics.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StripeService } from '../stripe/stripe.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
@@ -12,6 +13,10 @@ describe('AnalyticsService', () => {
         AnalyticsService,
         {
           provide: SupabaseService,
+          useValue: { getClient: jest.fn() },
+        },
+        {
+          provide: StripeService,
           useValue: { getClient: jest.fn() },
         },
         {
