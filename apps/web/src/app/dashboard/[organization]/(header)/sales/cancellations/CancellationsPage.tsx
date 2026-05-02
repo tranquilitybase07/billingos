@@ -3,16 +3,15 @@
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { DataTable, DataTableColumnHeader } from '@/components/atoms/datatable'
 import { Button } from '@/components/ui/button'
-import { Download01Icon, FilterIcon, Layers01Icon, PlusSignIcon } from 'hugeicons-react'
+import { Download01Icon, FilterIcon, Layers01Icon } from 'hugeicons-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { downloadCSV } from '@/utils/csv'
 import { useState, useMemo } from 'react'
 import type { SortingState } from '@tanstack/react-table'
-import Link from 'next/link'
 import { FocusModePanel } from './FocusModePanel'
-import { NewCancellationModal } from './NewCancellationModal'
+import { CustomerDrawer, type EnrichedCustomer } from '@/components/Customers/CustomerDrawer'
 import type { CancellationRow, FilterState } from './types'
 import { EMPTY_FILTERS } from './types'
 import { REASON_LABELS, REASON_VARIANTS, formatDate, formatCurrencyShort, calculateTenure } from './utils'
@@ -190,7 +189,7 @@ function FilterBar({
                 </div>
               )}
 
-              {/* MRR Range */}
+              {/* Lifetime Rev Range */}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">Lifetime Rev Range ($)</label>
                 <div className="flex items-center gap-2">
@@ -257,8 +256,7 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isFocusOpen, setIsFocusOpen] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [manualEntries, setManualEntries] = useState<CancellationRow[]>([])
+  const [selectedRow, setSelectedRow] = useState<CancellationRow | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
 
   const { data: allSubscriptions, isLoading } = useOrganizationSubscriptions(organizationId)
@@ -286,15 +284,10 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
       }))
   }, [allSubscriptions, defaultCurrency])
 
-  const allRows = useMemo<CancellationRow[]>(
-    () => [...manualEntries, ...apiRows],
-    [manualEntries, apiRows],
-  )
-
   // Unique plan options for filter bar
   const planOptions = useMemo(
-    () => [...new Set(allRows.map((r) => r.plan).filter(Boolean))],
-    [allRows],
+    () => [...new Set(apiRows.map((r) => r.plan).filter(Boolean))],
+    [apiRows],
   )
 
   // Active filter count for badge
@@ -309,7 +302,7 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
   }, [filters])
 
   const filtered = useMemo<CancellationRow[]>(() => {
-    let result = [...allRows]
+    let result = [...apiRows]
 
     if (filters.search) {
       const q = filters.search.toLowerCase()
@@ -369,7 +362,7 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
     }
 
     return result
-  }, [allRows, filters, sorting])
+  }, [apiRows, filters, sorting])
 
   const stats = useMemo(() => {
     const total = filtered.length
@@ -399,6 +392,31 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
     }))
     downloadCSV(rows, `cancellations-${organizationSlug}-${new Date().toISOString().split('T')[0]}.csv`)
   }
+
+  // Build EnrichedCustomer from the selected cancellation row + raw subscriptions
+  const drawerCustomer = useMemo<EnrichedCustomer | null>(() => {
+    if (!selectedRow || !selectedRow.customerDbId) return null
+    const customerSubs = allSubscriptions?.filter(
+      (s) => (s.customer?.id ?? s.customer_id) === selectedRow.customerDbId,
+    ) ?? []
+    const displayName = selectedRow.customerName || selectedRow.customerEmail
+    return {
+      id: selectedRow.customerDbId,
+      name: selectedRow.customerName || selectedRow.customerEmail,
+      email: selectedRow.customerEmail,
+      country: '',
+      created_at: customerSubs[0]?.created_at ?? '',
+      avatarInitial: displayName.charAt(0).toUpperCase(),
+      planName: selectedRow.plan || null,
+      subscriptionStatus: 'canceled',
+      mrr: selectedRow.amount,
+      churnRisk: 'Churned',
+      cancelAtPeriodEnd: false,
+      primarySubscriptionId: selectedRow.id,
+      subscriptions: customerSubs,
+      pendingDowngrade: null,
+    }
+  }, [selectedRow, allSubscriptions])
 
   return (
     <DashboardBody>
@@ -441,15 +459,6 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
               Focus
             </button>
 
-            {/* New entry */}
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <PlusSignIcon size={15} />
-              New entry
-            </button>
-
             <span className="text-xs text-muted-foreground ml-2 pl-2 border-l border-border">
               {filtered.length} entries
             </span>
@@ -487,113 +496,117 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
             <p className="text-xs text-muted-foreground max-w-xs">
               {activeFilterCount > 0
                 ? 'No results match your current filters. Try clearing some filters.'
-                : 'Churned customers will appear here. You can also add a manual entry.'}
+                : 'Churned customers will appear here once someone cancels.'}
             </p>
           </div>
         )}
 
         {/* Table */}
-        <DataTable
-          data={filtered}
-          isLoading={isLoading}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          rowCount={filtered.length}
-          columns={[
-            {
-              id: 'customer',
-              accessorKey: 'customerName',
-              size: 200,
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
-              cell: ({ row: { original: r } }) => {
-                const displayName = r.customerName || r.customerEmail
-                const initial = displayName?.charAt(0).toUpperCase() || '?'
-                return (
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                      {initial}
+        <div className="overflow-x-auto">
+          <DataTable
+            data={filtered}
+            isLoading={isLoading}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            rowCount={filtered.length}
+            columns={[
+              {
+                id: 'customer',
+                accessorKey: 'customerName',
+                size: 200,
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
+                cell: ({ row: { original: r } }) => {
+                  const displayName = r.customerName || r.customerEmail
+                  const initial = displayName?.charAt(0).toUpperCase() || '?'
+                  return (
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                        {initial}
+                      </div>
+                      <div className="flex flex-col truncate">
+                        <div className="truncate text-sm font-medium">{displayName}</div>
+                        {r.customerName && (
+                          <div className="truncate text-xs text-muted-foreground">{r.customerEmail}</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col truncate">
-                      <div className="truncate text-sm font-medium">{displayName}</div>
-                      {r.customerName && (
-                        <div className="truncate text-xs text-muted-foreground">{r.customerEmail}</div>
-                      )}
-                    </div>
-                  </div>
-                )
+                  )
+                },
               },
-            },
-            {
-              id: 'plan',
-              accessorKey: 'plan',
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Plan" />,
-              cell: ({ row: { original: r } }) => (
-                <span className="text-sm font-medium">{r.plan || '—'}</span>
-              ),
-            },
-            {
-              id: 'reason',
-              accessorKey: 'reason',
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Reason" />,
-              cell: ({ row: { original: r } }) =>
-                r.reason ? (
-                  <ReasonBadge reason={r.reason} />
-                ) : (
-                  <span className="text-muted-foreground/50 text-sm">—</span>
+              {
+                id: 'plan',
+                accessorKey: 'plan',
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Plan" />,
+                cell: ({ row: { original: r } }) => (
+                  <span className="text-sm font-medium">{r.plan || '—'}</span>
                 ),
-            },
-            {
-              id: 'notes',
-              header: () => <span className="text-xs font-medium text-muted-foreground">Notes</span>,
-              cell: ({ row: { original: r } }) =>
-                r.notes ? (
-                  <span className="text-sm text-muted-foreground line-clamp-2 max-w-[240px]">{r.notes}</span>
-                ) : (
-                  <span className="text-muted-foreground/40">—</span>
+              },
+              {
+                id: 'reason',
+                accessorKey: 'reason',
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Reason" />,
+                cell: ({ row: { original: r } }) =>
+                  r.reason ? (
+                    <ReasonBadge reason={r.reason} />
+                  ) : (
+                    <span className="text-muted-foreground/50 text-sm">—</span>
+                  ),
+              },
+              {
+                id: 'notes',
+                header: () => <span className="text-xs font-medium text-muted-foreground">Notes</span>,
+                cell: ({ row: { original: r } }) =>
+                  r.notes ? (
+                    <span className="text-sm text-muted-foreground line-clamp-2 max-w-[240px]">{r.notes}</span>
+                  ) : (
+                    <span className="text-muted-foreground/40">—</span>
+                  ),
+              },
+              {
+                id: 'amount',
+                accessorKey: 'amount',
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Lifetime Rev" />,
+                cell: ({ row: { original: r } }) => (
+                  <span className="text-sm text-muted-foreground">
+                    {formatCurrencyShort(r.amount, r.currency)}
+                  </span>
                 ),
-            },
-            {
-              id: 'amount',
-              accessorKey: 'amount',
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Lifetime Rev" />,
-              cell: ({ row: { original: r } }) => (
-                <span className="text-sm text-muted-foreground">
-                  {formatCurrencyShort(r.amount, r.currency)}
-                </span>
-              ),
-            },
-            {
-              id: 'tenure',
-              accessorKey: 'tenure',
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Tenure" />,
-              cell: ({ row: { original: r } }) => (
-                <span className="text-sm text-muted-foreground">{r.tenure}</span>
-              ),
-            },
-            {
-              id: 'cancelDate',
-              accessorKey: 'cancelDate',
-              header: ({ column }) => <DataTableColumnHeader column={column} title="Cancel Date" />,
-              cell: ({ row: { original: r } }) => (
-                <span className="text-sm text-muted-foreground">{formatDate(r.cancelDate)}</span>
-              ),
-            },
-            {
-              id: 'actions',
-              header: () => null,
-              cell: ({ row: { original: r } }) =>
-                r.customerDbId && !r.isManual ? (
-                  <span className="flex justify-end">
-                    <Link href={`/dashboard/${organizationSlug}/customers/${r.customerDbId}`}>
-                      <Button variant="secondary" size="sm">
+              },
+              {
+                id: 'tenure',
+                accessorKey: 'tenure',
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Tenure" />,
+                cell: ({ row: { original: r } }) => (
+                  <span className="text-sm text-muted-foreground">{r.tenure}</span>
+                ),
+              },
+              {
+                id: 'cancelDate',
+                accessorKey: 'cancelDate',
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Cancel Date" />,
+                cell: ({ row: { original: r } }) => (
+                  <span className="text-sm text-muted-foreground">{formatDate(r.cancelDate)}</span>
+                ),
+              },
+              {
+                id: 'actions',
+                header: () => null,
+                cell: ({ row: { original: r } }) =>
+                  r.customerDbId ? (
+                    <span className="flex justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setSelectedRow(r)}
+                      >
                         View Customer
                       </Button>
-                    </Link>
-                  </span>
-                ) : null,
-            },
-          ]}
-        />
+                    </span>
+                  ) : null,
+              },
+            ]}
+          />
+        </div>
       </div>
 
       <FocusModePanel
@@ -602,16 +615,11 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
         onClose={() => setIsFocusOpen(false)}
       />
 
-      <NewCancellationModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        defaultCurrency={defaultCurrency}
-        onSave={(entry) =>
-          setManualEntries((prev) => [
-            { ...entry, id: crypto.randomUUID() },
-            ...prev,
-          ])
-        }
+      <CustomerDrawer
+        customer={drawerCustomer}
+        organizationId={organizationId}
+        open={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
       />
     </DashboardBody>
   )
