@@ -16,7 +16,6 @@
  * - Concurrent grant + revoke determinism         E7
  * - Customer-id scoping at the table level        E8
  */
-import { INestApplication } from '@nestjs/common';
 import { TestingModule } from '@nestjs/testing';
 import {
   createIntegrationTestModule,
@@ -35,14 +34,12 @@ import { EntitlementService } from '../entitlement.service';
 import { SupabaseService } from '../../../supabase/supabase.service';
 
 describe('EntitlementService Integration', () => {
-  let app: INestApplication;
   let module: TestingModule;
   let cleanup: () => Promise<void>;
   let entitlements: EntitlementService;
 
   beforeAll(async () => {
     const ctx = await createIntegrationTestModule();
-    app = ctx.app;
     module = ctx.module;
     cleanup = ctx.cleanup;
     entitlements = module.get(EntitlementService);

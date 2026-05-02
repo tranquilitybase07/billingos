@@ -22,7 +22,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Building02Icon,
   Logout01Icon,
   PlusSignIcon,
   ArrowDown01Icon,

@@ -14,7 +14,10 @@ import { StripeService } from '../../../stripe/stripe.service';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
 import { EntitlementService } from '../../entitlements/entitlement.service';
-import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
+import {
+  extractPeriodStart,
+  extractPeriodEnd,
+} from '../../utils/period-end.helper';
 
 /**
  * Handles `checkout.session.completed` webhook events.

@@ -12,7 +12,10 @@ import { RedisService } from '../../redis/redis.service';
 import { CheckoutMetadataService } from '../../v1/checkout/checkout-metadata.service';
 import { DiscountContext } from '../context/types';
 import { StripeCouponParams } from '../plan/types';
-import { extractPeriodStart, extractPeriodEnd } from '../utils/period-end.helper';
+import {
+  extractPeriodStart,
+  extractPeriodEnd,
+} from '../utils/period-end.helper';
 import type { Json } from '../../../../../packages/shared/types/database';
 
 // ── Response types ──
@@ -454,7 +457,7 @@ export class CheckoutDiscountService {
     // 2. Create new subscription with/without discounts
     const createParams: Stripe.SubscriptionCreateParams = {
       customer: originalSub.customer as string,
-      items: [{ price: (originalSub.items.data[0]?.price).id }],
+      items: [{ price: originalSub.items.data[0].price.id }],
       payment_behavior: 'default_incomplete',
       payment_settings: {
         save_default_payment_method: 'on_subscription',

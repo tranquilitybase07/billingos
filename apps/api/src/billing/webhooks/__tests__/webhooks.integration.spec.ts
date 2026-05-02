@@ -10,7 +10,6 @@
  * - Trial setup intent handler                   W8
  * - Failure path: Redis key cleared on throw    W9
  */
-import { INestApplication } from '@nestjs/common';
 import { TestingModule } from '@nestjs/testing';
 import {
   createIntegrationTestModule,
@@ -35,13 +34,11 @@ import { SupabaseService } from '../../../supabase/supabase.service';
 import { PaymentIntentSucceededHandler } from '../handlers/payment-intent-succeeded.handler';
 
 describe('Webhook Middleware Integration', () => {
-  let app: INestApplication;
   let module: TestingModule;
   let cleanup: () => Promise<void>;
 
   beforeAll(async () => {
     const ctx = await createIntegrationTestModule();
-    app = ctx.app;
     module = ctx.module;
     cleanup = ctx.cleanup;
   });
@@ -171,7 +168,9 @@ describe('Webhook Middleware Integration', () => {
       const grants = await fetchRows(module, 'feature_grants', {
         subscription_id: sub.id as string,
       });
-      expect(grants.filter((g) => g.revoked_at === null).length).toBeGreaterThanOrEqual(1);
+      expect(
+        grants.filter((g) => g.revoked_at === null).length,
+      ).toBeGreaterThanOrEqual(1);
     });
 
     it('W4: invoice.payment_failed sets sub past_due and revokes grants', async () => {
@@ -486,9 +485,9 @@ describe('Webhook Middleware Integration', () => {
         eventId: `evt_w9_${Date.now()}`,
       });
 
-      await expect(scenario.webhookMiddleware.handleEvent(event)).rejects.toThrow(
-        'Simulated handler failure',
-      );
+      await expect(
+        scenario.webhookMiddleware.handleEvent(event),
+      ).rejects.toThrow('Simulated handler failure');
       spy.mockRestore();
 
       // Audit row must be marked failed.

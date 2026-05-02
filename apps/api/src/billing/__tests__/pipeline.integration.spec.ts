@@ -15,7 +15,7 @@
  * - Duplicate prevention (P9)
  * - Stripe failure → no BOS orphans (P10)
  */
-import { INestApplication, BadRequestException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { TestingModule } from '@nestjs/testing';
 import {
   createIntegrationTestModule,
@@ -40,13 +40,11 @@ import { StripeService } from '../../stripe/stripe.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 
 describe('Pipeline Integration', () => {
-  let app: INestApplication;
   let module: TestingModule;
   let cleanup: () => Promise<void>;
 
   beforeAll(async () => {
     const ctx = await createIntegrationTestModule();
-    app = ctx.app;
     module = ctx.module;
     cleanup = ctx.cleanup;
   });
@@ -132,7 +130,11 @@ describe('Pipeline Integration', () => {
         }),
       });
 
-      const updatedSub = await fetchRow(module, 'subscriptions', sub.id as string);
+      const updatedSub = await fetchRow(
+        module,
+        'subscriptions',
+        sub.id as string,
+      );
       expect(updatedSub?.status).toBe('active');
 
       const grants = await fetchRows(module, 'feature_grants', {
@@ -306,7 +308,6 @@ describe('Pipeline Integration', () => {
       });
 
       // Grant starter's features so we can verify the swap
-      const starterFeature = scenario.features['starter.dashboard'];
       await scenario.entitlementService.grantForSubscription({
         customerId: scenario.customer.id,
         subscriptionId: existingSubId,
@@ -340,9 +341,9 @@ describe('Pipeline Integration', () => {
       // Pro has a feature (`analytics`) that starter does not — that grant
       // must be present.
       const proAnalyticsId = scenario.features['pro.analytics'].id;
-      expect(
-        activeAfter.some((g) => g.feature_id === proAnalyticsId),
-      ).toBe(true);
+      expect(activeAfter.some((g) => g.feature_id === proAnalyticsId)).toBe(
+        true,
+      );
     });
   });
 

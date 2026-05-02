@@ -120,34 +120,37 @@ export function OnboardingFlow() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [answers, setAnswers] = useState<OnboardingAnswers>({});
+  const [hasSyncedFromServer, setHasSyncedFromServer] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: onboardingState, isLoading } = useOnboardingState();
   const updateOnboarding = useUpdateOnboarding();
 
-  // Route to correct step based on DB state
+  // Initialize step + answers from DB once. Subsequent query revalidations
+  // must NOT clobber user progress, so this is a one-shot sync gated by
+  // `hasSyncedFromServer`. Setting state during render is the React-blessed
+  // pattern for syncing server data into local state without an effect.
+  if (onboardingState && !hasSyncedFromServer) {
+    setHasSyncedFromServer(true);
+    const step = onboardingState.onboarding_step;
+    if (step !== 'complete') {
+      setCurrentStep(step === 'create_org' ? 6 : 1);
+      const restored = onboardingState.onboarding_answers;
+      if (restored && Object.keys(restored).length > 0) {
+        setAnswers(restored as OnboardingAnswers);
+      }
+    }
+  }
+
+  // Side effects (cookie, redirect) belong in an effect.
   useEffect(() => {
     if (!onboardingState) return;
-
     const step = onboardingState.onboarding_step;
-
     if (step === 'complete') {
       setOnboardingCookie('complete');
       router.replace('/dashboard');
-      return;
-    }
-
-    if (step === 'create_org') {
-      setCurrentStep(6);
+    } else if (step === 'create_org') {
       setOnboardingCookie('create_org');
-    } else {
-      // 'questions' — start from Q1
-      setCurrentStep(1);
-    }
-
-    // Restore answers from DB if any
-    if (onboardingState.onboarding_answers && Object.keys(onboardingState.onboarding_answers).length > 0) {
-      setAnswers(onboardingState.onboarding_answers as OnboardingAnswers);
     }
   }, [onboardingState, router]);
 

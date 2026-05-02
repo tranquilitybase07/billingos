@@ -640,7 +640,7 @@ export class OrganizationService {
     orgId: string,
     userId: string,
     fileName: string,
-    contentType: string,
+    _contentType: string,
   ): Promise<{ signedUrl: string; publicUrl: string; path: string }> {
     const supabase = this.supabaseService.getClient();
 

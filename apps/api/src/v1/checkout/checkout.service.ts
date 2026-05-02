@@ -104,9 +104,9 @@ function mapDbStatusToSession(
       return 'pending';
     case 'awaiting_payment':
     case 'executing':
-    // The SDK uses the `requiresAction` flag (not status) to drive the SCA
-    // UI, so a session in `requires_action` still surfaces as `processing`.
     case 'requires_action':
+      // The SDK uses the `requiresAction` flag (not status) to drive the SCA
+      // UI, so a session in `requires_action` still surfaces as `processing`.
       return 'processing';
     case 'completed':
       return 'completed';

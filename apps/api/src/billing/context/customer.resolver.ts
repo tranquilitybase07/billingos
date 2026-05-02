@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { StripeService } from '../../stripe/stripe.service';
 import { CustomersService } from '../../customers/customers.service';
@@ -71,7 +71,9 @@ export class CustomerResolver {
       name,
       stripe_customer_id: stripeCustomer.id,
       metadata: metadata
-        ? Object.fromEntries(Object.entries(metadata).map(([k, v]) => [k, String(v)]))
+        ? Object.fromEntries(
+            Object.entries(metadata).map(([k, v]) => [k, String(v)]),
+          )
         : undefined,
     });
 

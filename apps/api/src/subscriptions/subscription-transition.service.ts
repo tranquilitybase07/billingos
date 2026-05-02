@@ -530,7 +530,7 @@ export class SubscriptionTransitionService {
    */
   async handleDowngradeCompletion(
     subscriptionId: string,
-    metadata: Record<string, unknown>,
+    _metadata: Record<string, unknown>,
   ): Promise<void> {
     this.logger.log(
       `Downgrade completion: revoking features for subscription ${subscriptionId}`,
