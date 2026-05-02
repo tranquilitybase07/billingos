@@ -322,7 +322,9 @@ export async function seedFeature(
   const type = overrides.type || 'boolean_flag';
   const name = overrides.name || `feature-${generatedId.substring(0, 8)}`;
   const title =
-    overrides.title || overrides.name || `Feature ${generatedId.substring(0, 6)}`;
+    overrides.title ||
+    overrides.name ||
+    `Feature ${generatedId.substring(0, 6)}`;
 
   // Features are scoped (org, name) by unique constraint. When two products
   // in the same org share a feature (e.g. "dashboard"), reuse the existing
@@ -369,7 +371,7 @@ export async function seedFeature(
     const used = new Set<number>(
       (rows ?? []).map((r: { display_order: number }) => r.display_order),
     );
-    displayOrder = 0;
+    displayOrder = 1;
     while (used.has(displayOrder)) displayOrder++;
   }
 
