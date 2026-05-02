@@ -70,16 +70,17 @@ jobs:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
-      # Integration tests temporarily disabled — seed helpers need auth.users FK fix
-      # - name: Run API integration tests
-      #   run: pnpm --filter api test:integration
-      #   env:
-      #     SUPABASE_URL: ${{ steps.supabase.outputs.url }}
-      #     SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supabase.outputs.service_role_key }}
-      #     SUPABASE_ANON_KEY: ${{ steps.supabase.outputs.anon_key }}
-      #     STRIPE_SECRET_KEY: sk_test_integration
-      #     STRIPE_WEBHOOK_SECRET: whsec_test_integration
-      #     STRIPE_MOCK_HOST: localhost
-      #     STRIPE_MOCK_PORT: '12111'
-      #     REDIS_URL: redis://localhost:6379
-      #     NODE_ENV: test
+      - name: Run API integration tests
+        run: pnpm --filter api test:integration
+        env:
+          SUPABASE_URL: ${{ steps.supabase.outputs.url }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supabase.outputs.service_role_key }}
+          SUPABASE_ANON_KEY: ${{ steps.supabase.outputs.anon_key }}
+          STRIPE_SECRET_KEY: sk_test_integration
+          STRIPE_WEBHOOK_SECRET: whsec_test_integration
+          STRIPE_MOCK_HOST: localhost
+          STRIPE_MOCK_PORT: '12111'
+          REDIS_URL: redis://localhost:6379
+          REDIS_HOST: localhost
+          REDIS_PORT: '6379'
+          NODE_ENV: test

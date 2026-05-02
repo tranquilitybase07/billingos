@@ -137,3 +137,49 @@ For new features, create `docs/[feature-name]/` with:
 - Extract common logic into reusable helpers (DRY)
 - Use transactions for multi-step database operations
 - Write tests for critical backend logic
+
+## Comments
+
+Default: write no comments. Well-named identifiers explain *what*; comments are only for *why* when it isn't obvious from the code.
+
+Only add a comment when it captures something a reader can't see: a hidden constraint, a subtle invariant, a non-obvious tradeoff, or a workaround for specific external behavior (Stripe quirk, browser bug, race condition). If removing the comment wouldn't confuse a future reader, don't write it.
+
+Comments must be **neutral and timeless** — written for any future dev, not narrating the current session.
+
+Bad — restates the code:
+```ts
+// Increment the counter
+counter++;
+// Loop through users
+for (const user of users) { ... }
+```
+
+Bad — session/task narration:
+```ts
+// Fixed bug where discount wasn't applied
+// Added this because the user reported X
+// We need to do this because of the issue we just discussed
+// TODO: removed old logic per refactor
+```
+
+Bad — ghost comments for deleted code:
+```ts
+// (removed legacy handler)
+```
+
+Good — explains a non-obvious *why*:
+```ts
+// Stripe returns prorated amounts in the smallest currency unit, but
+// adaptive pricing checkout sessions report in major units — normalize here.
+const amount = isAdaptive ? raw * 100 : raw;
+
+// Must run before JSON middleware: Stripe webhook signature verification
+// requires the raw request body.
+app.use('/stripe/webhooks', rawBodyParser);
+```
+
+Style rules:
+- One short line max for inline comments. No multi-paragraph docstrings.
+- No references to PRs, issues, tickets, "the bug", "we", "I", "just", "now", "previously", or "this fix".
+- No commented-out code — delete it; git remembers.
+- No JSDoc on internal functions unless the type signature genuinely needs prose explanation.
