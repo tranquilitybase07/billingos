@@ -34,7 +34,6 @@ import {
   Ticket01Icon,
   User03Icon,
   ChartBarLineIcon,
-  ReloadIcon,
   Settings01Icon,
   Cancel01Icon,
 } from 'hugeicons-react'

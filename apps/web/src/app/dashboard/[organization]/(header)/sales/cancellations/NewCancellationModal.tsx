@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Cancel01Icon } from 'hugeicons-react'
-import { REASON_LABELS, calculateTenure } from './utils'
+import { REASON_LABELS, REASON_VARIANTS, calculateTenure } from './utils'
 import type { CancellationRow } from './types'
 
 interface NewCancellationModalProps {
@@ -14,14 +14,6 @@ interface NewCancellationModalProps {
 }
 
 const REASONS = Object.keys(REASON_LABELS) as Array<keyof typeof REASON_LABELS>
-
-const REASON_CHIP: Record<string, string> = {
-  too_expensive: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20',
-  not_using: 'bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/20',
-  missing_features: 'bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/20',
-  found_alternative: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20',
-  other: 'bg-gray-100 dark:bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-500/20',
-}
 
 const INPUT_CLS =
   'w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground placeholder:text-muted-foreground'
@@ -34,7 +26,7 @@ export function NewCancellationModal({
   onSave,
   defaultCurrency,
 }: NewCancellationModalProps) {
-  const today = new Date().toISOString().split('T')[0]
+  const getToday = () => new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
     customerName: '',
     customerEmail: '',
@@ -42,7 +34,7 @@ export function NewCancellationModal({
     reason: '' as string,
     amount: '',
     joinDate: '',
-    cancelDate: today,
+    cancelDate: getToday(),
     notes: '',
   })
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +47,7 @@ export function NewCancellationModal({
       reason: '',
       amount: '',
       joinDate: '',
-      cancelDate: today,
+      cancelDate: getToday(),
       notes: '',
     })
     setError(null)
@@ -92,7 +84,7 @@ export function NewCancellationModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="new-entry-title">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -102,7 +94,7 @@ export function NewCancellationModal({
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-base font-semibold text-foreground">Add Cancellation Entry</h2>
+            <h2 id="new-entry-title" className="text-base font-semibold text-foreground">Add Cancellation Entry</h2>
             <button
               onClick={handleClose}
               className="text-muted-foreground hover:text-foreground transition-colors"
@@ -154,7 +146,7 @@ export function NewCancellationModal({
                   />
                 </div>
                 <div>
-                  <label className={LABEL_CLS}>MRR ($)</label>
+                  <label className={LABEL_CLS}>Lifetime Rev ($)</label>
                   <input
                     type="number"
                     min="0"
@@ -198,7 +190,7 @@ export function NewCancellationModal({
                         onClick={() => setForm((p) => ({ ...p, reason: selected ? '' : r }))}
                         className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
                           selected
-                            ? REASON_CHIP[r] ?? REASON_CHIP.other
+                            ? REASON_VARIANTS[r] ?? REASON_VARIANTS.other
                             : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
                         }`}
                       >

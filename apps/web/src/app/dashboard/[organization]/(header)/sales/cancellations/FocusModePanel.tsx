@@ -33,18 +33,11 @@ export function FocusModePanel({ data, isOpen, onClose }: FocusModePanelProps) {
   const copyEmail = useCallback(async (email: string) => {
     try {
       await navigator.clipboard.writeText(email)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     } catch {
-      const el = document.createElement('textarea')
-      el.value = email
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      // clipboard API unavailable — silently skip
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }, [])
 
   const goNext = useCallback(() => {
@@ -85,6 +78,9 @@ export function FocusModePanel({ data, isOpen, onClose }: FocusModePanelProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Focus Mode"
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/98 backdrop-blur-sm"
       >
         {/* Top bar */}
@@ -246,23 +242,30 @@ export function FocusModePanel({ data, isOpen, onClose }: FocusModePanelProps) {
           </button>
         </div>
 
-        {/* Dot indicators */}
-        <div className="mt-6 flex items-center gap-1.5 flex-wrap justify-center px-6 max-w-sm">
-          {data.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setDirection(idx > currentIndex ? 1 : -1)
-                setCurrentIndex(idx)
-              }}
-              className={`rounded-full transition-all ${
-                idx === currentIndex
-                  ? 'w-5 h-1.5 bg-primary'
-                  : 'w-1.5 h-1.5 bg-border hover:bg-muted-foreground/40'
-              }`}
-            />
-          ))}
-        </div>
+        {/* Dot indicators (capped at 20; falls back to numeric for larger sets) */}
+        {data.length <= 20 ? (
+          <div className="mt-6 flex items-center gap-1.5 flex-wrap justify-center px-6 max-w-sm">
+            {data.map((_, idx) => (
+              <button
+                key={idx}
+                aria-label={`Go to entry ${idx + 1}`}
+                onClick={() => {
+                  setDirection(idx > currentIndex ? 1 : -1)
+                  setCurrentIndex(idx)
+                }}
+                className={`rounded-full transition-all ${
+                  idx === currentIndex
+                    ? 'w-5 h-1.5 bg-primary'
+                    : 'w-1.5 h-1.5 bg-border hover:bg-muted-foreground/40'
+                }`}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-6 text-xs text-muted-foreground">
+            {currentIndex + 1} / {data.length}
+          </p>
+        )}
       </motion.div>
     </AnimatePresence>
   )

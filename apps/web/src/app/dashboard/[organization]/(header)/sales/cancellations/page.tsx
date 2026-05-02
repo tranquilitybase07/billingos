@@ -15,7 +15,11 @@ export default async function Page({
   const organization = await getOrganizationBySlug(orgSlug)
 
   if (!organization) {
-    return <div>Organization not found</div>
+    return (
+      <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">
+        Organization not found
+      </div>
+    )
   }
 
   return (

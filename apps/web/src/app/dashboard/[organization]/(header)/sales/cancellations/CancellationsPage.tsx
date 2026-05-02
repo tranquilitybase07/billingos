@@ -111,19 +111,6 @@ function FilterBar({
       plans: p.plans.includes(plan) ? p.plans.filter((x) => x !== plan) : [...p.plans, plan],
     }))
 
-  const REASON_CHIP: Record<string, string> = {
-    too_expensive:
-      'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20',
-    not_using:
-      'bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/20',
-    missing_features:
-      'bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/20',
-    found_alternative:
-      'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20',
-    other:
-      'bg-gray-100 dark:bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-500/20',
-  }
-
   const INPUT_CLS =
     'w-full px-2.5 py-1.5 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground placeholder:text-muted-foreground'
 
@@ -171,7 +158,7 @@ function FilterBar({
                       onClick={() => toggleReason(r)}
                       className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
                         filters.reasons.includes(r)
-                          ? REASON_CHIP[r] ?? REASON_CHIP.other
+                          ? REASON_VARIANTS[r] ?? REASON_VARIANTS.other
                           : 'bg-background text-muted-foreground border-border hover:bg-muted'
                       }`}
                     >
@@ -205,7 +192,7 @@ function FilterBar({
 
               {/* MRR Range */}
               <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">MRR Range ($)</label>
+                <label className="block text-xs text-muted-foreground mb-1.5">Lifetime Rev Range ($)</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -447,7 +434,8 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
             {/* Focus mode */}
             <button
               onClick={() => setIsFocusOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              disabled={filtered.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               <Layers01Icon size={15} />
               Focus
@@ -491,6 +479,18 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
             Export CSV
           </Button>
         </div>
+
+        {/* Empty state */}
+        {!isLoading && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <p className="text-sm font-medium text-foreground">No cancellations yet</p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              {activeFilterCount > 0
+                ? 'No results match your current filters. Try clearing some filters.'
+                : 'Churned customers will appear here. You can also add a manual entry.'}
+            </p>
+          </div>
+        )}
 
         {/* Table */}
         <DataTable
@@ -608,7 +608,7 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
         defaultCurrency={defaultCurrency}
         onSave={(entry) =>
           setManualEntries((prev) => [
-            { ...entry, id: Math.random().toString(36).slice(2) },
+            { ...entry, id: crypto.randomUUID() },
             ...prev,
           ])
         }

@@ -4,6 +4,7 @@ export function calculateTenure(joinDate: string, cancelDate: string | null): st
   let months = (end.getFullYear() - start.getFullYear()) * 12
   months -= start.getMonth()
   months += end.getMonth()
+  if (end.getDate() < start.getDate()) months--
   if (months <= 0) return '< 1m'
   const years = Math.floor(months / 12)
   const remainingMonths = months % 12
