@@ -233,7 +233,8 @@ export async function seedPrice(
     id,
     product_id: productId,
     amount_type: isFree ? 'free' : overrides.amountType || 'fixed',
-    price_amount: isFree ? 0 : (overrides.amount ?? 2999),
+    // Table-level CHECK requires NULL when amount_type='free'.
+    price_amount: isFree ? null : (overrides.amount ?? 2999),
     price_currency: overrides.currency || 'usd',
     recurring_interval: overrides.interval || 'month',
     recurring_interval_count: overrides.intervalCount || 1,
@@ -317,31 +318,65 @@ export async function seedFeature(
   }> = {},
 ): Promise<SeedFeature> {
   const supabase = module.get(SupabaseService).getClient();
-  const id = genId();
+  const generatedId = genId();
   const type = overrides.type || 'boolean_flag';
-  const name = overrides.name || `feature-${id.substring(0, 8)}`;
+  const name = overrides.name || `feature-${generatedId.substring(0, 8)}`;
   const title =
-    overrides.title || overrides.name || `Feature ${id.substring(0, 6)}`;
+    overrides.title || overrides.name || `Feature ${generatedId.substring(0, 6)}`;
 
-  // Create feature (schema: name, title, type, organization_id, properties)
-  const { error: featureError } = await supabase.from('features').insert({
-    id,
-    organization_id: organizationId,
-    name,
-    title,
-    type,
-    properties: (overrides.properties || null) as any,
-  });
+  // Features are scoped (org, name) by unique constraint. When two products
+  // in the same org share a feature (e.g. "dashboard"), reuse the existing
+  // row instead of inserting; product_features handles the per-product link.
+  let featureId: string;
+  let featureTitle: string;
+  let featureType: string;
+  const { data: existing } = await supabase
+    .from('features')
+    .select('id, title, type')
+    .eq('organization_id', organizationId)
+    .eq('name', name)
+    .maybeSingle();
 
-  if (featureError) {
-    throw new Error(`Failed to seed feature: ${featureError.message}`);
+  if (existing) {
+    featureId = existing.id;
+    featureTitle = existing.title;
+    featureType = existing.type;
+  } else {
+    featureId = generatedId;
+    featureTitle = title;
+    featureType = type;
+    const { error: featureError } = await supabase.from('features').insert({
+      id: featureId,
+      organization_id: organizationId,
+      name,
+      title: featureTitle,
+      type: featureType,
+      properties: (overrides.properties || null) as any,
+    });
+    if (featureError) {
+      throw new Error(`Failed to seed feature: ${featureError.message}`);
+    }
   }
 
-  // Attach to product (schema: feature_id, product_id, display_order)
+  // (product_id, display_order) is unique. Auto-pick the next free slot when
+  // the caller doesn't pass one, so multi-feature loops don't collide.
+  let displayOrder = overrides.displayOrder;
+  if (displayOrder == null) {
+    const { data: rows } = await supabase
+      .from('product_features')
+      .select('display_order')
+      .eq('product_id', productId);
+    const used = new Set<number>(
+      (rows ?? []).map((r: { display_order: number }) => r.display_order),
+    );
+    displayOrder = 0;
+    while (used.has(displayOrder)) displayOrder++;
+  }
+
   const { error: pfError } = await supabase.from('product_features').insert({
     product_id: productId,
-    feature_id: id,
-    display_order: overrides.displayOrder ?? 1,
+    feature_id: featureId,
+    display_order: displayOrder,
   });
 
   if (pfError) {
@@ -349,11 +384,11 @@ export async function seedFeature(
   }
 
   return {
-    id,
+    id: featureId,
     organization_id: organizationId,
     name,
-    title,
-    type,
+    title: featureTitle,
+    type: featureType,
   };
 }
 
