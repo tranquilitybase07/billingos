@@ -96,14 +96,18 @@ export async function seedOrganization(
 
   const adminId = authData.user.id;
 
-  // Create public.users row (FK satisfied by auth user above)
-  const { error: userError } = await supabase.from('users').insert({
-    id: adminId,
-    email,
-    email_verified: true,
-    accepted_terms_of_service: true,
-    meta: {},
-  });
+  // The on_auth_user_created trigger already inserts a public.users row when
+  // auth.admin.createUser succeeds; upsert layers in the test-only fields.
+  const { error: userError } = await supabase.from('users').upsert(
+    {
+      id: adminId,
+      email,
+      email_verified: true,
+      accepted_terms_of_service: true,
+      meta: {},
+    },
+    { onConflict: 'id' },
+  );
 
   if (userError) {
     throw new Error(`Failed to seed user: ${userError.message}`);
