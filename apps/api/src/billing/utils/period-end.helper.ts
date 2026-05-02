@@ -17,17 +17,24 @@ type StripeSubLike = Stripe.Subscription | Record<string, unknown>;
  */
 export function extractPeriodEnd(input: StripeSubLike): string {
   const subData = input as Record<string, unknown>;
+
+  // Period_end must be strictly after period_start. If a Stripe response
+  // ever returns inverted/equal dates (canonical Stripe always returns
+  // valid pairs, but stripe-mock and broken upstreams can return garbage),
+  // we recompute from start + interval rather than persisting a value that
+  // would violate `subscriptions.check_subscription_dates`.
+  const startSeconds = resolvePeriodStartSeconds(subData);
+
   // 1. Items-level value (Stripe API v2025-12-15+)
   const itemPeriodEnd = resolveItemPeriodEnd(subData);
-  if (itemPeriodEnd) {
+  if (itemPeriodEnd && (!startSeconds || itemPeriodEnd > startSeconds)) {
     return new Date(itemPeriodEnd * 1000).toISOString();
   }
 
   // 2. Legacy top-level value
-  if (subData.current_period_end) {
-    return new Date(
-      (subData.current_period_end as number) * 1000,
-    ).toISOString();
+  const legacyEnd = subData.current_period_end as number | undefined;
+  if (legacyEnd && (!startSeconds || legacyEnd > startSeconds)) {
+    return new Date(legacyEnd * 1000).toISOString();
   }
 
   // 3. Compute from items-level start + interval
@@ -53,9 +60,18 @@ export function extractPeriodEnd(input: StripeSubLike): string {
 
   // 5. Last resort fallback
   logger.warn(
-    'current_period_end missing from Stripe data — using 30-day fallback',
+    'current_period_end missing or inconsistent from Stripe data — using 30-day fallback',
   );
   return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function resolvePeriodStartSeconds(
+  subData: Record<string, unknown>,
+): number | null {
+  const itemStart = resolveItemPeriodStart(subData);
+  if (itemStart) return itemStart;
+  const legacyStart = subData.current_period_start as number | undefined;
+  return legacyStart ?? null;
 }
 
 /**
