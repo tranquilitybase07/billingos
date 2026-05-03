@@ -27,14 +27,16 @@ async function bootstrap() {
     'http://localhost:61000', // Ladle development server
     'http://localhost:61001', // Ladle alternate port
     'http://localhost:5173', // Vite playground
-    'http://172.19.0.1:3000', // WSL2 host network interface
     'https://billingos-web.vercel.app', // Production frontend
     'https://*.vercel.app', // All Vercel preview deployments
   ];
 
-  // Add FRONTEND_URL from env if it exists
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+
+  if (process.env.EXTRA_CORS_ORIGINS) {
+    allowedOrigins.push(...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()));
   }
 
   app.enableCors({

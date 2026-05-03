@@ -10,7 +10,6 @@ export interface CancellationRow {
   currency: string
   cancelDate: string | null
   tenure: string
-  isManual?: boolean
 }
 
 export interface FilterState {
