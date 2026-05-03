@@ -22,7 +22,10 @@
     "test:integration": "jest --config ./test/jest-integration.json --runInBand",
     "test:integration:pipeline": "jest --config ./test/jest-integration.json --runInBand --testPathPattern=billing/__tests__/pipeline",
     "test:integration:webhook": "jest --config ./test/jest-integration.json --runInBand --testPathPattern=billing/webhooks/__tests__/webhooks",
-    "test:integration:entitlement": "jest --config ./test/jest-integration.json --runInBand --testPathPattern=billing/entitlements/__tests__/entitlement"
+    "test:integration:entitlement": "jest --config ./test/jest-integration.json --runInBand --testPathPattern=billing/entitlements/__tests__/entitlement",
+    "test:real-stripe": "jest --config ./test/jest-real-stripe.json --runInBand",
+    "setup:test-connect-account": "ts-node -r tsconfig-paths/register test/real-stripe/setup-connect-account.ts",
+    "cleanup:test-products": "ts-node -r tsconfig-paths/register test/real-stripe/cleanup-old-test-products.ts"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.1.0",
@@ -91,7 +94,7 @@
       "ts"
     ],
     "rootDir": "src",
-    "testRegex": ".*(?<!\\.integration)\\.spec\\.ts$",
+    "testRegex": ".*(?<!\\.integration)(?<!\\.real)\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

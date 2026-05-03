@@ -1,0 +1,77 @@
+name: Integration (real Stripe)
+
+# Runs against api.stripe.com (test mode) using a dedicated Connect account.
+# Slow (~15-25 min) — kept off the per-PR path. Triggered on:
+#   - nightly cron
+#   - manual workflow_dispatch
+#   - PRs labeled `run-real-stripe`
+#
+# Required secrets:
+#   STRIPE_TEST_SECRET_KEY        sk_test_... for the platform account
+#   STRIPE_TEST_CONNECT_ACCOUNT   acct_... — the Connect account tests run against
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  real-stripe:
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'run-real-stripe'
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase
+        run: supabase start
+
+      - name: Get Supabase keys
+        id: supabase
+        run: |
+          echo "url=$(supabase status --output json | jq -r '.API_URL')" >> $GITHUB_OUTPUT
+          echo "service_role_key=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')" >> $GITHUB_OUTPUT
+          echo "anon_key=$(supabase status --output json | jq -r '.ANON_KEY')" >> $GITHUB_OUTPUT
+
+      - name: Run real-Stripe integration tests
+        run: pnpm --filter api test:real-stripe
+        env:
+          SUPABASE_URL: ${{ steps.supabase.outputs.url }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supabase.outputs.service_role_key }}
+          SUPABASE_ANON_KEY: ${{ steps.supabase.outputs.anon_key }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          STRIPE_TEST_CONNECT_ACCOUNT: ${{ secrets.STRIPE_TEST_CONNECT_ACCOUNT }}
+          STRIPE_WEBHOOK_SECRET: whsec_test_realstripe
+          REDIS_URL: redis://localhost:6379
+          REDIS_HOST: localhost
+          REDIS_PORT: '6379'
+          NODE_ENV: test
