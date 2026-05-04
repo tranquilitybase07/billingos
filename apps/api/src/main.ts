@@ -36,6 +36,11 @@ async function bootstrap() {
     allowedOrigins.push(process.env.FRONTEND_URL);
   }
 
+  // Add any extra comma-separated origins (e.g. WSL2 or dev tunnel IPs)
+  if (process.env.EXTRA_CORS_ORIGINS) {
+    allowedOrigins.push(...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()));
+  }
+
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, Postman, etc.)
