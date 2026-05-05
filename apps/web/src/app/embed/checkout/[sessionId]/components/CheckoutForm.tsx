@@ -68,6 +68,7 @@ interface CheckoutFormProps {
   onHeightChange: (height: number) => void
   /** Called when the adaptive pricing total updates (currency change) */
   onTotalChange?: (totalAmount: number, currency: string, recurringAmount?: number) => void
+  onElementsReady?: (elements: import('@stripe/stripe-js').StripeElements) => void
   /** When true (adaptive mode), the CheckoutProvider is already created outside — skip wrapping */
   skipProvider?: boolean
   theme?: 'light' | 'dark' | 'auto'
@@ -514,6 +515,7 @@ export function CheckoutForm({
   onProcessing,
   onHeightChange,
   onTotalChange,
+  onElementsReady,
   skipProvider,
   theme,
   accentColor,
@@ -633,6 +635,7 @@ export function CheckoutForm({
         onError={onError}
         onProcessing={onProcessing}
         onHeightChange={onHeightChange}
+        onElementsReady={onElementsReady}
         theme={theme}
       />
     </Elements>
@@ -981,8 +984,8 @@ function CheckoutFormTrial({
         type="submit"
         disabled={isProcessing || !stripe || !elements}
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isProcessing
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
           }`}
       >
         {isProcessing ? (
@@ -1013,10 +1016,17 @@ function CheckoutFormInner({
   onSuccess,
   onError,
   onProcessing,
-  onHeightChange
+  onHeightChange,
+  onElementsReady,
 }: CheckoutFormProps) {
   const stripe = useStripe()
   const elements = useElements()
+
+  useEffect(() => {
+    if (elements && onElementsReady) {
+      onElementsReady(elements)
+    }
+  }, [elements, onElementsReady])
   const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [name, setName] = useState(session.customer?.name || '')
@@ -1171,8 +1181,8 @@ function CheckoutFormInner({
         type="submit"
         disabled={!stripe || isProcessing}
         className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-[1.01] hover:shadow-md ${isProcessing || !stripe
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
+          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          : 'bg-[var(--checkout-accent,#3b82f6)] text-white hover:opacity-90'
           }`}
       >
         {isProcessing ? (

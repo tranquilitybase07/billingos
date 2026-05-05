@@ -14,7 +14,10 @@ import { StripeService } from '../../../stripe/stripe.service';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
 import { EntitlementService } from '../../entitlements/entitlement.service';
-import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
+import {
+  extractPeriodStart,
+  extractPeriodEnd,
+} from '../../utils/period-end.helper';
 
 /**
  * Handles `checkout.session.completed` webhook events.
@@ -60,7 +63,7 @@ export class CheckoutSessionCompletedHandler
     try {
       this.logger.log(`Checkout session completed: ${session.id}`);
 
-      // Only handle our adaptive mode sessions; ignore others (e.g. Stripe-hosted)
+      // Handles BillingOS-issued Checkout Sessions (standard hosted, adaptive).
       const metadata = (session.metadata || {}) as Record<string, string>;
       const metadataId = metadata.metadataId;
       const organizationId = metadata.organizationId;

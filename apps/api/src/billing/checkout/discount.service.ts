@@ -12,7 +12,6 @@ import { RedisService } from '../../redis/redis.service';
 import { CheckoutMetadataService } from '../../v1/checkout/checkout-metadata.service';
 import { DiscountContext } from '../context/types';
 import { StripeCouponParams } from '../plan/types';
-import { extractPeriodStart, extractPeriodEnd } from '../utils/period-end.helper';
 import type { Json } from '../../../../../packages/shared/types/database';
 
 // ── Response types ──
@@ -183,26 +182,14 @@ export class CheckoutDiscountService {
       clientSecretResult = result.clientSecret;
     } else {
       // Standard checkout
-      const stripeSubscriptionId =
-        (info.metadata.stripeSubscriptionId as string) ||
-        (info.session.stripe_subscription_id as string);
-
-      if (!stripeSubscriptionId) {
-        throw new BadRequestException(
-          'Unable to apply discount — subscription not found',
-        );
-      }
-
       const coupon = await this.createStripeCoupon(
         couponParams,
         info.stripeAccountId,
       );
       stripeCouponId = coupon.id;
 
-      const result = await this.recreateStandardSubscription(
+      const result = await this.updateStandardPaymentIntent(
         info,
-        stripeSubscriptionId,
-        [{ coupon: coupon.id }],
         newAmount,
         supabase,
       );
@@ -267,26 +254,17 @@ export class CheckoutDiscountService {
       );
       clientSecretResult = result.clientSecret;
     } else {
-      // Standard checkout
-      const stripeSubscriptionId =
-        (info.metadata.stripeSubscriptionId as string) ||
-        (info.session.stripe_subscription_id as string);
-      const stripeAccountId = info.stripeAccountId;
+      // Standard checkout: restore the PaymentIntent amount in place.
+      const result = await this.updateStandardPaymentIntent(
+        info,
+        originalAmount,
+        supabase,
+      );
+      clientSecretResult = result.clientSecret;
 
-      if (stripeSubscriptionId && stripeAccountId) {
-        const result = await this.recreateStandardSubscription(
-          info,
-          stripeSubscriptionId,
-          undefined, // No discounts
-          originalAmount,
-          supabase,
-        );
-        clientSecretResult = result.clientSecret;
-
-        this.logger.log(
-          `Removed discount via cancel+recreate: restored amount ${originalAmount}`,
-        );
-      }
+      this.logger.log(
+        `Removed discount via PI update: restored amount ${originalAmount}`,
+      );
     }
 
     // Clear discount metadata
@@ -410,144 +388,55 @@ export class CheckoutDiscountService {
       });
   }
 
-  // ── Standard subscription recreation ──
+  // ── Standard payment intent in-place update ──
 
-  private async recreateStandardSubscription(
+  private async updateStandardPaymentIntent(
     info: SessionInfo,
-    stripeSubscriptionId: string,
-    discounts: Stripe.SubscriptionCreateParams.Discount[] | undefined,
     newAmount: number,
     supabase: ReturnType<SupabaseService['getClient']>,
   ): Promise<{ clientSecret: string }> {
     const stripeClient = this.stripeService.getClient();
     const stripeAccountId = info.stripeAccountId;
-    const paymentIntentDbId = (info.paymentIntent as Record<string, unknown>)
-      ?.id as string;
+    const piRecord = info.paymentIntent;
 
-    // Find subscription DB record
-    const { data: subscriptionRecord } = await supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('payment_intent_id', paymentIntentDbId)
-      .single();
-
-    if (!subscriptionRecord) {
-      throw new BadRequestException('Subscription record not found');
-    }
-
-    // Retrieve original subscription for customer + price info
-    const originalSub = await stripeClient.subscriptions.retrieve(
-      stripeSubscriptionId,
-      { stripeAccount: stripeAccountId },
-    );
-
-    // 1. Cancel the current incomplete subscription
-    await stripeClient.subscriptions.cancel(
-      stripeSubscriptionId,
-      {},
-      { stripeAccount: stripeAccountId },
-    );
-    this.logger.log(
-      `Canceled incomplete subscription ${stripeSubscriptionId} for discount recreation`,
-    );
-
-    // 2. Create new subscription with/without discounts
-    const createParams: Stripe.SubscriptionCreateParams = {
-      customer: originalSub.customer as string,
-      items: [{ price: (originalSub.items.data[0]?.price).id }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: {
-        save_default_payment_method: 'on_subscription',
-      },
-      application_fee_percent: 5,
-      expand: ['latest_invoice'],
-      metadata: {
-        ...(originalSub.metadata as Record<string, string>),
-        subscriptionCreatedDuringCheckout: 'true',
-      },
-    };
-
-    if (discounts && discounts.length > 0) {
-      createParams.discounts = discounts;
-    }
-
-    const idempotencyKey = `sub-recreate:${originalSub.customer}:${stripeSubscriptionId}:${Date.now()}`;
-    const newSubscription = await this.stripeService.createSubscription(
-      createParams,
-      stripeAccountId,
-      idempotencyKey,
-    );
-
-    // 3. Retrieve invoice with expanded PaymentIntent
-    const invoice = newSubscription.latest_invoice as Stripe.Invoice;
-    const expandedInvoice = await stripeClient.invoices.retrieve(
-      invoice.id,
-      { expand: ['payments.data.payment.payment_intent'] },
-      { stripeAccount: stripeAccountId },
-    );
-
-    const firstPayment = (expandedInvoice as unknown as Record<string, unknown>)
-      .payments as
-      | {
-          data?: Array<{ payment?: { payment_intent?: Stripe.PaymentIntent } }>;
-        }
-      | undefined;
-    const newPaymentIntent = firstPayment?.data?.[0]?.payment?.payment_intent;
-
-    if (!newPaymentIntent?.client_secret) {
-      this.logger.error(
-        'No PaymentIntent found on recreated subscription invoice',
-        {
-          subscriptionId: newSubscription.id,
-          invoiceId: invoice.id,
-        },
-      );
+    if (!piRecord) {
       throw new BadRequestException(
-        'Failed to recreate subscription for discount',
+        'Unable to update discount — payment intent not found',
       );
     }
 
-    // 4. Update DB records
+    const paymentIntentDbId = piRecord.id as string;
+    const stripePaymentIntentId = piRecord.stripe_payment_intent_id as string;
+    const clientSecret = piRecord.client_secret as string;
+
+    if (!stripePaymentIntentId) {
+      throw new BadRequestException(
+        'Unable to update discount — Stripe payment intent missing',
+      );
+    }
+
     const applicationFeeAmount = Math.round(newAmount * 0.05);
-    const subData = newSubscription as unknown as Record<string, unknown>;
+
+    await stripeClient.paymentIntents.update(
+      stripePaymentIntentId,
+      { amount: newAmount, application_fee_amount: applicationFeeAmount },
+      { stripeAccount: stripeAccountId },
+    );
 
     await supabase
       .from('payment_intents')
       .update({
-        stripe_payment_intent_id: newPaymentIntent.id,
-        client_secret: newPaymentIntent.client_secret,
-        stripe_subscription_id: newSubscription.id,
         amount: newAmount,
         application_fee_amount: applicationFeeAmount,
-        status: newPaymentIntent.status,
         updated_at: new Date().toISOString(),
       })
       .eq('id', paymentIntentDbId);
 
-    await supabase
-      .from('subscriptions')
-      .update({
-        stripe_subscription_id: newSubscription.id,
-        amount: newAmount,
-        status: newSubscription.status,
-        current_period_start: extractPeriodStart(subData),
-        current_period_end: extractPeriodEnd(subData),
-      })
-      .eq('id', subscriptionRecord.id);
-
-    await supabase
-      .from('checkout_sessions')
-      .update({
-        stripe_subscription_id: newSubscription.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', info.session.id as string);
-
     this.logger.log(
-      `Recreated subscription: ${stripeSubscriptionId} → ${newSubscription.id} (amount: ${newAmount})`,
+      `Updated payment intent ${stripePaymentIntentId} amount → ${newAmount}`,
     );
 
-    return { clientSecret: newPaymentIntent.client_secret };
+    return { clientSecret };
   }
 
   // ── Adaptive session recreation ──

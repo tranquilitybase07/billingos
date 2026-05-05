@@ -32,14 +32,17 @@ type SubscriptionUpdate =
 /**
  * Handles `payment_intent.succeeded` webhook events.
  *
- * Routes to one of two sub-flows:
- * 1. **Direct subscription flow** -- subscription already exists (created during checkout).
- *    Updates status to active, handles upgrade/downgrade, grants features.
- * 2. **Legacy flow** -- subscription was NOT created during checkout.
- *    Creates a Stripe subscription in the webhook (backward compat).
+ * Standard checkout uses *deferred subscription creation*: at session-create
+ * we only stage a PaymentIntent. The Stripe subscription is created here, in
+ * `handleDeferredSubscriptionPaymentSuccess`, once payment confirms — with
+ * trial-end set one period out (so Stripe doesn't double-bill the customer)
+ * and any recurring coupon applied at creation time.
  *
- * Also resolves race conditions where the PaymentIntent belongs to an existing
- * Stripe subscription but our DB hasn't committed yet (invoice-based resolution).
+ * The `handleDirectSubscriptionPaymentSuccess` branch remains for adaptive
+ * checkouts (Stripe Checkout Session creates the sub atomically) where the
+ * PI handler may fire as a safety net after `checkout.session.completed`.
+ * It's resolved either via PI metadata or by retrieving the invoice's
+ * subscription (race-recovery).
  */
 @Injectable()
 export class PaymentIntentSucceededHandler
@@ -84,8 +87,8 @@ export class PaymentIntentSucceededHandler
         .single();
 
       if (updateError || !paymentIntentRecord) {
-        this.logger.warn(
-          `Payment intent ${paymentIntent.id} not found in database - may be from a different source`,
+        this.logger.log(
+          `Payment intent ${paymentIntent.id} not in BOS payment_intents — handled elsewhere or external. Skipping.`,
         );
         return;
       }
@@ -186,12 +189,13 @@ export class PaymentIntentSucceededHandler
             resolvedStripeSubId,
           );
         } else {
-          // Legacy flow: subscription was NOT created during checkout.
-          // Fall back to creating one now.
+          // Deferred-subscription flow (standard mode): the Stripe sub was
+          // intentionally not created at session-create. Create it now with
+          // the final discount/trial state baked in.
           this.logger.log(
-            `Legacy flow: creating subscription in webhook for PI ${paymentIntent.id}`,
+            `Deferred flow: creating subscription in webhook for PI ${paymentIntent.id}`,
           );
-          await this.handleLegacyPaymentIntentSuccess(
+          await this.handleDeferredSubscriptionPaymentSuccess(
             ctx,
             paymentIntent,
             paymentIntentRecord,
@@ -447,10 +451,15 @@ export class PaymentIntentSucceededHandler
   }
 
   /**
-   * Legacy flow: subscription was NOT created during checkout.
-   * Create subscription in the webhook (old behavior, for backward compat).
+   * Deferred-subscription flow (standard checkout): the Stripe subscription
+   * was intentionally not created during checkout. Create it now with the
+   * final discount/trial state baked in.
+   *
+   * Sets `trial_end` one billing period out so Stripe doesn't immediately
+   * generate (and charge) a second invoice — the upfront PaymentIntent
+   * already covered the first period.
    */
-  private async handleLegacyPaymentIntentSuccess(
+  private async handleDeferredSubscriptionPaymentSuccess(
     ctx: WebhookContext,
     paymentIntent: Stripe.PaymentIntent,
     paymentIntentRecord: PaymentIntentRow,
@@ -653,7 +662,8 @@ export class PaymentIntentSucceededHandler
       }
     }
 
-    // Create subscription with trial_end deferral (legacy double-charge prevention)
+    // Create subscription with trial_end deferral so the first sub invoice
+    // doesn't double-charge the customer (the upfront PI already covered it).
     const subscriptionParams: Stripe.SubscriptionCreateParams = {
       customer: stripeCustomerId,
       items: [{ price: price.stripe_price_id }],
@@ -661,6 +671,7 @@ export class PaymentIntentSucceededHandler
       payment_settings: {
         save_default_payment_method: 'on_subscription',
       },
+      application_fee_percent: 5,
       metadata: {
         organizationId,
         customerId,
@@ -681,9 +692,11 @@ export class PaymentIntentSucceededHandler
         ? billingIntervalCount * 365 * 24 * 60 * 60
         : billingIntervalCount * 30 * 24 * 60 * 60;
 
+    subscriptionParams.billing_cycle_anchor = now + deferSeconds;
+    subscriptionParams.proration_behavior = 'none';
+
     let shouldGrantTrial = false;
     if (trialDays > 0) {
-      // Acquire trial lock to prevent concurrent trial grants
       const trialLockKey = `trial-lock:${customerId}:${productId}`;
       const acquiredTrialLock = await this.redisService.setIdempotencyKey(
         trialLockKey,
@@ -705,14 +718,12 @@ export class PaymentIntentSucceededHandler
         },
       );
       if (trialEligible && acquiredTrialLock) {
+        // Real trial on top of the cycle defer — the customer gets the
+        // already-paid period plus an additional `trialDays` of free use.
         subscriptionParams.trial_end =
           now + deferSeconds + trialDays * 24 * 60 * 60;
         shouldGrantTrial = true;
-      } else {
-        subscriptionParams.trial_end = now + deferSeconds;
       }
-    } else {
-      subscriptionParams.trial_end = now + deferSeconds;
     }
 
     if (paymentIntent.payment_method) {
@@ -747,7 +758,7 @@ export class PaymentIntentSucceededHandler
     // Create Stripe subscription
     let stripeSubscription;
     try {
-      const idempotencyKey = `legacy-sub:${paymentIntent.id}`;
+      const idempotencyKey = `deferred-sub:${paymentIntent.id}`;
       stripeSubscription = await this.stripeService.createSubscription(
         subscriptionParams,
         stripeAccountId,
@@ -795,7 +806,7 @@ export class PaymentIntentSucceededHandler
       payment_intent_id: paymentIntentRecord.id,
       metadata: {
         payment_intent_id: paymentIntentRecord.id,
-        created_from: 'legacy_payment_intent_succeeded',
+        created_from: 'deferred_payment_intent_succeeded',
         hasRealTrial: shouldGrantTrial,
         trialDays: shouldGrantTrial ? trialDays : 0,
       },
@@ -871,12 +882,103 @@ export class PaymentIntentSucceededHandler
       })
       .eq('payment_intent_id', paymentIntentRecord.id);
 
-    this.logger.log(`Legacy flow completed for PI ${paymentIntent.id}`);
+    await this.backfillFirstPeriodInvoice({
+      stripeCustomerId,
+      stripeAccountId,
+      stripePaymentIntentId: paymentIntent.id,
+      stripeSubscriptionId: subscription.stripe_subscription_id,
+      amount: paymentIntentRecord.amount || 0,
+      currency: paymentIntentRecord.currency || 'usd',
+    });
+
+    this.logger.log(`Deferred flow completed for PI ${paymentIntent.id}`);
   }
 
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  private async backfillFirstPeriodInvoice(params: {
+    stripeCustomerId: string;
+    stripeAccountId: string;
+    stripePaymentIntentId: string;
+    stripeSubscriptionId: string | null;
+    amount: number;
+    currency: string;
+  }): Promise<void> {
+    const {
+      stripeCustomerId,
+      stripeAccountId,
+      stripePaymentIntentId,
+      stripeSubscriptionId,
+      amount,
+      currency,
+    } = params;
+
+    if (amount <= 0) return;
+
+    try {
+      const stripeClient = this.stripeService.getClient();
+      const metadata: Record<string, string> = {
+        bos_payment_intent_id: stripePaymentIntentId,
+        bos_first_period_backfill: 'true',
+      };
+      if (stripeSubscriptionId) {
+        metadata.bos_subscription_id = stripeSubscriptionId;
+      }
+
+      // 1. Create draft invoice (empty). `pending_invoice_items_behavior: 'exclude'`
+      //    prevents Stripe from sweeping unrelated pending items onto our invoice.
+      const draftInvoice = await stripeClient.invoices.create(
+        {
+          customer: stripeCustomerId,
+          collection_method: 'send_invoice',
+          days_until_due: 0,
+          auto_advance: false,
+          pending_invoice_items_behavior: 'exclude',
+          metadata,
+        },
+        { stripeAccount: stripeAccountId },
+      );
+
+      // 2. Attach a single line item to the draft via explicit `invoice` ref.
+      await stripeClient.invoiceItems.create(
+        {
+          customer: stripeCustomerId,
+          invoice: draftInvoice.id,
+          amount,
+          currency,
+          description: 'Subscription first period — paid at checkout',
+          metadata,
+        },
+        { stripeAccount: stripeAccountId },
+      );
+
+      // 3. Finalize so it gets a number / PDF / receipt.
+      await stripeClient.invoices.finalizeInvoice(
+        draftInvoice.id,
+        {},
+        { stripeAccount: stripeAccountId },
+      );
+
+      // 4. Mark paid out-of-band — no re-charge, just records the payment
+      //    against the invoice. The PaymentIntent already collected the funds.
+      await stripeClient.invoices.pay(
+        draftInvoice.id,
+        { paid_out_of_band: true },
+        { stripeAccount: stripeAccountId },
+      );
+
+      this.logger.log(
+        `Backfilled paid invoice ${draftInvoice.id} for PI ${stripePaymentIntentId}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Non-critical: failed to backfill first-period invoice for PI ${stripePaymentIntentId}:`,
+        error,
+      );
+    }
+  }
 
   /**
    * Best-effort: populate customer billing_address.country from the card's issuing country.

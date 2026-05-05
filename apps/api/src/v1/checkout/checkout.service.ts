@@ -48,6 +48,7 @@ export interface CheckoutSession {
     | 'trial'
     | 'upgrade'
     | 'downgrade';
+  uiMode?: 'hosted' | 'embedded';
   downgradeInfo?: {
     effectiveDate?: string;
     newPrice: number;
@@ -384,9 +385,16 @@ export class CheckoutService {
       return this.getDowngradeCheckoutStatus(session, metadata, orgCurrency);
     }
 
-    // Adaptive checkout sessions (no payment intent — uses Stripe Checkout Session)
-    if (!session.payment_intent && metadata.checkoutMode === 'adaptive') {
-      return this.getAdaptiveCheckoutStatus(session, metadata, orgCurrency);
+    if (
+      !session.payment_intent &&
+      (metadata.checkoutMode === 'adaptive' ||
+        metadata.checkoutMode === 'standard')
+    ) {
+      return this.getStripeCheckoutSessionStatus(
+        session,
+        metadata,
+        orgCurrency,
+      );
     }
 
     // Trial checkout sessions (no payment intent — uses SetupIntent)
@@ -446,6 +454,7 @@ export class CheckoutService {
         | 'adaptive'
         | 'free'
         | 'trial',
+      uiMode: 'embedded',
       expiresAt: session.expires_at,
       product: {
         name: product.name,
@@ -928,7 +937,7 @@ export class CheckoutService {
     };
   }
 
-  private async getAdaptiveCheckoutStatus(
+  private async getStripeCheckoutSessionStatus(
     session: any,
     metadata: any,
     orgCurrency: string,
@@ -968,6 +977,9 @@ export class CheckoutService {
       subscription = subscriptionData;
     }
 
+    const checkoutMode =
+      metadata.checkoutMode === 'adaptive' ? 'adaptive' : 'standard';
+
     return {
       id: session.id,
       clientSecret: metadata.clientSecret || '',
@@ -976,7 +988,8 @@ export class CheckoutService {
       currency: metadata.priceCurrency || price.price_currency || orgCurrency,
       totalAmount: metadata.priceAmount || price.price_amount || 0,
       status: mapDbStatusToSession(session.status),
-      checkoutMode: 'adaptive',
+      checkoutMode,
+      uiMode: 'hosted',
       expiresAt: session.expires_at,
       product: {
         name: product.name,

@@ -741,6 +741,7 @@ export type Database = {
           account_id: string | null
           avatar_url: string | null
           blocked_at: string | null
+          checkout_mode: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at: string
           customer_email_settings: Json
           customer_invoice_next_number: number
@@ -771,6 +772,7 @@ export type Database = {
           account_id?: string | null
           avatar_url?: string | null
           blocked_at?: string | null
+          checkout_mode?: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at?: string
           customer_email_settings?: Json
           customer_invoice_next_number?: number
@@ -801,6 +803,7 @@ export type Database = {
           account_id?: string | null
           avatar_url?: string | null
           blocked_at?: string | null
+          checkout_mode?: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at?: string
           customer_email_settings?: Json
           customer_invoice_next_number?: number
@@ -2348,6 +2351,7 @@ export type Database = {
         | "completed"
         | "failed"
         | "expired"
+      organization_checkout_mode: "hosted" | "embedded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2484,6 +2488,7 @@ export const Constants = {
         "failed",
         "expired",
       ],
+      organization_checkout_mode: ["hosted", "embedded"],
     },
   },
 } as const

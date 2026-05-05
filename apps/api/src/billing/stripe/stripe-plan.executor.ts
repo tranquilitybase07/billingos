@@ -66,6 +66,9 @@ export class StripePlanExecutor {
       case 'create_stripe_subscription':
         return this.createSubscription(action, stripeAccountId);
 
+      case 'create_stripe_payment_intent':
+        return this.createPaymentIntent(action, stripeAccountId);
+
       case 'create_checkout_session':
         return this.createCheckoutSession(action, stripeAccountId);
 
@@ -153,6 +156,42 @@ export class StripePlanExecutor {
       paymentIntent,
       clientSecret: paymentIntent.client_secret,
       invoiceId: invoice.id,
+    };
+  }
+
+  private async createPaymentIntent(
+    action: Extract<
+      StripePlan['action'],
+      { kind: 'create_stripe_payment_intent' }
+    >,
+    stripeAccountId: string,
+  ): Promise<StripeResult> {
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await this.stripeService
+        .getClient()
+        .paymentIntents.create(action.params, {
+          stripeAccount: stripeAccountId,
+          idempotencyKey: action.idempotencyKey,
+        });
+    } catch (error) {
+      this.logger.error('Failed to create Stripe payment intent:', error);
+      throw new BadRequestException(
+        'Failed to create payment intent with Stripe',
+      );
+    }
+
+    if (!paymentIntent.client_secret) {
+      this.logger.error('PaymentIntent created without client_secret', {
+        paymentIntentId: paymentIntent.id,
+      });
+      throw new BadRequestException('Failed to initialize payment');
+    }
+
+    return {
+      kind: 'payment_intent_only',
+      paymentIntent,
+      clientSecret: paymentIntent.client_secret,
     };
   }
 

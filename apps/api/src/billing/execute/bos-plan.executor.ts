@@ -89,6 +89,15 @@ export class BosPlanExecutor {
           options,
         );
 
+      case 'payment_intent_only':
+        return this.handlePaymentIntentOnly(
+          ctx,
+          plan,
+          stripeResult,
+          checkoutMode,
+          options,
+        );
+
       case 'checkout_session_created':
         return this.handleCheckoutSessionCreated(
           ctx,
@@ -313,6 +322,80 @@ export class BosPlanExecutor {
     };
   }
 
+  private async handlePaymentIntentOnly(
+    ctx: BillingContext,
+    plan: BillingPlan,
+    result: Extract<StripeResult, { kind: 'payment_intent_only' }>,
+    checkoutMode: PipelineResult['checkoutMode'],
+    options: BosExecuteOptions,
+  ): Promise<PipelineResult> {
+    const supabase = this.supabaseService.getClient();
+    const { paymentIntent } = result;
+
+    const applicationFeeAmount = Math.round(ctx.price.amount * 0.05);
+    const { data: piRecord, error: piError } = await supabase
+      .from('payment_intents')
+      .insert({
+        organization_id: ctx.organization.id,
+        customer_id: ctx.customer.id,
+        stripe_payment_intent_id: paymentIntent.id,
+        stripe_customer_id: ctx.customer.stripeCustomerId,
+        stripe_account_id: ctx.organization.stripeAccountId,
+        client_secret: paymentIntent.client_secret || '',
+        amount: ctx.price.amount,
+        currency: ctx.price.currency,
+        application_fee_amount: applicationFeeAmount,
+        status: paymentIntent.status,
+        product_id: ctx.product.id,
+        price_id: ctx.price.id,
+        metadata: {
+          metadataId: ctx.checkoutMetadataId || '',
+          externalUserId: ctx.customer.externalUserId,
+          productName: ctx.product.name,
+          ...ctx.metadata,
+        } as Json,
+      })
+      .select()
+      .single();
+
+    if (piError) {
+      this.logger.error('Failed to store payment intent:', piError);
+      await this.cleanupOrphanedPaymentIntent(
+        paymentIntent.id,
+        ctx.organization.stripeAccountId,
+      );
+      throw new BadRequestException('Failed to create checkout session');
+    }
+
+    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
+      metadata: {
+        checkoutMode: 'standard',
+        stripeAccountId: ctx.organization.stripeAccountId,
+        productId: ctx.product.id,
+        priceId: ctx.price.id,
+        customerId: ctx.customer.id,
+        priceAmount: ctx.price.amount,
+        priceCurrency: ctx.price.currency,
+        existingSubscriptionId: ctx.transition?.oldSubscription.id,
+      },
+      paymentIntentId: piRecord.id,
+    });
+
+    if (ctx.checkoutMetadataId) {
+      await this.metadataService.linkToCheckoutSession(
+        ctx.checkoutMetadataId,
+        paymentIntent.id,
+      );
+    }
+
+    return {
+      stripeResult: result,
+      checkoutSessionId,
+      clientSecret: result.clientSecret,
+      checkoutMode,
+    };
+  }
+
   // ── Adaptive checkout session created ──
 
   private async handleCheckoutSessionCreated(
@@ -324,7 +407,7 @@ export class BosPlanExecutor {
   ): Promise<PipelineResult> {
     const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
       metadata: {
-        checkoutMode: 'adaptive',
+        checkoutMode,
         stripeCheckoutSessionId: result.checkoutSession.id,
         clientSecret: result.clientSecret,
         stripeAccountId: ctx.organization.stripeAccountId,
@@ -930,6 +1013,29 @@ export class BosPlanExecutor {
     }
 
     return session.id;
+  }
+
+  private async cleanupOrphanedPaymentIntent(
+    stripePaymentIntentId: string,
+    stripeAccountId: string,
+  ): Promise<void> {
+    try {
+      await this.stripeService
+        .getClient()
+        .paymentIntents.cancel(
+          stripePaymentIntentId,
+          {},
+          { stripeAccount: stripeAccountId },
+        );
+      this.logger.warn(
+        `Canceled orphaned Stripe payment intent ${stripePaymentIntentId} due to DB error`,
+      );
+    } catch (cancelError) {
+      this.logger.error(
+        'Failed to cancel orphaned payment intent:',
+        cancelError,
+      );
+    }
   }
 
   private async cleanupOrphanedSubscription(

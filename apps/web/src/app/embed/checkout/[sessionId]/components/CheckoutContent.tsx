@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe, type StripeElements } from '@stripe/stripe-js'
 import {
   CheckoutProvider,
   CurrencySelectorElement,
@@ -9,6 +9,7 @@ import {
 import { CheckoutForm, getStripeAppearance } from './CheckoutForm'
 import { ProductSummary } from './ProductSummary'
 import { DiscountCode } from './DiscountCode'
+import { HostedCheckout } from './HostedCheckout'
 import { useCheckoutSession } from '../hooks/useCheckoutSession'
 import { useParentMessaging } from '../hooks/useParentMessaging'
 import { api } from '@/lib/api/client'
@@ -21,6 +22,7 @@ interface CheckoutContentProps {
 
 export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutContentProps) {
   const hasSentReadyMessageRef = useRef(false)
+  const elementsRef = useRef<StripeElements | null>(null)
   const [discountAmount, setDiscountAmount] = useState(0)
   const [displayTotal, setDisplayTotal] = useState<number | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<string | undefined>(undefined)
@@ -49,6 +51,13 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       if (result.clientSecret) {
         setClientSecretOverride(result.clientSecret)
       }
+      // Standard mode keeps the same client secret — refresh Elements so any
+      // amount-aware payment-method messaging (Klarna etc.) reflects the new total.
+      try {
+        await elementsRef.current?.fetchUpdates()
+      } catch {
+        // non-critical
+      }
       setAppliedCode(code.trim().toUpperCase())
       setAppliedDiscountLabel(result.discountLabel)
       return { success: true, discountLabel: result.discountLabel }
@@ -68,6 +77,11 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       setAppliedDiscountLabel(null)
       if (result.clientSecret) {
         setClientSecretOverride(result.clientSecret)
+      }
+      try {
+        await elementsRef.current?.fetchUpdates()
+      } catch {
+        // non-critical
       }
     } catch {
       // Swallow — UI already resets
@@ -119,6 +133,16 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
     return loadStripe(publishableKey)
   }, [isAdaptive, stripeAccountId])
 
+  const effectiveSession = useMemo(() => {
+    if (!session) return session
+    let next = session
+    if (clientSecretOverride) next = { ...next, clientSecret: clientSecretOverride }
+    if (displayTotal !== null) next = { ...next, totalAmount: displayTotal }
+    if (displayRecurringAmount !== undefined) next = { ...next, amount: displayRecurringAmount }
+    if (displayCurrency) next = { ...next, currency: displayCurrency }
+    return next
+  }, [session, clientSecretOverride, displayTotal, displayRecurringAmount, displayCurrency])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] bg-amber-700">
@@ -149,6 +173,15 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
 
   if (!session) {
     return null
+  }
+
+  if (session.uiMode === 'hosted') {
+    return (
+      <HostedCheckout
+        clientSecret={session.clientSecret}
+        stripeAccountId={session.stripeAccountId}
+      />
+    )
   }
 
   const leftPanel = (
@@ -221,10 +254,13 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
 
       <CheckoutForm
         key={`${clientSecretOverride ?? session.clientSecret}-${theme ?? 'light'}`}
-        session={clientSecretOverride ? { ...session, clientSecret: clientSecretOverride } : session}
+        session={effectiveSession ?? session}
         skipProvider={isAdaptive}
         theme={theme}
         accentColor={accentColor}
+        onElementsReady={(elements) => {
+          elementsRef.current = elements
+        }}
         onSuccess={(subscription) => {
           sendMessage({
             type: 'CHECKOUT_SUCCESS',

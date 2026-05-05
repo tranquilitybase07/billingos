@@ -133,7 +133,7 @@ export class StripePlanBuilder {
           metadataId,
           ...sub.stripeMetadata,
         },
-        return_url: `${process.env.APP_URL}/embed/checkout/complete`,
+        return_url: `${process.env.APP_URL}/embed/checkout/success`,
         expires_at: Math.floor(expiresAt.getTime() / 1000),
       } as Stripe.Checkout.SessionCreateParams;
 
@@ -143,16 +143,63 @@ export class StripePlanBuilder {
       };
     }
 
-    // Standard → Stripe Subscription with incomplete payment
-    const params: Stripe.SubscriptionCreateParams = {
+    // Hosted standard → Stripe Checkout Session (ui_mode: 'embedded').
+    if (ctx.organization.checkoutMode === 'hosted') {
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+
+      const hasExistingSub = !!ctx.transition;
+      const hasPreAppliedDiscount = !!ctx.discount?.stripeCouponId;
+      const params: Stripe.Checkout.SessionCreateParams = {
+        mode: 'subscription',
+        customer: ctx.customer.stripeCustomerId,
+        line_items: [{ price: sub.stripePriceId, quantity: 1 }],
+        ui_mode: 'embedded',
+        ...(hasPreAppliedDiscount ? {} : { allow_promotion_codes: true }),
+        ...(hasExistingSub ? { payment_method_collection: 'if_required' } : {}),
+        subscription_data: {
+          application_fee_percent: sub.applicationFeePercent,
+          ...(ctx.product.trialDays > 0 && !hasExistingSub
+            ? { trial_period_days: ctx.product.trialDays }
+            : {}),
+          metadata: {
+            metadataId,
+            ...sub.stripeMetadata,
+          },
+        },
+        metadata: {
+          metadataId,
+          ...sub.stripeMetadata,
+        },
+        return_url: `${process.env.APP_URL}/embed/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+      } as Stripe.Checkout.SessionCreateParams;
+
+      if (ctx.discount?.stripeCouponId) {
+        return {
+          kind: 'create_checkout_session',
+          params,
+          discounts: [{ coupon: ctx.discount.stripeCouponId }],
+        };
+      }
+
+      return {
+        kind: 'create_checkout_session',
+        params,
+      };
+    }
+
+    const applicationFeeAmount = Math.round(
+      (sub.amount * sub.applicationFeePercent) / 100,
+    );
+
+    const piParams: Stripe.PaymentIntentCreateParams = {
+      amount: sub.amount,
+      currency: sub.currency,
       customer: ctx.customer.stripeCustomerId,
-      items: [{ price: sub.stripePriceId }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: {
-        save_default_payment_method: 'on_subscription',
-      },
-      application_fee_percent: sub.applicationFeePercent,
-      expand: ['latest_invoice'],
+      automatic_payment_methods: { enabled: true },
+      application_fee_amount: applicationFeeAmount,
+      setup_future_usage: 'off_session',
       metadata: {
         metadataId,
         ...sub.stripeMetadata,
@@ -161,11 +208,11 @@ export class StripePlanBuilder {
 
     const stableKey =
       ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
-    const idempotencyKey = `sub-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
+    const idempotencyKey = `pi-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
 
     return {
-      kind: 'create_stripe_subscription',
-      params,
+      kind: 'create_stripe_payment_intent',
+      params: piParams,
       idempotencyKey,
     };
   }

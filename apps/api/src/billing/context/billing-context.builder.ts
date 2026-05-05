@@ -132,7 +132,8 @@ export class BillingContextBuilder {
       transition.type === 'swap' &&
       !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
-      transition.oldSubscription.recurringInterval === price.recurringInterval &&
+      transition.oldSubscription.recurringInterval ===
+        price.recurringInterval &&
       transition.oldSubscription.status !== 'trialing';
 
     // 7. Determine trial eligibility (trial product + no transition)
@@ -185,7 +186,7 @@ export class BillingContextBuilder {
 
     const { data: organization } = await supabase
       .from('organizations')
-      .select('default_currency, accounts!inner(stripe_id)')
+      .select('default_currency, checkout_mode, accounts!inner(stripe_id)')
       .eq('id', organizationId)
       .single();
 
@@ -207,6 +208,7 @@ export class BillingContextBuilder {
       id: organizationId,
       stripeAccountId,
       defaultCurrency: organization.default_currency || 'usd',
+      checkoutMode: organization.checkout_mode || 'hosted',
     };
   }
 
