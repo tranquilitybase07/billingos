@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Building02Icon,
+
   Logout01Icon,
   PlusSignIcon,
   ArrowDown01Icon,
@@ -35,7 +35,7 @@ import {
   User03Icon,
   ChartBarLineIcon,
   Settings01Icon,
-  Cancel01Icon,
+  Unlink02Icon,
 } from 'hugeicons-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -133,7 +133,7 @@ export const DashboardSidebar = () => {
         // },
         {
           title: 'Churn',
-          icon: Cancel01Icon,
+          icon: Unlink02Icon,
           href: `/dashboard/${organization.slug}/sales/cancellations`,
         },
       ],
