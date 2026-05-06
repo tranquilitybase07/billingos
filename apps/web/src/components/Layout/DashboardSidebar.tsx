@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Building02Icon,
+
   Logout01Icon,
   PlusSignIcon,
   ArrowDown01Icon,
@@ -34,8 +34,8 @@ import {
   Ticket01Icon,
   User03Icon,
   ChartBarLineIcon,
-  ReloadIcon,
   Settings01Icon,
+  Unlink02Icon,
 } from 'hugeicons-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -126,10 +126,15 @@ export const DashboardSidebar = () => {
     {
       label: 'RETENTION',
       items: [
+        // {
+        //   title: 'Churn Prevention',
+        //   icon: ReloadIcon,
+        //   href: `/dashboard/${organization.slug}/churn`,
+        // },
         {
-          title: 'Churn Prevention',
-          icon: ReloadIcon,
-          href: `/dashboard/${organization.slug}/churn`,
+          title: 'Churn',
+          icon: Unlink02Icon,
+          href: `/dashboard/${organization.slug}/sales/cancellations`,
         },
       ],
     },

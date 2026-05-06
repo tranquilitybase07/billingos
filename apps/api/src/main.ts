@@ -31,9 +31,12 @@ async function bootstrap() {
     'https://*.vercel.app', // All Vercel preview deployments
   ];
 
-  // Add FRONTEND_URL from env if it exists
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+
+  if (process.env.EXTRA_CORS_ORIGINS) {
+    allowedOrigins.push(...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()));
   }
 
   app.enableCors({
