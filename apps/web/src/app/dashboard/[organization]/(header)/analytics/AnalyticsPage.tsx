@@ -62,7 +62,8 @@ interface AnalyticsPageProps {
 type DateRange = 'Today' | 'Last 7 days' | 'Last 30 days' | 'Last 90 days' | 'Last year' | 'Custom'
 type ChartType = 'Line' | 'Area' | 'Bar'
 type MetricFormat = 'currency' | 'number' | 'percentage'
-type MetricSource = 'revenue' | 'subscriptions' | 'churn' | 'none'
+type SingleSource = 'revenue' | 'subscriptions' | 'churn'
+type MetricSource = SingleSource | SingleSource[] | 'none'
 
 interface DataPoint {
   date: string
@@ -271,14 +272,53 @@ const METRICS: MetricDef[] = [
   {
     id: 'revenue_churn',
     name: 'Revenue Churn Rate',
-    description: 'Percentage of revenue lost from cancellations',
+    description: 'Estimated MRR lost from cancellations ÷ MRR at period start',
     category: 'CHURN & RETENTION',
     format: 'percentage',
     color: '#fb7185',
     Icon: PercentIcon,
-    source: 'none',
-    getPoints: () => [],
-    getSummary: () => null,
+    source: ['revenue', 'subscriptions', 'churn'] as SingleSource[],
+    getPoints: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const subPts = d.subscriptions?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      const len = Math.min(revPts.length, subPts.length, churnPts.length)
+      if (len < 2) return []
+      const result: DataPoint[] = []
+      for (let i = 1; i < len; i++) {
+        const prevMrr = revPts[i - 1].revenue / 100
+        const currMrr = revPts[i].revenue / 100
+        const prevActive = churnPts[i - 1].active_at_start
+        const prevArpu = prevActive > 0 ? prevMrr / prevActive : 0
+        const newMrrAdded = subPts[i].new_subscriptions * prevArpu
+        const churnedMrr = Math.max(0, prevMrr + newMrrAdded - currMrr)
+        result.push({
+          date: revPts[i].date,
+          chartDate: formatChartDate(revPts[i].date),
+          value: prevMrr > 0 ? Math.min((churnedMrr / prevMrr) * 100, 100) : 0,
+        })
+      }
+      return result
+    },
+    getSummary: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const subPts = d.subscriptions?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      const len = Math.min(revPts.length, subPts.length, churnPts.length)
+      if (len < 2) return null
+      let total = 0
+      let count = 0
+      for (let i = 1; i < len; i++) {
+        const prevMrr = revPts[i - 1].revenue / 100
+        const currMrr = revPts[i].revenue / 100
+        const prevActive = churnPts[i - 1].active_at_start
+        const prevArpu = prevActive > 0 ? prevMrr / prevActive : 0
+        const newMrrAdded = subPts[i].new_subscriptions * prevArpu
+        const churnedMrr = Math.max(0, prevMrr + newMrrAdded - currMrr)
+        if (prevMrr > 0) { total += (churnedMrr / prevMrr) * 100; count++ }
+      }
+      return count > 0 ? total / count : null
+    },
   },
   {
     id: 'net_revenue_retention',
@@ -343,26 +383,67 @@ const METRICS: MetricDef[] = [
   {
     id: 'arpu',
     name: 'ARPU',
-    description: 'Average Revenue Per User',
+    description: 'Average Revenue Per User — MRR ÷ active customers',
     category: 'UNIT ECONOMICS',
     format: 'currency',
     color: '#f59e0b',
     Icon: Dollar01Icon,
-    source: 'none',
-    getPoints: () => [],
-    getSummary: () => null,
+    source: ['revenue', 'churn'] as SingleSource[],
+    getPoints: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      const len = Math.min(revPts.length, churnPts.length)
+      if (len === 0) return []
+      return Array.from({ length: len }, (_, i) => ({
+        date: revPts[i].date,
+        chartDate: formatChartDate(revPts[i].date),
+        value: churnPts[i].active_at_start > 0
+          ? (revPts[i].revenue / 100) / churnPts[i].active_at_start
+          : 0,
+      }))
+    },
+    getSummary: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      if (!revPts.length || !churnPts.length) return null
+      const lastActive = churnPts[churnPts.length - 1].active_at_start
+      return lastActive > 0
+        ? (revPts[revPts.length - 1].revenue / 100) / lastActive
+        : null
+    },
   },
   {
     id: 'ltv',
     name: 'Customer LTV',
-    description: 'Average lifetime value of a customer',
+    description: 'Average lifetime value — ARPU ÷ monthly churn rate',
     category: 'UNIT ECONOMICS',
     format: 'currency',
     color: '#84cc16',
     Icon: Dollar01Icon,
-    source: 'none',
-    getPoints: () => [],
-    getSummary: () => null,
+    source: ['revenue', 'churn'] as SingleSource[],
+    getPoints: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      const len = Math.min(revPts.length, churnPts.length)
+      if (len === 0) return []
+      return Array.from({ length: len }, (_, i) => {
+        const active = churnPts[i].active_at_start
+        const churnRate = churnPts[i].churn_rate / 100
+        if (active === 0 || churnRate === 0) return { date: revPts[i].date, chartDate: formatChartDate(revPts[i].date), value: 0 }
+        const arpu = (revPts[i].revenue / 100) / active
+        return { date: revPts[i].date, chartDate: formatChartDate(revPts[i].date), value: arpu / churnRate }
+      })
+    },
+    getSummary: (d) => {
+      const revPts = d.revenue?.data ?? []
+      const churnPts = d.churn?.data ?? []
+      if (!revPts.length || !churnPts.length) return null
+      const lastActive = churnPts[churnPts.length - 1].active_at_start
+      const avgChurnRate = (d.churn?.summary.avg_churn_rate ?? 0) / 100
+      if (lastActive === 0 || avgChurnRate === 0) return null
+      const arpu = (revPts[revPts.length - 1].revenue / 100) / lastActive
+      return arpu / avgChurnRate
+    },
   },
   {
     id: 'cac',
@@ -549,10 +630,17 @@ export default function AnalyticsPage({ organizationId }: AnalyticsPageProps) {
     [selectedMetric, allData],
   )
 
-  const isLoading =
-    (selectedMetric.source === 'revenue' && revenueLoading) ||
-    (selectedMetric.source === 'subscriptions' && subscriptionsLoading) ||
-    (selectedMetric.source === 'churn' && churnLoading)
+  const isLoading = useMemo(() => {
+    const { source } = selectedMetric
+    if (source === 'none') return false
+    const sources = Array.isArray(source) ? source : [source]
+    return sources.some(
+      (s) =>
+        (s === 'revenue' && revenueLoading) ||
+        (s === 'subscriptions' && subscriptionsLoading) ||
+        (s === 'churn' && churnLoading),
+    )
+  }, [selectedMetric, revenueLoading, subscriptionsLoading, churnLoading])
 
   const yDomain = useMemo(() => {
     if (!chartData.length) return undefined
