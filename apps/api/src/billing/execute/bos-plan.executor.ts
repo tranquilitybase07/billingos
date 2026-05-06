@@ -72,8 +72,17 @@ export class BosPlanExecutor {
     stripeResult: StripeResult,
     options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    // 1. Execute transition BOS writes (cancel old subscription in DB)
-    await this.executeTransition(ctx, plan);
+    // 1. Execute transition BOS writes (cancel old subscription in DB).
+    //    Skip for Checkout Session flows: Stripe creates the new sub only
+    //    after the customer actually pays, and the
+    //    `checkout.session.completed` webhook calls
+    //    `transitionService.handleTransition` to cancel the old sub and
+    //    swap entitlements at that point. Running it here would cancel
+    //    the customer's existing plan the moment they OPEN the upgrade
+    //    modal — even if they never click pay.
+    if (stripeResult.kind !== 'checkout_session_created') {
+      await this.executeTransition(ctx, plan);
+    }
 
     // 2. Determine checkout mode for status polling
     const checkoutMode = this.determineCheckoutMode(ctx, plan);
@@ -82,15 +91,6 @@ export class BosPlanExecutor {
     switch (stripeResult.kind) {
       case 'subscription_created':
         return this.handleSubscriptionCreated(
-          ctx,
-          plan,
-          stripeResult,
-          checkoutMode,
-          options,
-        );
-
-      case 'payment_intent_only':
-        return this.handlePaymentIntentOnly(
           ctx,
           plan,
           stripeResult,
@@ -322,81 +322,7 @@ export class BosPlanExecutor {
     };
   }
 
-  private async handlePaymentIntentOnly(
-    ctx: BillingContext,
-    plan: BillingPlan,
-    result: Extract<StripeResult, { kind: 'payment_intent_only' }>,
-    checkoutMode: PipelineResult['checkoutMode'],
-    options: BosExecuteOptions,
-  ): Promise<PipelineResult> {
-    const supabase = this.supabaseService.getClient();
-    const { paymentIntent } = result;
-
-    const applicationFeeAmount = Math.round(ctx.price.amount * 0.05);
-    const { data: piRecord, error: piError } = await supabase
-      .from('payment_intents')
-      .insert({
-        organization_id: ctx.organization.id,
-        customer_id: ctx.customer.id,
-        stripe_payment_intent_id: paymentIntent.id,
-        stripe_customer_id: ctx.customer.stripeCustomerId,
-        stripe_account_id: ctx.organization.stripeAccountId,
-        client_secret: paymentIntent.client_secret || '',
-        amount: ctx.price.amount,
-        currency: ctx.price.currency,
-        application_fee_amount: applicationFeeAmount,
-        status: paymentIntent.status,
-        product_id: ctx.product.id,
-        price_id: ctx.price.id,
-        metadata: {
-          metadataId: ctx.checkoutMetadataId || '',
-          externalUserId: ctx.customer.externalUserId,
-          productName: ctx.product.name,
-          ...ctx.metadata,
-        } as Json,
-      })
-      .select()
-      .single();
-
-    if (piError) {
-      this.logger.error('Failed to store payment intent:', piError);
-      await this.cleanupOrphanedPaymentIntent(
-        paymentIntent.id,
-        ctx.organization.stripeAccountId,
-      );
-      throw new BadRequestException('Failed to create checkout session');
-    }
-
-    const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
-      metadata: {
-        checkoutMode: 'standard',
-        stripeAccountId: ctx.organization.stripeAccountId,
-        productId: ctx.product.id,
-        priceId: ctx.price.id,
-        customerId: ctx.customer.id,
-        priceAmount: ctx.price.amount,
-        priceCurrency: ctx.price.currency,
-        existingSubscriptionId: ctx.transition?.oldSubscription.id,
-      },
-      paymentIntentId: piRecord.id,
-    });
-
-    if (ctx.checkoutMetadataId) {
-      await this.metadataService.linkToCheckoutSession(
-        ctx.checkoutMetadataId,
-        paymentIntent.id,
-      );
-    }
-
-    return {
-      stripeResult: result,
-      checkoutSessionId,
-      clientSecret: result.clientSecret,
-      checkoutMode,
-    };
-  }
-
-  // ── Adaptive checkout session created ──
+  // ── Stripe Checkout Session created (hosted, embedded custom, adaptive) ──
 
   private async handleCheckoutSessionCreated(
     ctx: BillingContext,
@@ -1013,29 +939,6 @@ export class BosPlanExecutor {
     }
 
     return session.id;
-  }
-
-  private async cleanupOrphanedPaymentIntent(
-    stripePaymentIntentId: string,
-    stripeAccountId: string,
-  ): Promise<void> {
-    try {
-      await this.stripeService
-        .getClient()
-        .paymentIntents.cancel(
-          stripePaymentIntentId,
-          {},
-          { stripeAccount: stripeAccountId },
-        );
-      this.logger.warn(
-        `Canceled orphaned Stripe payment intent ${stripePaymentIntentId} due to DB error`,
-      );
-    } catch (cancelError) {
-      this.logger.error(
-        'Failed to cancel orphaned payment intent:',
-        cancelError,
-      );
-    }
   }
 
   private async cleanupOrphanedSubscription(

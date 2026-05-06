@@ -4,6 +4,8 @@ import { BillingContext } from '../context/types';
 import { BillingPlan } from '../plan/types';
 import { StripePlan, StripeAction, StripeCancelAction } from './types';
 
+type CheckoutSessionUiMode = 'embedded' | 'custom';
+
 /**
  * Phase 3a: Converts a BillingPlan into concrete Stripe API call parameters.
  *
@@ -143,77 +145,55 @@ export class StripePlanBuilder {
       };
     }
 
-    // Hosted standard → Stripe Checkout Session (ui_mode: 'embedded').
-    if (ctx.organization.checkoutMode === 'hosted') {
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 1);
+    // Standard mode → Stripe Checkout Session.
+    // - Hosted (`ui_mode: 'embedded'`): Stripe renders the form.
+    // - Embedded (`ui_mode: 'custom'`): the BOS embed renders its own UI on
+    //   top of `useCheckout()` / `<PaymentElement>` from
+    //   `@stripe/react-stripe-js/checkout`.
+    const uiMode: CheckoutSessionUiMode =
+      ctx.organization.checkoutMode === 'hosted' ? 'embedded' : 'custom';
 
-      const hasExistingSub = !!ctx.transition;
-      const hasPreAppliedDiscount = !!ctx.discount?.stripeCouponId;
-      const params: Stripe.Checkout.SessionCreateParams = {
-        mode: 'subscription',
-        customer: ctx.customer.stripeCustomerId,
-        line_items: [{ price: sub.stripePriceId, quantity: 1 }],
-        ui_mode: 'embedded',
-        ...(hasPreAppliedDiscount ? {} : { allow_promotion_codes: true }),
-        ...(hasExistingSub ? { payment_method_collection: 'if_required' } : {}),
-        subscription_data: {
-          application_fee_percent: sub.applicationFeePercent,
-          ...(ctx.product.trialDays > 0 && !hasExistingSub
-            ? { trial_period_days: ctx.product.trialDays }
-            : {}),
-          metadata: {
-            metadataId,
-            ...sub.stripeMetadata,
-          },
-        },
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    const hasExistingSub = !!ctx.transition;
+    const hasPreAppliedDiscount = !!ctx.discount?.stripeCouponId;
+    const params: Stripe.Checkout.SessionCreateParams = {
+      mode: 'subscription',
+      customer: ctx.customer.stripeCustomerId,
+      line_items: [{ price: sub.stripePriceId, quantity: 1 }],
+      ui_mode: uiMode,
+      ...(hasPreAppliedDiscount ? {} : { allow_promotion_codes: true }),
+      ...(hasExistingSub ? { payment_method_collection: 'if_required' } : {}),
+      subscription_data: {
+        application_fee_percent: sub.applicationFeePercent,
+        ...(ctx.product.trialDays > 0 && !hasExistingSub
+          ? { trial_period_days: ctx.product.trialDays }
+          : {}),
         metadata: {
           metadataId,
           ...sub.stripeMetadata,
         },
-        return_url: `${process.env.APP_URL}/embed/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        expires_at: Math.floor(expiresAt.getTime() / 1000),
-      } as Stripe.Checkout.SessionCreateParams;
-
-      if (ctx.discount?.stripeCouponId) {
-        return {
-          kind: 'create_checkout_session',
-          params,
-          discounts: [{ coupon: ctx.discount.stripeCouponId }],
-        };
-      }
-
-      return {
-        kind: 'create_checkout_session',
-        params,
-      };
-    }
-
-    const applicationFeeAmount = Math.round(
-      (sub.amount * sub.applicationFeePercent) / 100,
-    );
-
-    const piParams: Stripe.PaymentIntentCreateParams = {
-      amount: sub.amount,
-      currency: sub.currency,
-      customer: ctx.customer.stripeCustomerId,
-      automatic_payment_methods: { enabled: true },
-      application_fee_amount: applicationFeeAmount,
-      setup_future_usage: 'off_session',
+      },
       metadata: {
         metadataId,
         ...sub.stripeMetadata,
       },
-    };
+      return_url: `${process.env.APP_URL}/embed/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      expires_at: Math.floor(expiresAt.getTime() / 1000),
+    } as Stripe.Checkout.SessionCreateParams;
 
-    const stableKey =
-      ctx.existingCheckoutSessionId || metadataId || ctx.customer.id;
-    const idempotencyKey = `pi-create:${ctx.customer.id}:${ctx.product.id}:${stableKey}`;
+    if (ctx.discount?.stripeCouponId) {
+      return {
+        kind: 'create_checkout_session',
+        params,
+        discounts: [{ coupon: ctx.discount.stripeCouponId }],
+      };
+    }
 
     return {
-      kind: 'create_stripe_payment_intent',
-      params: piParams,
-      idempotencyKey,
+      kind: 'create_checkout_session',
+      params,
     };
   }
 

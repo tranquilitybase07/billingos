@@ -363,10 +363,12 @@ export class CheckoutService {
 
     const { data: orgForCurrency } = await supabase
       .from('organizations')
-      .select('default_currency')
+      .select('default_currency, checkout_mode')
       .eq('id', session.organization_id)
       .single();
     const orgCurrency = orgForCurrency?.default_currency || 'usd';
+    const orgCheckoutMode: 'hosted' | 'embedded' =
+      orgForCurrency?.checkout_mode === 'embedded' ? 'embedded' : 'hosted';
 
     const metadata = (session.metadata as any) || {};
 
@@ -394,6 +396,7 @@ export class CheckoutService {
         session,
         metadata,
         orgCurrency,
+        orgCheckoutMode,
       );
     }
 
@@ -941,6 +944,7 @@ export class CheckoutService {
     session: any,
     metadata: any,
     orgCurrency: string,
+    orgCheckoutMode: 'hosted' | 'embedded',
   ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
     const productId = metadata.productId;
@@ -980,6 +984,13 @@ export class CheckoutService {
     const checkoutMode =
       metadata.checkoutMode === 'adaptive' ? 'adaptive' : 'standard';
 
+    // Adaptive mode always renders in the embedded BOS shell (Stripe gives
+    // us a `ui_mode: 'custom'` session). For non-adaptive standard, the org
+    // flag determines whether the FE renders Stripe's hosted iframe or the
+    // BOS-controlled embedded UI on top of Stripe Elements.
+    const uiMode: 'hosted' | 'embedded' =
+      checkoutMode === 'adaptive' ? 'embedded' : orgCheckoutMode;
+
     return {
       id: session.id,
       clientSecret: metadata.clientSecret || '',
@@ -989,7 +1000,7 @@ export class CheckoutService {
       totalAmount: metadata.priceAmount || price.price_amount || 0,
       status: mapDbStatusToSession(session.status),
       checkoutMode,
-      uiMode: 'hosted',
+      uiMode,
       expiresAt: session.expires_at,
       product: {
         name: product.name,

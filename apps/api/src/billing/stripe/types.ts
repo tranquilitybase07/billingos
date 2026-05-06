@@ -13,7 +13,6 @@ import Stripe from 'stripe';
 
 export type StripeAction =
   | CreateStripeSubscriptionAction
-  | CreateStripePaymentIntentAction
   | CreateCheckoutSessionAction
   | CreateSetupIntentAction
   | UpdateStripeSubscriptionAction
@@ -25,12 +24,6 @@ export interface CreateStripeSubscriptionAction {
   idempotencyKey: string;
   /** Discounts to include at creation time */
   discounts?: Stripe.SubscriptionCreateParams.Discount[];
-}
-
-export interface CreateStripePaymentIntentAction {
-  kind: 'create_stripe_payment_intent';
-  params: Stripe.PaymentIntentCreateParams;
-  idempotencyKey: string;
 }
 
 export interface CreateCheckoutSessionAction {
@@ -77,7 +70,6 @@ export interface NoStripeAction {
 
 export type StripeResult =
   | SubscriptionCreatedResult
-  | PaymentIntentOnlyResult
   | CheckoutSessionCreatedResult
   | SetupIntentCreatedResult
   | SubscriptionUpdatedResult
@@ -90,12 +82,6 @@ export interface SubscriptionCreatedResult {
   paymentIntent: Stripe.PaymentIntent;
   clientSecret: string;
   invoiceId: string;
-}
-
-export interface PaymentIntentOnlyResult {
-  kind: 'payment_intent_only';
-  paymentIntent: Stripe.PaymentIntent;
-  clientSecret: string;
 }
 
 export interface CheckoutSessionCreatedResult {

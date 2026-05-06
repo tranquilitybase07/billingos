@@ -181,19 +181,11 @@ export class CheckoutDiscountService {
       );
       clientSecretResult = result.clientSecret;
     } else {
-      // Standard checkout
-      const coupon = await this.createStripeCoupon(
-        couponParams,
-        info.stripeAccountId,
+      // Standard mode now rides Stripe Checkout Session — discounts go
+      // through `useCheckout().applyPromotionCode()` on the FE, not here.
+      throw new BadRequestException(
+        'Discounts cannot be applied to standard checkouts via this endpoint.',
       );
-      stripeCouponId = coupon.id;
-
-      const result = await this.updateStandardPaymentIntent(
-        info,
-        newAmount,
-        supabase,
-      );
-      clientSecretResult = result.clientSecret;
     }
 
     // Update session metadata with discount info
@@ -254,16 +246,10 @@ export class CheckoutDiscountService {
       );
       clientSecretResult = result.clientSecret;
     } else {
-      // Standard checkout: restore the PaymentIntent amount in place.
-      const result = await this.updateStandardPaymentIntent(
-        info,
-        originalAmount,
-        supabase,
-      );
-      clientSecretResult = result.clientSecret;
-
-      this.logger.log(
-        `Removed discount via PI update: restored amount ${originalAmount}`,
+      // Standard mode rides Stripe Checkout Session — promo removal goes
+      // through `useCheckout().removePromotionCode()` on the FE.
+      throw new BadRequestException(
+        'Discounts cannot be removed from standard checkouts via this endpoint.',
       );
     }
 
@@ -388,57 +374,6 @@ export class CheckoutDiscountService {
       });
   }
 
-  // ── Standard payment intent in-place update ──
-
-  private async updateStandardPaymentIntent(
-    info: SessionInfo,
-    newAmount: number,
-    supabase: ReturnType<SupabaseService['getClient']>,
-  ): Promise<{ clientSecret: string }> {
-    const stripeClient = this.stripeService.getClient();
-    const stripeAccountId = info.stripeAccountId;
-    const piRecord = info.paymentIntent;
-
-    if (!piRecord) {
-      throw new BadRequestException(
-        'Unable to update discount — payment intent not found',
-      );
-    }
-
-    const paymentIntentDbId = piRecord.id as string;
-    const stripePaymentIntentId = piRecord.stripe_payment_intent_id as string;
-    const clientSecret = piRecord.client_secret as string;
-
-    if (!stripePaymentIntentId) {
-      throw new BadRequestException(
-        'Unable to update discount — Stripe payment intent missing',
-      );
-    }
-
-    const applicationFeeAmount = Math.round(newAmount * 0.05);
-
-    await stripeClient.paymentIntents.update(
-      stripePaymentIntentId,
-      { amount: newAmount, application_fee_amount: applicationFeeAmount },
-      { stripeAccount: stripeAccountId },
-    );
-
-    await supabase
-      .from('payment_intents')
-      .update({
-        amount: newAmount,
-        application_fee_amount: applicationFeeAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', paymentIntentDbId);
-
-    this.logger.log(
-      `Updated payment intent ${stripePaymentIntentId} amount → ${newAmount}`,
-    );
-
-    return { clientSecret };
-  }
-
   // ── Adaptive session recreation ──
 
   private async recreateAdaptiveSession(
@@ -546,7 +481,7 @@ export class CheckoutDiscountService {
               }
             : {}),
         },
-        return_url: `${process.env.APP_URL}/embed/checkout/complete`,
+        return_url: `${process.env.APP_URL}/embed/checkout/success`,
         expires_at: Math.floor(expiresAt.getTime() / 1000),
       } as unknown as Stripe.Checkout.SessionCreateParams,
       { stripeAccount: stripeAccountId },

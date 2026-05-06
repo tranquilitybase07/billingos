@@ -67,8 +67,12 @@ export class CheckoutController {
   // 1. Session ID is cryptographically secure UUID
   // 2. Only returns read-only status information
   // 3. Similar to Stripe's checkout session status endpoint
-  async getCheckoutStatus(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
-    this.logger.log(`Getting checkout status for session: ${sessionId.substring(0, 8)}...`);
+  async getCheckoutStatus(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
+    this.logger.log(
+      `Getting checkout status for session: ${sessionId.substring(0, 8)}...`,
+    );
 
     return this.checkoutService.getCheckoutStatus(sessionId);
   }
@@ -77,7 +81,9 @@ export class CheckoutController {
   // No auth guard — sessionId is the bearer for execute, same security model
   // as confirm-free / confirm-upgrade / confirm-downgrade.
   async executeCheckout(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
-    this.logger.log(`Executing checkout session: ${sessionId.substring(0, 8)}...`);
+    this.logger.log(
+      `Executing checkout session: ${sessionId.substring(0, 8)}...`,
+    );
     return this.checkoutService.executeCheckout(sessionId);
   }
 
@@ -87,8 +93,12 @@ export class CheckoutController {
   // 1. Session ID is cryptographically secure UUID
   // 2. Only creates subscription for already-validated session
   // 3. User has already authenticated when creating the session
-  async confirmFreeCheckout(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
-    this.logger.log(`Confirming free checkout for session: ${sessionId.substring(0, 8)}...`);
+  async confirmFreeCheckout(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
+    this.logger.log(
+      `Confirming free checkout for session: ${sessionId.substring(0, 8)}...`,
+    );
 
     return this.checkoutService.confirmFreeCheckout(sessionId);
   }
@@ -99,8 +109,12 @@ export class CheckoutController {
   // 1. Session ID is cryptographically secure UUID
   // 2. Only performs upgrade for already-validated session
   // 3. User has already authenticated when creating the session
-  async confirmUpgradeCheckout(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
-    this.logger.log(`Confirming upgrade checkout for session: ${sessionId.substring(0, 8)}...`);
+  async confirmUpgradeCheckout(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
+    this.logger.log(
+      `Confirming upgrade checkout for session: ${sessionId.substring(0, 8)}...`,
+    );
 
     return this.checkoutService.confirmUpgradeCheckout(sessionId);
   }
@@ -111,8 +125,12 @@ export class CheckoutController {
   // 1. Session ID is cryptographically secure UUID
   // 2. Only performs downgrade for already-validated session
   // 3. User has already authenticated when creating the session
-  async confirmDowngradeCheckout(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
-    this.logger.log(`Confirming downgrade checkout for session: ${sessionId.substring(0, 8)}...`);
+  async confirmDowngradeCheckout(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
+    this.logger.log(
+      `Confirming downgrade checkout for session: ${sessionId.substring(0, 8)}...`,
+    );
 
     return this.checkoutService.confirmDowngradeCheckout(sessionId);
   }
@@ -136,7 +154,9 @@ export class CheckoutController {
   streamCheckoutStatus(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
   ): Observable<MessageEvent> {
-    this.logger.log(`Starting SSE stream for checkout session: ${sessionId.substring(0, 8)}...`);
+    this.logger.log(
+      `Starting SSE stream for checkout session: ${sessionId.substring(0, 8)}...`,
+    );
 
     // Poll status every 2 seconds
     return interval(2000).pipe(
