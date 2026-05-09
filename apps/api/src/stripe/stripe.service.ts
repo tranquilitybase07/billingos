@@ -1182,6 +1182,22 @@ export class StripeService {
     return invoices;
   }
 
+  /**
+   * List invoices for a specific Stripe customer in a Connect account.
+   * Returns the raw `Stripe.ApiList` so callers can inspect `has_more` if
+   * paging is needed; defaults to the most recent 25.
+   */
+  async listCustomerInvoices(
+    stripeCustomerId: string,
+    stripeAccountId: string,
+    limit = 25,
+  ): Promise<Stripe.ApiList<Stripe.Invoice>> {
+    return this.stripe.invoices.list(
+      { customer: stripeCustomerId, limit },
+      { stripeAccount: stripeAccountId },
+    );
+  }
+
   // ================================================
   // SUBSCRIPTION UPGRADE/DOWNGRADE METHODS
   // ================================================

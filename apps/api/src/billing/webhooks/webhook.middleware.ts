@@ -28,6 +28,26 @@ export class WebhookMiddleware {
   ) {}
 
   /**
+   * Dispatch a Stripe event directly to its handler, bypassing the
+   * idempotency layers and `webhook_events` audit insert.
+   *
+   * Used by the admin module for "reconcile from Stripe" actions, where we
+   * synthesize an `*.updated` event from a freshly fetched Stripe object and
+   * route it through the existing handler so all sync logic stays in one
+   * place. The caller is responsible for separately writing an audit row
+   * (we use `admin_audit_log` for this).
+   */
+  async dispatchEventDirectly(event: Stripe.Event): Promise<void> {
+    const ctx: WebhookContext = {
+      event,
+      supabase: this.supabaseService.getClient(),
+      stripeAccountId: (event.account as string) || null,
+      livemode: event.livemode,
+    };
+    await this.router.dispatch(ctx);
+  }
+
+  /**
    * Process an incoming Stripe webhook event through the middleware pipeline.
    * Called from StripeController after signature verification.
    */
