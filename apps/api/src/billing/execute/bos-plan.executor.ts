@@ -334,6 +334,9 @@ export class BosPlanExecutor {
     const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
       metadata: {
         checkoutMode,
+        // Persist org UI preference so getCheckoutStatus can render
+        // 'hosted' vs 'embedded' without re-querying organizations.
+        uiMode: ctx.organization.checkoutMode,
         stripeCheckoutSessionId: result.checkoutSession.id,
         clientSecret: result.clientSecret,
         stripeAccountId: ctx.organization.stripeAccountId,

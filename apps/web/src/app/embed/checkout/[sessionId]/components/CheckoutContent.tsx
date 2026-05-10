@@ -26,7 +26,10 @@ type NonNullSession = NonNullable<SessionType>
 interface PanelHandlers {
   onClose: () => void
   onSuccess: (subscription?: unknown) => void
+  // Terminal — parent SDK shows fatal error screen.
   onError: (error: Error) => void
+  // Recoverable payment failure — form stays mounted, parent only logs.
+  onPaymentFailed: (details: { message: string; code?: string; declineCode?: string; type?: string }) => void
   onProcessing: () => void
   onHeightChange: (height: number) => void
 }
@@ -35,6 +38,14 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
   const hasSentReadyMessageRef = useRef(false)
   const { session, loading, error } = useCheckoutSession(sessionId)
   const { sendMessage } = useParentMessaging()
+
+  // Kick off the Stripe.js script load on mount so it overlaps with the
+  // session fetch. loadStripe is internally cached, so the later
+  // useMemo() call below will reuse this instance.
+  useEffect(() => {
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    if (key) void loadStripe(key)
+  }, [])
 
   useEffect(() => {
     hasSentReadyMessageRef.current = false
@@ -89,6 +100,8 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       onSuccess: (subscription) =>
         sendMessage({ type: 'CHECKOUT_SUCCESS', payload: { subscription } }),
       onError: (err) => sendMessage({ type: 'CHECKOUT_ERROR', payload: { error: err.message } }),
+      onPaymentFailed: (details) =>
+        sendMessage({ type: 'PAYMENT_FAILED', payload: details }),
       onProcessing: () => sendMessage({ type: 'PROCESSING' }),
       onHeightChange: (height) => sendMessage({ type: 'HEIGHT_CHANGED', payload: { height } }),
     }),
@@ -433,6 +446,7 @@ function CheckoutShell({
         accentColor={accentColor}
         onSuccess={(subscription) => handlers.onSuccess(subscription)}
         onError={handlers.onError}
+        onPaymentFailed={handlers.onPaymentFailed}
         onProcessing={handlers.onProcessing}
         onHeightChange={handlers.onHeightChange}
       />

@@ -20,6 +20,13 @@ export function HostedCheckout({
   const { sendMessage } = useParentMessaging()
   const hasSentReadyRef = useRef(false)
 
+  // Warm the Stripe.js script load early so the EmbeddedCheckoutProvider
+  // doesn't pay the script-fetch cost serially after mount.
+  useEffect(() => {
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    if (key) void loadStripe(key)
+  }, [])
+
   const stripePromise = useMemo(() => {
     const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
     if (stripeAccountId) {

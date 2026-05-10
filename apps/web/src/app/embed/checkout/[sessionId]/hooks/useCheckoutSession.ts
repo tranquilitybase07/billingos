@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { api } from '@/lib/api/client'
 
 interface CheckoutSession {
@@ -46,9 +46,31 @@ interface UseCheckoutSessionReturn {
   refreshSession: () => Promise<void>
 }
 
+/**
+ * Read a session payload that the SDK passed via the URL hash, so the
+ * iframe can render without a network round trip. Hash format:
+ *   #bootstrap=<base64(JSON.stringify(session))>
+ *
+ * Falls back gracefully (returns null) for older SDK versions that don't
+ * populate the hash, or if the payload is malformed.
+ */
+function readBootstrap(): CheckoutSession | null {
+  if (typeof window === 'undefined') return null
+  const hash = window.location.hash
+  const prefix = '#bootstrap='
+  if (!hash.startsWith(prefix)) return null
+  try {
+    const json = atob(decodeURIComponent(hash.slice(prefix.length)))
+    return JSON.parse(json) as CheckoutSession
+  } catch {
+    return null
+  }
+}
+
 export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn {
-  const [session, setSession] = useState<CheckoutSession | null>(null)
-  const [loading, setLoading] = useState(true)
+  const bootstrap = useMemo(readBootstrap, [])
+  const [session, setSession] = useState<CheckoutSession | null>(bootstrap)
+  const [loading, setLoading] = useState(!bootstrap)
   const [error, setError] = useState<Error | null>(null)
 
   const fetchSession = async () => {
@@ -56,36 +78,27 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
       setLoading(true)
       setError(null)
 
-      // Fetch session details from API
       const response = await api.get<CheckoutSession>(
-        `/v1/checkout/${sessionId}/status`
+        `/v1/checkout/${sessionId}/status`,
       )
-
-      // Debug logging
-      console.log('[useCheckoutSession] Session fetched from API:', {
-        sessionId,
-        customer: response.customer,
-        hasEmail: !!response.customer?.email,
-        hasName: !!response.customer?.name,
-        fullResponse: response,
-      })
-
       setSession(response)
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to load checkout session')
+      const error =
+        err instanceof Error ? err : new Error('Failed to load checkout session')
       setError(error)
-      console.error('[useCheckoutSession] Error:', error)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (sessionId) {
-      fetchSession()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId])
+    if (!sessionId) return
+    // Skip the network call when the SDK already handed us the session
+    // via URL hash. Older SDK versions still trigger the fetch path.
+    if (bootstrap) return
+    fetchSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, bootstrap])
 
   // Check for session expiry
   useEffect(() => {
@@ -94,14 +107,13 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
       const now = Date.now()
 
       if (now > expiryTime) {
-        setSession(prev => prev ? { ...prev, status: 'expired' } : null)
+        setSession((prev) => (prev ? { ...prev, status: 'expired' } : null))
         return
       }
 
-      // Set timer to mark as expired
       const timeUntilExpiry = expiryTime - now
       const timer = setTimeout(() => {
-        setSession(prev => prev ? { ...prev, status: 'expired' } : null)
+        setSession((prev) => (prev ? { ...prev, status: 'expired' } : null))
       }, timeUntilExpiry)
 
       return () => clearTimeout(timer)
@@ -112,6 +124,6 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
     session,
     loading,
     error,
-    refreshSession: fetchSession
+    refreshSession: fetchSession,
   }
 }

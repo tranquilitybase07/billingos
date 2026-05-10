@@ -361,16 +361,14 @@ export class CheckoutService {
       throw new NotFoundException('Checkout session not found');
     }
 
-    const { data: orgForCurrency } = await supabase
-      .from('organizations')
-      .select('default_currency, checkout_mode')
-      .eq('id', session.organization_id)
-      .single();
-    const orgCurrency = orgForCurrency?.default_currency || 'usd';
-    const orgCheckoutMode: 'hosted' | 'embedded' =
-      orgForCurrency?.checkout_mode === 'embedded' ? 'embedded' : 'hosted';
-
     const metadata = (session.metadata as any) || {};
+    // The org's UI preference and currency are persisted into metadata at
+    // session-create time (BosPlanExecutor.handleCheckoutSessionCreated /
+    // BillingService.persistPendingCheckout), so we no longer need to
+    // re-query the organizations table here.
+    const orgCurrency = (metadata.priceCurrency as string | undefined) || 'usd';
+    const orgCheckoutMode: 'hosted' | 'embedded' =
+      metadata.uiMode === 'embedded' ? 'embedded' : 'hosted';
 
     // Free product sessions (no payment intent)
     if (!session.payment_intent && metadata.isFreeProduct) {
@@ -416,30 +414,33 @@ export class CheckoutService {
       throw new NotFoundException('Product or price information not found');
     }
 
-    const { data: productFeatures } = await supabase
-      .from('product_features')
-      .select('features(title, properties)')
-      .eq('product_id', product.id)
-      .order('display_order', { ascending: true });
+    // Run features + subscription lookups in parallel — both depend only
+    // on already-resolved IDs and have no inter-dependency.
+    const [{ data: productFeatures }, { data: subscriptionData }] =
+      await Promise.all([
+        supabase
+          .from('product_features')
+          .select('features(title, properties)')
+          .eq('product_id', product.id)
+          .order('display_order', { ascending: true }),
+        paymentIntent.stripe_payment_intent_id
+          ? supabase
+              .from('subscriptions')
+              .select('*')
+              .eq('payment_intent_id', paymentIntent.id)
+              .single()
+          : Promise.resolve({ data: null }),
+      ]);
 
     const features = (productFeatures || []).map(
       (pf: any) => pf.features.title,
     );
 
-    // Look up the active subscription (if any) for the linked payment intent.
-    let subscription: any = null;
-    if (paymentIntent.stripe_payment_intent_id) {
-      const { data: subscriptionData } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('payment_intent_id', paymentIntent.id)
-        .single();
-
-      // Frontend polls until subscription is active.
-      if (subscriptionData && subscriptionData.status !== 'incomplete') {
-        subscription = subscriptionData;
-      }
-    }
+    // Frontend polls until subscription is active.
+    const subscription: any =
+      subscriptionData && subscriptionData.status !== 'incomplete'
+        ? subscriptionData
+        : null;
 
     // Use the persisted state machine status as the source of truth.
     const status = mapDbStatusToSession(session.status);
@@ -950,9 +951,28 @@ export class CheckoutService {
     const productId = metadata.productId;
     const priceId = metadata.priceId;
 
-    const [{ data: product }, { data: price }] = await Promise.all([
+    // All four reads only depend on IDs already in metadata / on the
+    // session row, so we can fan them out in a single round trip.
+    const [
+      { data: product },
+      { data: price },
+      { data: productFeatures },
+      { data: subscriptionData },
+    ] = await Promise.all([
       supabase.from('products').select('*').eq('id', productId).single(),
       supabase.from('product_prices').select('*').eq('id', priceId).single(),
+      supabase
+        .from('product_features')
+        .select('features(title, properties)')
+        .eq('product_id', productId)
+        .order('display_order', { ascending: true }),
+      session.subscription_id
+        ? supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('id', session.subscription_id)
+            .single()
+        : Promise.resolve({ data: null }),
     ]);
 
     if (!product || !price) {
@@ -961,25 +981,11 @@ export class CheckoutService {
       );
     }
 
-    const { data: productFeatures } = await supabase
-      .from('product_features')
-      .select('features(title, properties)')
-      .eq('product_id', product.id)
-      .order('display_order', { ascending: true });
-
     const features = (productFeatures || []).map(
       (pf: any) => pf.features.title,
     );
 
-    let subscription: any = null;
-    if (session.subscription_id) {
-      const { data: subscriptionData } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('id', session.subscription_id)
-        .single();
-      subscription = subscriptionData;
-    }
+    const subscription = subscriptionData;
 
     const checkoutMode =
       metadata.checkoutMode === 'adaptive' ? 'adaptive' : 'standard';

@@ -40,42 +40,53 @@ export class BillingContextBuilder {
     externalUserId: string,
     dto: CreateCheckoutDto,
   ): Promise<BillingContext> {
-    // 1. Resolve organization + Stripe account
-    const organization = await this.resolveOrganization(organizationId);
+    // Wave 1: org + price/product are independent
+    const [organization, { product, price }] = await Promise.all([
+      this.resolveOrganization(organizationId),
+      this.resolveProductAndPrice(dto.priceId, organizationId),
+    ]);
 
-    // 2. Fetch price + product
-    const { product, price } = await this.resolveProductAndPrice(
-      dto.priceId,
-      organizationId,
-    );
+    const isFreeProduct = price.amountType === 'free' || price.amount === 0;
 
-    // 3. Resolve customer (get-or-create in BOS + Stripe)
+    // Wave 2: customer needs the org's stripeAccountId; features and
+    //         discount only need the product id. All three are independent.
     const customerEmail = dto.customerEmail || dto.customer?.email;
     const customerName = dto.customerName || dto.customer?.name;
 
-    const customer = await this.customerResolver.resolve(
-      organizationId,
-      externalUserId,
-      organization.stripeAccountId,
-      customerEmail,
-      customerName,
-      dto.metadata,
-    );
+    const [customer, features, discount] = await Promise.all([
+      this.customerResolver.resolve(
+        organizationId,
+        externalUserId,
+        organization.stripeAccountId,
+        customerEmail,
+        customerName,
+        dto.metadata,
+      ),
+      this.resolveProductFeatures(product.id),
+      dto.couponCode
+        ? this.discountService.resolveDiscount(
+            organizationId,
+            dto.couponCode,
+            product.id,
+          )
+        : Promise.resolve<DiscountContext | null>(null),
+    ]);
 
-    // 4. Check for duplicate active subscriptions (prevent re-subscribe)
-    if (!dto.existingSubscriptionId) {
-      await this.checkDuplicateSubscription(customer.id, product.id);
-    }
-
-    // 5. Detect transition (upgrade/downgrade/swap)
-    const isFreeProduct = price.amountType === 'free' || price.amount === 0;
-    const transition = await this.transitionDetector.detect(
-      customer.id,
-      product.id,
-      price.amount,
-      dto.existingSubscriptionId,
-      organization.stripeAccountId,
-    );
+    // Wave 3: dup-check + transition both depend on customer.id and run
+    //         in parallel. checkDuplicateSubscription throws on conflict —
+    //         Promise.all rejects fast, which is the desired behavior.
+    const [, transition] = await Promise.all([
+      dto.existingSubscriptionId
+        ? Promise.resolve()
+        : this.checkDuplicateSubscription(customer.id, product.id),
+      this.transitionDetector.detect(
+        customer.id,
+        product.id,
+        price.amount,
+        dto.existingSubscriptionId,
+        organization.stripeAccountId,
+      ),
+    ]);
 
     // 6. Determine if in-place upgrade (existing Stripe sub + new paid price)
     const isInPlaceUpgrade =
@@ -143,19 +154,6 @@ export class BillingContextBuilder {
     const isAdaptivePricing = false;
     // const isAdaptivePricing =
     //   dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
-
-    // 9. Fetch product features for display
-    const features = await this.resolveProductFeatures(product.id);
-
-    // 10. Resolve discount (if coupon code provided at checkout creation)
-    let discount: DiscountContext | null = null;
-    if (dto.couponCode) {
-      discount = await this.discountService.resolveDiscount(
-        organizationId,
-        dto.couponCode,
-        product.id,
-      );
-    }
 
     return {
       organization,

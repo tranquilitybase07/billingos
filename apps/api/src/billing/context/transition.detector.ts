@@ -33,61 +33,65 @@ export class TransitionDetector {
   ): Promise<TransitionContext | null> {
     const supabase = this.supabaseService.getClient();
 
-    // If explicit sub ID provided, use it directly
-    let oldSubId = explicitExistingSubId;
+    // Single query that fetches the sub plus the old price's recurring
+    // interval via a join. Replaces the previous 2-3 sequential queries
+    // (subs-by-customer → full sub → price).
+    const subSelect = `
+      id, organization_id, stripe_subscription_id, product_id, price_id,
+      amount, status, cancel_at_period_end, current_period_end, metadata,
+      price:product_prices(recurring_interval)
+    `;
 
-    // Auto-detect: customer has active sub for a DIFFERENT product
-    if (!oldSubId) {
-      const { data: subs } = await supabase
+    type JoinedPrice = { recurring_interval?: string };
+    type OldSubRow = {
+      id: string;
+      organization_id: string;
+      stripe_subscription_id: string | null;
+      product_id: string;
+      price_id: string | null;
+      amount: number | null;
+      status: string;
+      cancel_at_period_end: boolean | null;
+      current_period_end: string | null;
+      metadata: Record<string, unknown> | null;
+      price: JoinedPrice | JoinedPrice[] | null;
+    };
+
+    let oldSub: OldSubRow | null = null;
+    if (explicitExistingSubId) {
+      const { data } = await supabase
         .from('subscriptions')
-        .select('id, product_id, amount, status, cancel_at_period_end')
+        .select(subSelect)
+        .eq('id', explicitExistingSubId)
+        .single();
+      oldSub = data as unknown as OldSubRow | null;
+    } else {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select(subSelect)
         .eq('customer_id', customerId)
         .neq('product_id', newProductId)
         .in('status', ['active', 'trialing', 'past_due'])
-        .is('ended_at', null);
-
-      if (subs && subs.length > 0) {
-        oldSubId = subs[0].id;
+        .is('ended_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      oldSub = data as unknown as OldSubRow | null;
+      if (oldSub) {
         this.logger.log(
-          `Auto-detected plan change: existing subscription ${oldSubId} for customer ${customerId}`,
+          `Auto-detected plan change: existing subscription ${oldSub.id} for customer ${customerId}`,
         );
       }
     }
 
-    if (!oldSubId) return null;
+    if (!oldSub) return null;
 
-    // Fetch full old subscription details
-    const { data: oldSub } = await supabase
-      .from('subscriptions')
-      .select(
-        'id, organization_id, stripe_subscription_id, product_id, price_id, amount, status, cancel_at_period_end, current_period_end, metadata',
-      )
-      .eq('id', oldSubId)
-      .single();
-
-    if (!oldSub) {
-      this.logger.warn(
-        `Existing subscription ${oldSubId} not found — skipping transition`,
-      );
-      return null;
-    }
-
-    // Fetch the old price's recurring interval
-    let oldRecurringInterval: OldSubscriptionInfo['recurringInterval'] =
+    const recurringIntervalRaw = Array.isArray(oldSub.price)
+      ? oldSub.price[0]?.recurring_interval
+      : oldSub.price?.recurring_interval;
+    const oldRecurringInterval: OldSubscriptionInfo['recurringInterval'] =
+      (recurringIntervalRaw as OldSubscriptionInfo['recurringInterval']) ||
       'month';
-    if (oldSub.price_id) {
-      const { data: oldPrice } = await supabase
-        .from('product_prices')
-        .select('recurring_interval')
-        .eq('id', oldSub.price_id)
-        .eq('organization_id', oldSub.organization_id)
-        .single();
-
-      if (oldPrice?.recurring_interval) {
-        oldRecurringInterval =
-          oldPrice.recurring_interval as OldSubscriptionInfo['recurringInterval'];
-      }
-    }
 
     // Determine transition type
     const oldAmount = oldSub.amount ?? 0;

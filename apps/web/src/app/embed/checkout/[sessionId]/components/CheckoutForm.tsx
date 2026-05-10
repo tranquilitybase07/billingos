@@ -59,14 +59,143 @@ interface CheckoutSessionDetails {
   subscription?: CheckoutSubscription
 }
 
+export interface PaymentFailureDetails {
+  message: string
+  code?: string
+  declineCode?: string
+  type?: string
+}
+
 interface CheckoutFormProps {
   session: CheckoutSessionDetails
   onSuccess: (subscription?: CheckoutSubscription) => void
+  // Terminal error — kills the form (e.g. session expired, polling exhausted).
   onError: (error: Error) => void
+  // Recoverable payment failure — form stays mounted; user can retry inline.
+  onPaymentFailed: (details: PaymentFailureDetails) => void
   onProcessing: () => void
   onHeightChange: (height: number) => void
   theme?: 'light' | 'dark' | 'auto'
   accentColor?: string
+}
+
+/**
+ * Stripe surfaces errors in two distinct shapes depending on which SDK
+ * raised them:
+ *
+ * 1. Custom Checkout SDK (`@stripe/react-stripe-js/checkout`, used by
+ *    the standard + adaptive flows). `checkout.confirm()` returns
+ *    `{ type: 'error', error: ConfirmError }` where ConfirmError is
+ *    `{ message, code: 'paymentFailed', paymentFailed: { declineCode } }`
+ *    or `{ message, code: null }` (AnyBuyerError). Both are buyer-side
+ *    failures by Stripe's own typing — always recoverable inline.
+ *
+ * 2. Standard Stripe.js (`@stripe/stripe-js`, used by the trial flow
+ *    via `stripe.confirmSetup()`). Returns the canonical StripeError
+ *    with `type` (`card_error` / `validation_error` / `invalid_request_error`
+ *    / `api_error` / `idempotency_error`) and a Stripe error `code`.
+ *    Only `invalid_request_error` with a session-state code is fatal.
+ */
+
+// Decline-code copy (applies to both SDK shapes). Stripe's decline_code
+// reference: https://docs.stripe.com/declines/codes
+const DECLINE_COPY: Record<string, string> = {
+  insufficient_funds: 'Your card has insufficient funds. Try a different card.',
+  lost_card: 'This card was reported lost. Please use a different card.',
+  stolen_card: 'This card was reported stolen. Please use a different card.',
+  expired_card: 'Your card has expired. Try a different card.',
+  incorrect_cvc: 'The security code is incorrect. Double-check and try again.',
+  incorrect_number: 'The card number is incorrect. Double-check and try again.',
+  fraudulent: 'Your bank declined the charge. Try a different card.',
+  generic_decline: 'Your bank declined the charge. Try a different card or contact your bank.',
+  do_not_honor: 'Your bank declined the charge. Try a different card or contact your bank.',
+  transaction_not_allowed: 'Your bank doesn’t allow this transaction. Try a different card.',
+  pickup_card: 'Your bank declined the charge. Please use a different card.',
+  card_velocity_exceeded: 'This card has hit its usage limit. Try a different card or wait a while.',
+  withdrawal_count_limit_exceeded: 'This card has hit its withdrawal limit. Try a different card.',
+  approve_with_id: 'The bank couldn’t approve the charge. Try a different card.',
+  call_issuer: 'Your bank needs you to authorize the charge. Contact them or try a different card.',
+  authentication_required: 'Your bank requires authentication. Complete the verification or try a different card.',
+}
+
+// Stripe.js standard `error.code` copy.
+const STRIPE_CODE_COPY: Record<string, string> = {
+  card_declined: 'Your card was declined. Try a different card.',
+  expired_card: 'Your card has expired. Try a different card.',
+  incorrect_cvc: 'The security code is incorrect. Double-check and try again.',
+  incorrect_number: 'The card number is incorrect. Double-check and try again.',
+  invalid_number: 'The card number is invalid. Please re-enter your card.',
+  invalid_expiry_month: 'The expiration month is invalid.',
+  invalid_expiry_year: 'The expiration year is invalid.',
+  invalid_cvc: 'The security code is invalid.',
+  incomplete_number: 'Please enter your full card number.',
+  incomplete_cvc: 'Please enter the security code.',
+  incomplete_expiry: 'Please enter the expiration date.',
+  processing_error: 'We couldn’t process your card right now. Please try again in a moment.',
+  authentication_required: 'Your bank requires authentication. Complete the verification or try a different card.',
+  payment_intent_authentication_failure: 'We couldn’t verify your card with your bank. Please try again or use a different card.',
+  setup_intent_authentication_failure: 'We couldn’t verify your card with your bank. Please try again or use a different card.',
+  insufficient_funds: 'Your card has insufficient funds. Try a different card.',
+  card_decline_rate_limit_exceeded: 'This card has been declined too many times. Try again later or use a different card.',
+  payment_method_not_available: 'That payment method is temporarily unavailable. Try again or use a different one.',
+  payment_method_provider_timeout: 'Your bank took too long to respond. Try again or use a different card.',
+  payment_method_provider_decline: 'Your bank declined the charge. Try a different card.',
+}
+
+/**
+ * Subset of Stripe.js StripeError we actually inspect. Kept narrow so any
+ * shape returned by submit()/confirmSetup() is structurally assignable.
+ */
+interface StandardStripeError {
+  type?: string
+  code?: string
+  decline_code?: string
+  message?: string
+}
+
+/**
+ * Custom Checkout SDK error shape (from `@stripe/react-stripe-js/checkout`).
+ */
+interface CustomCheckoutConfirmError {
+  message: string
+  code: 'paymentFailed' | null
+  paymentFailed?: { declineCode: string | null }
+}
+
+function friendlyCustomCheckoutMessage(err: CustomCheckoutConfirmError): string {
+  const declineCode = err.paymentFailed?.declineCode
+  if (declineCode && DECLINE_COPY[declineCode]) return DECLINE_COPY[declineCode]
+  // Stripe's default `message` for paymentFailed is usually fine — it's the
+  // localized message they show in their own Checkout. Fall back to a sane
+  // default if missing.
+  return err.message || 'Your payment couldn’t be completed. Please try again.'
+}
+
+function friendlyStandardStripeMessage(err: StandardStripeError): string {
+  if (err.decline_code && DECLINE_COPY[err.decline_code]) return DECLINE_COPY[err.decline_code]
+  if (err.code && STRIPE_CODE_COPY[err.code]) return STRIPE_CODE_COPY[err.code]
+  return err.message || 'Your payment couldn’t be completed. Please try again.'
+}
+
+/**
+ * Standard Stripe.js errors that mean the underlying PaymentIntent /
+ * SetupIntent / session is dead and the customer cannot recover by
+ * retrying inline. Reference: https://docs.stripe.com/error-codes
+ */
+const FATAL_STRIPE_CODES = new Set([
+  'payment_intent_unexpected_state',
+  'intent_invalid_state',
+  'payment_intent_payment_attempt_expired',
+  'resource_missing',
+  'setup_intent_unexpected_state',
+])
+
+function isFatalStandardStripeError(err: StandardStripeError): boolean {
+  if (err.code && FATAL_STRIPE_CODES.has(err.code)) return true
+  // `idempotency_error` means the same key was reused with a different
+  // request — programmer error, not buyer-recoverable.
+  if (err.type === 'idempotency_error') return true
+  return false
 }
 
 export const stripeAppearance = {
@@ -506,6 +635,7 @@ export function CheckoutForm({
   session,
   onSuccess,
   onError,
+  onPaymentFailed,
   onProcessing,
   onHeightChange,
   theme,
@@ -566,6 +696,7 @@ export function CheckoutForm({
         session={session}
         onSuccess={onSuccess}
         onError={onError}
+        onPaymentFailed={onPaymentFailed}
         onProcessing={onProcessing}
         onHeightChange={onHeightChange}
         theme={theme}
@@ -585,6 +716,7 @@ export function CheckoutForm({
           session={session}
           onSuccess={onSuccess}
           onError={onError}
+          onPaymentFailed={onPaymentFailed}
           onProcessing={onProcessing}
           onHeightChange={onHeightChange}
           theme={theme}
@@ -600,6 +732,7 @@ function CheckoutFormCustom({
   session,
   onSuccess,
   onError,
+  onPaymentFailed,
   onProcessing,
   onHeightChange,
 }: CheckoutFormProps) {
@@ -612,6 +745,7 @@ function CheckoutFormCustom({
   const namePrefilled = !!session.customer?.name
   const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLDivElement>(null)
+  const errorBannerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!formRef.current) return
@@ -624,24 +758,47 @@ function CheckoutFormCustom({
     return () => resizeObserver.disconnect()
   }, [onHeightChange])
 
+  // Scroll the error banner into view when a recoverable failure surfaces.
+  useEffect(() => {
+    if (errorMessage && errorBannerRef.current) {
+      errorBannerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [errorMessage])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!checkout || checkoutResult.type !== 'success') return
 
     setIsProcessing(true)
     setErrorMessage(null)
-    onProcessing()
 
     try {
-      const result = await checkout.confirm({ redirect: 'if_required' }) as any
+      // Don't notify the parent we're "processing" yet — Stripe may render a
+      // 3DS challenge inline within this iframe, and the parent SDK overlays
+      // the iframe with a full-cover "Processing payment…" loader on PROCESSING,
+      // which would block clicks on the 3DS modal. The button below already
+      // shows an inline spinner during confirm().
+      const result = await checkout.confirm({ redirect: 'if_required' })
 
-      if (result?.type === 'error' || result?.error) {
-        const errorMsg = result.error?.message || result.message || 'Payment failed'
-        setErrorMessage(errorMsg)
-        onError(new Error(errorMsg))
+      if (result?.type === 'error') {
+        // Custom Checkout SDK ConfirmError shape — always a buyer error
+        // (`paymentFailed` or AnyBuyerError with code: null). Both are
+        // recoverable inline; the form stays mounted.
+        const stripeErr = result.error as CustomCheckoutConfirmError
+        const friendly = friendlyCustomCheckoutMessage(stripeErr)
+        setErrorMessage(friendly)
+        onPaymentFailed({
+          message: friendly,
+          code: stripeErr.code ?? undefined,
+          declineCode: stripeErr.paymentFailed?.declineCode ?? undefined,
+        })
         setIsProcessing(false)
         return
       }
+
+      // 3DS (if any) is done — safe to surface the parent overlay while we
+      // poll for the subscription record.
+      onProcessing()
 
       let attempts = 0
       const maxAttempts = 20
@@ -663,9 +820,10 @@ function CheckoutFormCustom({
       }
       pollForSubscription()
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Payment failed')
-      setErrorMessage(err.message)
-      onError(err)
+      // Unexpected throw (network, etc.) — assume recoverable, keep the form.
+      const message = error instanceof Error ? error.message : 'Payment failed'
+      setErrorMessage(message)
+      onPaymentFailed({ message })
     } finally {
       setIsProcessing(false)
     }
@@ -743,8 +901,16 @@ function CheckoutFormCustom({
       </div>
 
       {errorMessage && (
-        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
+        <div
+          ref={errorBannerRef}
+          role="alert"
+          aria-live="polite"
+          className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2"
+        >
+          <svg className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">{errorMessage}</p>
         </div>
       )}
 
@@ -781,6 +947,7 @@ function CheckoutFormTrial({
   session,
   onSuccess,
   onError,
+  onPaymentFailed,
   onProcessing,
   onHeightChange,
 }: CheckoutFormProps) {
@@ -793,6 +960,7 @@ function CheckoutFormTrial({
   const namePrefilled = !!session.customer?.name
   const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLFormElement>(null)
+  const errorBannerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (session?.customer?.email) setEmail(session.customer.email)
@@ -810,22 +978,39 @@ function CheckoutFormTrial({
     return () => resizeObserver.disconnect()
   }, [onHeightChange])
 
+  useEffect(() => {
+    if (errorMessage && errorBannerRef.current) {
+      errorBannerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [errorMessage])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!stripe || !elements) return
 
     setIsProcessing(true)
     setErrorMessage(null)
-    onProcessing()
 
     try {
       const { error: submitError } = await elements.submit()
       if (submitError) {
-        setErrorMessage(submitError.message || 'An error occurred')
+        // elements.submit() only surfaces validation/incomplete-field errors —
+        // always recoverable inline.
+        const friendly = friendlyStandardStripeMessage(submitError)
+        setErrorMessage(friendly)
+        onPaymentFailed({
+          message: friendly,
+          code: submitError.code,
+          type: submitError.type,
+        })
         setIsProcessing(false)
         return
       }
 
+      // Defer onProcessing() until after confirmSetup() resolves — the parent
+      // SDK overlays the iframe with a "Processing payment…" loader on the
+      // PROCESSING message, which would block the 3DS challenge that Stripe
+      // renders inline within this iframe during confirm.
       const { error: confirmError } = await stripe.confirmSetup({
         elements,
         confirmParams: { return_url: `${window.location.origin}/embed/checkout/success` },
@@ -833,11 +1018,24 @@ function CheckoutFormTrial({
       })
 
       if (confirmError) {
-        setErrorMessage(confirmError.message || 'Setup failed')
-        onError(new Error(confirmError.message || 'Setup failed'))
+        const friendly = friendlyStandardStripeMessage(confirmError)
+        setErrorMessage(friendly)
+        if (isFatalStandardStripeError(confirmError)) {
+          // Session/intent state is dead — only path forward is restarting checkout.
+          onError(new Error(friendly))
+        } else {
+          onPaymentFailed({
+            message: friendly,
+            code: confirmError.code,
+            declineCode: (confirmError as { decline_code?: string }).decline_code,
+            type: confirmError.type,
+          })
+        }
         setIsProcessing(false)
         return
       }
+
+      onProcessing()
 
       let attempts = 0
       const maxAttempts = 20
@@ -859,9 +1057,9 @@ function CheckoutFormTrial({
       }
       pollForSubscription()
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Setup failed')
-      setErrorMessage(err.message)
-      onError(err)
+      const message = error instanceof Error ? error.message : 'Setup failed'
+      setErrorMessage(message)
+      onPaymentFailed({ message })
     } finally {
       setIsProcessing(false)
     }
@@ -915,8 +1113,16 @@ function CheckoutFormTrial({
       </div>
 
       {errorMessage && (
-        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
+        <div
+          ref={errorBannerRef}
+          role="alert"
+          aria-live="polite"
+          className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2"
+        >
+          <svg className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">{errorMessage}</p>
         </div>
       )}
 
