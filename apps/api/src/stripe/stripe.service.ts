@@ -596,11 +596,11 @@ export class StripeService {
    */
   async getSubscription(
     subscriptionId: string,
-    stripeAccountId: string,
+    stripeAccountId?: string,
   ): Promise<Stripe.Subscription> {
-    return await this.stripe.subscriptions.retrieve(subscriptionId, {
-      stripeAccount: stripeAccountId,
-    });
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) options.stripeAccount = stripeAccountId;
+    return await this.stripe.subscriptions.retrieve(subscriptionId, options);
   }
 
   /**
@@ -1182,6 +1182,22 @@ export class StripeService {
     return invoices;
   }
 
+  /**
+   * List invoices for a specific Stripe customer in a Connect account.
+   * Returns the raw `Stripe.ApiList` so callers can inspect `has_more` if
+   * paging is needed; defaults to the most recent 25.
+   */
+  async listCustomerInvoices(
+    stripeCustomerId: string,
+    stripeAccountId: string,
+    limit = 25,
+  ): Promise<Stripe.ApiList<Stripe.Invoice>> {
+    return this.stripe.invoices.list(
+      { customer: stripeCustomerId, limit },
+      { stripeAccount: stripeAccountId },
+    );
+  }
+
   // ================================================
   // SUBSCRIPTION UPGRADE/DOWNGRADE METHODS
   // ================================================
@@ -1366,13 +1382,15 @@ export class StripeService {
 
   async retrieveInvoice(
     invoiceId: string,
-    stripeAccountId: string,
+    stripeAccountId?: string,
     expand?: string[],
   ): Promise<Stripe.Invoice> {
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) options.stripeAccount = stripeAccountId;
     return this.stripe.invoices.retrieve(
       invoiceId,
       expand && expand.length > 0 ? { expand } : undefined,
-      { stripeAccount: stripeAccountId },
+      options,
     );
   }
 

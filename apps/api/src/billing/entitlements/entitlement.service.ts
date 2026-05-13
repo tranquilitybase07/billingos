@@ -159,14 +159,23 @@ export class EntitlementService {
   /**
    * Revoke all active feature grants for a subscription.
    * Uses soft-revoke (sets revoked_at) — never hard-deletes.
+   *
+   * Also expires the sub's usage_records (sets `period_end = now`) so that
+   * `getUsageMetrics` (which filters by `period_end >= now`) stops surfacing
+   * stale consumption/limits from the canceled plan. Without this, after a
+   * free→paid upgrade or a re-subscribe, the customer would still see the
+   * old plan's `consumed_units` and `limit_units` in their dashboard
+   * because the old usage row stays in the table with a future period_end.
    */
   async revokeForSubscription(input: RevokeInput): Promise<RevokeResult> {
     const { subscriptionId } = input;
     const supabase = this.supabaseService.getClient();
 
+    const now = new Date().toISOString();
+
     const { data, error } = await supabase
       .from('feature_grants')
-      .update({ revoked_at: new Date().toISOString() })
+      .update({ revoked_at: now })
       .eq('subscription_id', subscriptionId)
       .is('revoked_at', null)
       .select('id');
@@ -182,6 +191,25 @@ export class EntitlementService {
     if (revokedCount > 0) {
       this.logger.log(
         `Revoked ${revokedCount} feature grants for subscription ${subscriptionId}`,
+      );
+    }
+
+    // Expire usage_records for this sub. Only touch rows whose period_end
+    // is still in the future — already-expired rows don't need to move.
+    const { data: expiredUsage, error: usageError } = await supabase
+      .from('usage_records')
+      .update({ period_end: now })
+      .eq('subscription_id', subscriptionId)
+      .gt('period_end', now)
+      .select('id');
+
+    if (usageError) {
+      this.logger.warn(
+        `Failed to expire usage_records for subscription ${subscriptionId}: ${usageError.message}`,
+      );
+    } else if ((expiredUsage?.length ?? 0) > 0) {
+      this.logger.log(
+        `Expired ${expiredUsage?.length} usage records for canceled subscription ${subscriptionId}`,
       );
     }
 

@@ -72,8 +72,17 @@ export class BosPlanExecutor {
     stripeResult: StripeResult,
     options: BosExecuteOptions,
   ): Promise<PipelineResult> {
-    // 1. Execute transition BOS writes (cancel old subscription in DB)
-    await this.executeTransition(ctx, plan);
+    // 1. Execute transition BOS writes (cancel old subscription in DB).
+    //    Skip for Checkout Session flows: Stripe creates the new sub only
+    //    after the customer actually pays, and the
+    //    `checkout.session.completed` webhook calls
+    //    `transitionService.handleTransition` to cancel the old sub and
+    //    swap entitlements at that point. Running it here would cancel
+    //    the customer's existing plan the moment they OPEN the upgrade
+    //    modal — even if they never click pay.
+    if (stripeResult.kind !== 'checkout_session_created') {
+      await this.executeTransition(ctx, plan);
+    }
 
     // 2. Determine checkout mode for status polling
     const checkoutMode = this.determineCheckoutMode(ctx, plan);
@@ -313,7 +322,7 @@ export class BosPlanExecutor {
     };
   }
 
-  // ── Adaptive checkout session created ──
+  // ── Stripe Checkout Session created (hosted, embedded custom, adaptive) ──
 
   private async handleCheckoutSessionCreated(
     ctx: BillingContext,
@@ -324,7 +333,10 @@ export class BosPlanExecutor {
   ): Promise<PipelineResult> {
     const checkoutSessionId = await this.upsertCheckoutSession(ctx, options, {
       metadata: {
-        checkoutMode: 'adaptive',
+        checkoutMode,
+        // Persist org UI preference so getCheckoutStatus can render
+        // 'hosted' vs 'embedded' without re-querying organizations.
+        uiMode: ctx.organization.checkoutMode,
         stripeCheckoutSessionId: result.checkoutSession.id,
         clientSecret: result.clientSecret,
         stripeAccountId: ctx.organization.stripeAccountId,

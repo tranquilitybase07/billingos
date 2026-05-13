@@ -203,6 +203,9 @@ export class BillingPlanBuilder {
         customerId: ctx.customer.id,
         productId: ctx.product.id,
         priceId: ctx.price.id,
+        billingInterval: ctx.price.recurringInterval,
+        billingIntervalCount: String(ctx.price.recurringIntervalCount),
+        trialDays: String(ctx.product.trialDays ?? 0),
         ...(ctx.transition
           ? { existingSubscriptionId: ctx.transition.oldSubscription.id }
           : {}),

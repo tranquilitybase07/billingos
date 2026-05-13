@@ -14,6 +14,7 @@ export interface BillingOrganization {
   id: string;
   stripeAccountId: string;
   defaultCurrency: string;
+  checkoutMode: 'hosted' | 'embedded';
 }
 
 // ── Customer ──

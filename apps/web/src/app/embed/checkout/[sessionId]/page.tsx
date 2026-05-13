@@ -43,6 +43,12 @@ export default async function CheckoutEmbedPage({
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#141415]">
+      {/* Warm DNS+TLS for Stripe so loadStripe() / CheckoutProvider don't
+          pay that cost serially after the session resolves. */}
+      <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
+      <link rel="preconnect" href="https://api.stripe.com" crossOrigin="anonymous" />
+      <link rel="preconnect" href="https://r.stripe.com" crossOrigin="anonymous" />
+      <link rel="dns-prefetch" href="https://m.stripe.network" />
       <script dangerouslySetInnerHTML={{ __html: `(function(){${varsScript}})()` }} />
       <Suspense fallback={<CheckoutSkeleton />}>
         <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + primary} />
