@@ -62,10 +62,19 @@ export class AdminService {
     }
 
     // Reset status so middleware treats this as a retry rather than a duplicate.
-    await supabase
+    // Must succeed before clearing Redis — otherwise we'd lose the idempotency
+    // key while leaving the row in its old state, opening a race window for
+    // a duplicate live delivery to slip through.
+    const { error: updateError } = await supabase
       .from('webhook_events')
       .update({ status: 'pending', error_message: null })
       .eq('id', webhookEventId);
+
+    if (updateError) {
+      throw new BadRequestException(
+        `Failed to reset webhook_event status before replay: ${updateError.message}`,
+      );
+    }
 
     const idempotencyKey = `stripe:webhook:${row.livemode ? 'live' : 'test'}:${row.event_id}`;
     await this.redisService.delete(idempotencyKey);
@@ -142,6 +151,7 @@ export class AdminService {
       'customer.subscription.updated',
       stripeSub,
       accountStripeId,
+      stripeSub.livemode,
     );
 
     await this.webhookMiddleware.dispatchEventDirectly(event);
@@ -204,10 +214,12 @@ export class AdminService {
       );
     }
 
+    const customerObject = stripeCustomer as Stripe.Customer;
     const event = this.synthesizeEvent(
       'customer.updated',
-      stripeCustomer as Stripe.Customer,
+      customerObject,
       accountStripeId,
+      customerObject.livemode,
     );
 
     await this.webhookMiddleware.dispatchEventDirectly(event);
@@ -283,11 +295,17 @@ export class AdminService {
    * through the existing webhook handlers. The synthetic event id is
    * prefixed `evt_admin_*` so anything that ends up in audit tables is
    * obviously not a real Stripe-delivered event.
+   *
+   * `livemode` MUST come from the underlying Stripe object, not the BOS
+   * deployment env — a test-mode object reconciled on a prod deployment is
+   * still a test-mode event, and downstream handlers / audit rows branch on
+   * this flag.
    */
   private synthesizeEvent<T>(
     type: Stripe.Event.Type,
     object: T,
     stripeAccountId: string,
+    livemode: boolean,
   ): Stripe.Event {
     return {
       id: `evt_admin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -297,7 +315,7 @@ export class AdminService {
       data: {
         object: object as unknown as Stripe.Event.Data.Object,
       },
-      livemode: process.env.NODE_ENV === 'production',
+      livemode,
       pending_webhooks: 0,
       request: { id: null, idempotency_key: null },
       type,

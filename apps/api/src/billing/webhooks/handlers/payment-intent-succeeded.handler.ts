@@ -146,12 +146,10 @@ export class PaymentIntentSucceededHandler
             const invoiceId =
               typeof piInvoice === 'string' ? piInvoice : piInvoice?.id;
             if (invoiceId) {
-              const inv = await this.stripeService
-                .getClient()
-                .invoices.retrieve(invoiceId, {
-                  stripeAccount:
-                    paymentIntentRecord.stripe_account_id || undefined,
-                });
+              const inv = await this.stripeService.retrieveInvoice(
+                invoiceId,
+                paymentIntentRecord.stripe_account_id || undefined,
+              );
               const invSubscription = (inv as any).subscription;
               if (invSubscription) {
                 resolvedStripeSubId =
@@ -252,11 +250,10 @@ export class PaymentIntentSucceededHandler
     // Fetch the updated subscription from Stripe to get current status and period data
     let stripeSubscription: Stripe.Subscription | null = null;
     try {
-      stripeSubscription = await this.stripeService
-        .getClient()
-        .subscriptions.retrieve(stripeSubscriptionId, {
-          stripeAccount: stripeAccountId,
-        });
+      stripeSubscription = await this.stripeService.getSubscription(
+        stripeSubscriptionId,
+        stripeAccountId,
+      );
     } catch (e) {
       this.logger.warn(
         `Could not fetch subscription ${stripeSubscriptionId} from Stripe:`,
@@ -468,11 +465,10 @@ export class PaymentIntentSucceededHandler
       if (existingAddress.country) return; // Already set, don't overwrite
 
       // Retrieve payment method from Stripe to get card country
-      const paymentMethod = await this.stripeService
-        .getClient()
-        .paymentMethods.retrieve(paymentMethodId, {
-          stripeAccount: stripeAccountId,
-        });
+      const paymentMethod = await this.stripeService.getPaymentMethod(
+        paymentMethodId,
+        stripeAccountId,
+      );
 
       const cardCountry = paymentMethod.card?.country;
       this.logger.log(

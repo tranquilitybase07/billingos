@@ -110,7 +110,7 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] bg-amber-700">
+      <div className="flex items-center justify-center min-h-[400px] bg-white dark:bg-[#141415]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )

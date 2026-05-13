@@ -149,11 +149,10 @@ export class CheckoutSessionCompletedHandler
 
       let stripeSub: any;
       try {
-        stripeSub = await this.stripeService
-          .getClient()
-          .subscriptions.retrieve(stripeSubscriptionId, {
-            stripeAccount: stripeAccountId,
-          });
+        stripeSub = await this.stripeService.getSubscription(
+          stripeSubscriptionId,
+          stripeAccountId,
+        );
       } catch (err) {
         this.logger.error(
           `Failed to retrieve Stripe subscription ${stripeSubscriptionId}:`,
@@ -439,16 +438,15 @@ export class CheckoutSessionCompletedHandler
         .eq('id', subscriptionId);
 
       for (const discountId of matchedDiscountIds) {
-        const { data: row } = await supabase
-          .from('discounts')
-          .select('redemptions_count')
-          .eq('id', discountId)
-          .single();
-        const current = (row?.redemptions_count as number | null) ?? 0;
-        await supabase
-          .from('discounts')
-          .update({ redemptions_count: current + 1 })
-          .eq('id', discountId);
+        const { error: rpcError } = await supabase.rpc(
+          'increment_discount_redemptions',
+          { p_discount_id: discountId },
+        );
+        if (rpcError) {
+          this.logger.warn(
+            `increment_discount_redemptions failed for ${discountId}: ${rpcError.message}`,
+          );
+        }
       }
 
       this.logger.log(
@@ -494,11 +492,10 @@ export class CheckoutSessionCompletedHandler
         (customer.billing_address as Record<string, unknown>) || {};
       if (existingAddress.country) return;
 
-      const paymentMethod = await this.stripeService
-        .getClient()
-        .paymentMethods.retrieve(paymentMethodId, {
-          stripeAccount: stripeAccountId,
-        });
+      const paymentMethod = await this.stripeService.getPaymentMethod(
+        paymentMethodId,
+        stripeAccountId,
+      );
 
       const cardCountry = paymentMethod.card?.country;
       this.logger.log(

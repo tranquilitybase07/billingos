@@ -2,10 +2,26 @@
 
 import { useEffect } from 'react'
 
+function resolveTargetOrigin(): string {
+  if (typeof window === 'undefined') return '*'
+  const raw = new URLSearchParams(window.location.search).get('parent_origin')
+  if (!raw) return '*'
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '*'
+    return url.origin
+  } catch {
+    return '*'
+  }
+}
+
 export default function CheckoutSuccessPage() {
   useEffect(() => {
     try {
-      window.parent.postMessage({ type: 'CHECKOUT_SUCCESS', payload: {} }, '*')
+      window.parent.postMessage(
+        { type: 'CHECKOUT_SUCCESS', payload: {} },
+        resolveTargetOrigin(),
+      )
     } catch {
       // best-effort — page works fine if there's no parent
     }

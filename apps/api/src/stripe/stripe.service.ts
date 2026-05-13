@@ -596,11 +596,11 @@ export class StripeService {
    */
   async getSubscription(
     subscriptionId: string,
-    stripeAccountId: string,
+    stripeAccountId?: string,
   ): Promise<Stripe.Subscription> {
-    return await this.stripe.subscriptions.retrieve(subscriptionId, {
-      stripeAccount: stripeAccountId,
-    });
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) options.stripeAccount = stripeAccountId;
+    return await this.stripe.subscriptions.retrieve(subscriptionId, options);
   }
 
   /**
@@ -1382,13 +1382,15 @@ export class StripeService {
 
   async retrieveInvoice(
     invoiceId: string,
-    stripeAccountId: string,
+    stripeAccountId?: string,
     expand?: string[],
   ): Promise<Stripe.Invoice> {
+    const options: Stripe.RequestOptions = {};
+    if (stripeAccountId) options.stripeAccount = stripeAccountId;
     return this.stripe.invoices.retrieve(
       invoiceId,
       expand && expand.length > 0 ? { expand } : undefined,
-      { stripeAccount: stripeAccountId },
+      options,
     );
   }
 

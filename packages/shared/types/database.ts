@@ -2281,6 +2281,10 @@ export type Database = {
           version_status: string
         }[]
       }
+      increment_discount_redemptions: {
+        Args: { p_discount_id: string }
+        Returns: number
+      }
       is_organization_admin: {
         Args: { org_id: string; user_id: string }
         Returns: boolean

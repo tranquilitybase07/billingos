@@ -111,7 +111,7 @@ export class TransitionDetector {
       status: oldSub.status,
       cancelAtPeriodEnd: oldSub.cancel_at_period_end ?? false,
       currentPeriodEnd: oldSub.current_period_end,
-      metadata: (oldSub.metadata ?? {}) as Record<string, unknown>,
+      metadata: oldSub.metadata ?? {},
       recurringInterval: oldRecurringInterval,
     };
 
