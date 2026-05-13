@@ -46,6 +46,7 @@ import { createClient } from '@/lib/supabase/client'
 import { clearOnboardingCookie } from '@/components/Onboarding/utils'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { EnvironmentSwitcher } from '@/components/EnvironmentSwitcher'
+import { MRRTrackerWidget } from '@/components/Layout/MRRTrackerWidget'
 
 interface MenuItem {
   title: string
@@ -247,6 +248,9 @@ export const DashboardSidebar = () => {
 
       {/* ── Footer: Settings + Support + Docs + Org profile ── */}
       <SidebarFooter className="border-t border-sidebar-border p-3">
+        {/* MRR Tracker — hidden when sidebar is collapsed */}
+        <MRRTrackerWidget />
+
         <SidebarMenu>
           {/* Settings */}
           <SidebarMenuItem>

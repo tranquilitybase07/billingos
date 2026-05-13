@@ -52,6 +52,7 @@ export function useMRR(organizationId: string) {
     queryFn: () =>
       api.get<MRRResponse>(`/analytics/mrr?organization_id=${organizationId}`),
     enabled: !!organizationId,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
