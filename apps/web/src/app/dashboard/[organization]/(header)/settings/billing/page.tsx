@@ -47,6 +47,54 @@ import { DisconnectAccountDialog } from './_components/DisconnectAccountDialog'
 
 type ConnectMode = 'managed' | 'oauth'
 
+function describeOAuthError(
+  code: string,
+  details: { connectedOrgName: string | null; connectedOrgSlug: string | null },
+): { title: string; description: string } {
+  switch (code) {
+    case 'account_already_connected': {
+      const where = details.connectedOrgName
+        ? `the “${details.connectedOrgName}” organization`
+        : 'another organization'
+      return {
+        title: 'Stripe account already connected',
+        description: `This Stripe account is already linked to ${where}. Disconnect it there first, then retry.`,
+      }
+    }
+    case 'state_expired':
+      return {
+        title: 'Connection link expired',
+        description: 'The connection link expired. Please start the Stripe connect flow again.',
+      }
+    case 'invalid_state':
+    case 'missing_code_or_state':
+      return {
+        title: 'Connection failed',
+        description: 'Something went wrong during the redirect from Stripe. Please try again.',
+      }
+    case 'access_denied':
+      return {
+        title: 'Connection cancelled',
+        description: 'You declined the connection on Stripe. No changes were made.',
+      }
+    case 'oauth_connect_failed':
+      return {
+        title: 'Connection failed',
+        description: 'We could not complete the Stripe connection. Please try again — if this keeps happening, contact support.',
+      }
+    case 'unknown_error':
+      return {
+        title: 'Connection failed',
+        description: 'An unexpected error occurred. Please try again — if this keeps happening, contact support.',
+      }
+    default:
+      return {
+        title: 'Connection failed',
+        description: `Stripe returned an error (${code}). Please try again.`,
+      }
+  }
+}
+
 export default function BillingPage() {
   const { organization } = useOrganization()
   const { environment } = useEnvironment()
@@ -130,10 +178,16 @@ export default function BillingPage() {
         queryKey: accountKeys.byOrganization(organization.id),
       })
     } else {
-      const message = searchParams.get('message') || 'Please try again.'
+      const message = searchParams.get('message') || 'unknown_error'
+      const connectedOrgName = searchParams.get('connected_org_name')
+      const connectedOrgSlug = searchParams.get('connected_org_slug')
+      const { title, description } = describeOAuthError(message, {
+        connectedOrgName,
+        connectedOrgSlug,
+      })
       toast({
-        title: 'Connection failed',
-        description: decodeURIComponent(message),
+        title,
+        description,
         variant: 'destructive',
       })
     }

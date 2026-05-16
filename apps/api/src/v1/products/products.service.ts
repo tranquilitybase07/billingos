@@ -71,6 +71,7 @@ export class V1ProductsService {
     organizationId: string,
     externalUserId?: string,
     planIds?: string[],
+    externalEmail?: string,
   ): Promise<GetProductsResponse> {
     const supabase = this.supabaseService.getClient();
 
@@ -128,13 +129,28 @@ export class V1ProductsService {
     let currentProductId: string | null = null;
 
     if (externalUserId) {
-      // First, find the customer by external_user_id
-      const { data: customer } = await supabase
+      // Find by external_id; fall back to email-based lazy bind for imported
+      // customers whose external_id is still NULL.
+      let { data: customer } = await supabase
         .from('customers')
         .select('id')
         .eq('organization_id', organizationId)
         .eq('external_id', externalUserId)
+        .is('deleted_at', null)
         .maybeSingle();
+
+      if (!customer && externalEmail) {
+        const { data: bound } = await supabase
+          .from('customers')
+          .update({ external_id: externalUserId } as any)
+          .eq('organization_id', organizationId)
+          .ilike('email', externalEmail)
+          .is('external_id', null)
+          .is('deleted_at', null)
+          .select('id')
+          .maybeSingle();
+        customer = bound;
+      }
 
       if (customer) {
         // Then fetch their active subscription

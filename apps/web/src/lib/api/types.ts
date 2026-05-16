@@ -500,6 +500,9 @@ export interface OnboardingChecklistStep {
   description: string
   completed: boolean
   href: string
+  // When true, the UI lets merchants dismiss the step without completing it
+  // (persisted client-side per org). Used for optional steps like Stripe import.
+  dismissible?: boolean
 }
 
 export interface OnboardingStatusResponse {

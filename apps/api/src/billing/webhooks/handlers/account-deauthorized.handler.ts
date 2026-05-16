@@ -38,16 +38,19 @@ export class AccountDeauthorizedHandler
       );
 
       const supabase = ctx.supabase;
+      const now = new Date().toISOString();
 
-      // Update account status to blocked. Use maybeSingle() because the row
-      // may already be soft-deleted if the merchant clicked our own Disconnect
-      // (in which case Stripe fires this webhook as confirmation), or if the
-      // account was never tracked in BOS — both are no-ops, not errors.
+      // Soft-delete the account row. Mirrors the user-initiated disconnect()
+      // path so re-connecting the same Stripe account isn't blocked by dedup
+      // (which filters on deleted_at IS NULL). Use maybeSingle() because the
+      // row may already be soft-deleted (our own Disconnect fires Stripe's
+      // deauth webhook as confirmation) or never tracked — both are no-ops.
       const { data, error } = await supabase
         .from('accounts')
         .update({
           status: 'blocked',
-          updated_at: new Date().toISOString(),
+          deleted_at: now,
+          updated_at: now,
         })
         .eq('stripe_id', accountId)
         .is('deleted_at', null)
@@ -69,10 +72,27 @@ export class AccountDeauthorizedHandler
         return;
       }
 
-      // Update organization status to blocked
-      await this.updateOrganizationStatus(ctx, data.id, 'blocked', false);
+      // Unlink the org and revert it to 'created' so the user can re-connect.
+      const { error: orgErr } = await supabase
+        .from('organizations')
+        .update({
+          account_id: null,
+          status: 'created',
+          status_updated_at: now,
+          updated_at: now,
+        })
+        .eq('account_id', data.id);
 
-      this.logger.log(`Account ${accountId} marked as deauthorized/blocked`);
+      if (orgErr) {
+        this.logger.error(
+          `Failed to unlink organization for deauthorized account ${data.id}:`,
+          orgErr,
+        );
+      }
+
+      this.logger.log(
+        `Account ${accountId} soft-deleted and org unlinked (deauthorized)`,
+      );
     } catch (error) {
       this.logger.error(
         'Error handling account.application.deauthorized:',
@@ -81,43 +101,4 @@ export class AccountDeauthorizedHandler
     }
   }
 
-  /**
-   * Update organization status based on account readiness
-   */
-  private async updateOrganizationStatus(
-    ctx: WebhookContext,
-    accountId: string,
-    status: string,
-    setOnboardedAt: boolean = false,
-  ): Promise<void> {
-    try {
-      const supabase = ctx.supabase;
-
-      const updateData: any = {
-        status,
-        status_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Set onboarded_at when account becomes active
-      if (setOnboardedAt && status === 'active') {
-        updateData.onboarded_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from('organizations')
-        .update(updateData)
-        .eq('account_id', accountId);
-
-      if (error) {
-        this.logger.error(`Failed to update organization status:`, error);
-      } else {
-        this.logger.log(
-          `Organization status updated to ${status} for account ${accountId}${setOnboardedAt ? ' (onboarded)' : ''}`,
-        );
-      }
-    } catch (error) {
-      this.logger.error('Error updating organization status:', error);
-    }
-  }
 }

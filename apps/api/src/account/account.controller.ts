@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  HttpException,
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -44,6 +45,50 @@ const ALLOWED_OAUTH_ERROR_CODES = new Set<string>([
   'server_error',
   'temporarily_unavailable',
 ]);
+
+// Unpack a thrown error into an allowlisted code, a redirect-target slug
+// (when the originating org is known), and a flat extras bag of safe query
+// params (e.g., connected_org_slug for the duplicate-account case).
+function extractOAuthError(e: unknown): {
+  code: string;
+  originOrgSlug: string | null;
+  extras: Record<string, string>;
+} {
+  const extras: Record<string, string> = {};
+  let originOrgSlug: string | null = null;
+
+  if (e instanceof HttpException) {
+    const response = e.getResponse();
+    if (typeof response === 'object' && response !== null) {
+      const r = response as Record<string, unknown>;
+      const errorCode =
+        typeof r.errorCode === 'string'
+          ? r.errorCode
+          : typeof r.message === 'string'
+            ? r.message
+            : '';
+      if (typeof r.connectedOrgSlug === 'string') {
+        extras.connected_org_slug = r.connectedOrgSlug;
+      }
+      if (typeof r.connectedOrgName === 'string') {
+        extras.connected_org_name = r.connectedOrgName;
+      }
+      if (typeof r.originOrgSlug === 'string') {
+        originOrgSlug = r.originOrgSlug;
+      }
+      const code = ALLOWED_OAUTH_ERROR_CODES.has(errorCode)
+        ? errorCode
+        : 'unknown_error';
+      return { code, originOrgSlug, extras };
+    }
+  }
+
+  const rawMessage = (e as Error)?.message ?? '';
+  const code = ALLOWED_OAUTH_ERROR_CODES.has(rawMessage)
+    ? rawMessage
+    : 'unknown_error';
+  return { code, originOrgSlug, extras };
+}
 
 @ApiTags('Accounts')
 @Controller('accounts')
@@ -107,10 +152,7 @@ export class AccountController {
         `${appUrl}/dashboard/${organizationSlug}/settings/billing?oauth=success`,
       );
     } catch (e) {
-      const rawMessage = (e as Error)?.message ?? '';
-      const code = ALLOWED_OAUTH_ERROR_CODES.has(rawMessage)
-        ? rawMessage
-        : 'unknown_error';
+      const { code, originOrgSlug, extras } = extractOAuthError(e);
 
       if (code === 'unknown_error') {
         this.logger.error(
@@ -119,10 +161,18 @@ export class AccountController {
         );
       }
 
-      // We may not have the slug if lookup failed; fall back to /dashboard.
-      res.redirect(
-        `${appUrl}/dashboard?oauth=error&message=${encodeURIComponent(code)}`,
-      );
+      const params = new URLSearchParams({ oauth: 'error', message: code });
+      for (const [key, value] of Object.entries(extras)) {
+        if (value) params.set(key, value);
+      }
+
+      // When we know which org initiated the connect, redirect to its
+      // billing settings page so the in-page toast handler can show the
+      // error. Otherwise fall back to /dashboard.
+      const path = originOrgSlug
+        ? `/dashboard/${originOrgSlug}/settings/billing`
+        : '/dashboard';
+      res.redirect(`${appUrl}${path}?${params.toString()}`);
     }
   }
 

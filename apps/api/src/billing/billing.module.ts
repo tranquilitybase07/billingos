@@ -39,6 +39,7 @@ import { ProrationInvoiceService } from './stripe/proration-invoice.service';
 import { BosPlanExecutor } from './execute/bos-plan.executor';
 import { EntitlementExecutor } from './execute/entitlement.executor';
 import { CheckoutDiscountService } from './checkout/discount.service';
+import { StripeIngestService } from './import/stripe-ingest.service';
 
 import { SupabaseModule } from '../supabase/supabase.module';
 import { StripeModule } from '../stripe/stripe.module';
@@ -102,6 +103,8 @@ const webhookHandlers = [
     EntitlementExecutor,
     // Discount service
     CheckoutDiscountService,
+    // Stripe import / ingest
+    StripeIngestService,
   ],
   exports: [
     EntitlementService,
@@ -110,6 +113,7 @@ const webhookHandlers = [
     WebhookRouter,
     BillingService,
     CheckoutDiscountService,
+    StripeIngestService,
   ],
 })
 export class BillingModule {}

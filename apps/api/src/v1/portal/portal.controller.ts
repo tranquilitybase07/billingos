@@ -47,6 +47,7 @@ export class PortalController {
       customer.organizationId,
       customer.externalUserId,
       dto,
+      customer.externalEmail,
     );
   }
 

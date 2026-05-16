@@ -7,6 +7,7 @@ import { V1ProductsModule } from './products/products.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { PortalModule } from './portal/portal.module';
 import { V1UsageModule } from './usage/usage.module';
+import { V1CustomersModule } from './customers/customers.module';
 import { CustomerController } from './customer/customer.controller';
 import { V1FeaturesController } from './features/features.controller';
 
@@ -35,6 +36,7 @@ import { V1FeaturesController } from './features/features.controller';
     CheckoutModule,
     PortalModule,
     V1UsageModule,
+    V1CustomersModule,
   ],
   controllers: [CustomerController, V1FeaturesController],
 })

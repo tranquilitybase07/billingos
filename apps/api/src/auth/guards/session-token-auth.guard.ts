@@ -36,6 +36,7 @@ export class SessionTokenAuthGuard implements CanActivate {
     // Attach customer context for convenience
     (request as any).customer = {
       externalUserId: payload.external_user_id,
+      externalEmail: payload.external_email,
       externalOrganizationId: payload.external_organization_id,
       organizationId: payload.merchant_id,
     };

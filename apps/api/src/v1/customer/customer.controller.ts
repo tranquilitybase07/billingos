@@ -39,10 +39,11 @@ export class CustomerController {
   async getMe(
     @CurrentCustomer() customer: CustomerContext,
   ): Promise<CustomerStateResponseDto> {
-    // 1. Find customer by external_user_id
-    const customerRecord = await this.customersService.findOneByExternalId(
+    // 1. Find customer by external_user_id (lazy-binds imported customers by email)
+    const customerRecord = await this.customersService.findOrBindByEmail(
       customer.externalUserId,
       customer.organizationId,
+      customer.externalEmail,
     );
 
     if (!customerRecord) {

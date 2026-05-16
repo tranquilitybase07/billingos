@@ -37,6 +37,7 @@ export class V1ProductsController {
       customer.organizationId,
       customerId,
       planIdsArray,
+      customer.externalEmail,
     );
   }
 }

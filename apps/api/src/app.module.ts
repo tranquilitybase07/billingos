@@ -27,6 +27,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { BillingModule } from './billing/billing.module';
+import { ImportModule } from './import/import.module';
 import { AdminModule } from './admin/admin.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import {
@@ -99,6 +100,7 @@ import {
     DiscountsModule,
     SandboxModule,
     BillingModule,
+    ImportModule,
     AdminModule,
   ],
   controllers: [AppController],

@@ -658,6 +658,74 @@ export class StripeService {
     return subscriptions;
   }
 
+  // Iterators for the Stripe → BOS import flow. Auto-paginating yields keep
+  // memory bounded for merchants with tens of thousands of customers/subs.
+
+  async *iterateAccountCustomers(
+    stripeAccountId: string,
+  ): AsyncGenerator<Stripe.Customer> {
+    for await (const customer of this.stripe.customers.list(
+      { limit: 100 },
+      { stripeAccount: stripeAccountId },
+    )) {
+      yield customer;
+    }
+  }
+
+  async *iterateAccountProducts(
+    stripeAccountId: string,
+    options: { activeOnly?: boolean } = {},
+  ): AsyncGenerator<Stripe.Product> {
+    const params: Stripe.ProductListParams = { limit: 100 };
+    if (options.activeOnly !== false) {
+      params.active = true;
+    }
+
+    for await (const product of this.stripe.products.list(params, {
+      stripeAccount: stripeAccountId,
+    })) {
+      yield product;
+    }
+  }
+
+  async *iterateAccountPrices(
+    stripeAccountId: string,
+    options: { activeOnly?: boolean } = {},
+  ): AsyncGenerator<Stripe.Price> {
+    const params: Stripe.PriceListParams = {
+      limit: 100,
+      expand: ['data.product'],
+    };
+    if (options.activeOnly !== false) {
+      params.active = true;
+    }
+
+    for await (const price of this.stripe.prices.list(params, {
+      stripeAccount: stripeAccountId,
+    })) {
+      yield price;
+    }
+  }
+
+  async *iterateAccountSubscriptions(
+    stripeAccountId: string,
+    options: { status?: Stripe.SubscriptionListParams.Status } = {},
+  ): AsyncGenerator<Stripe.Subscription> {
+    const params: Stripe.SubscriptionListParams = {
+      limit: 100,
+      expand: ['data.items.data.price'],
+    };
+    if (options.status) {
+      params.status = options.status;
+    }
+
+    for await (const subscription of this.stripe.subscriptions.list(params, {
+      stripeAccount: stripeAccountId,
+    })) {
+      yield subscription;
+    }
+  }
+
   /**
    * Update a subscription in Stripe Connect account
    */

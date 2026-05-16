@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsArray,
   IsInt,
+  IsEmail,
   Min,
   Max,
 } from 'class-validator';
@@ -12,6 +13,12 @@ export class CreateSessionTokenDto {
   @IsString()
   @IsNotEmpty()
   externalUserId: string; // Merchant's user ID
+
+  // Optional but strongly recommended: enables lazy bind for imported customers
+  // whose external_id is still NULL after a Stripe → BOS migration.
+  @IsEmail()
+  @IsOptional()
+  email?: string;
 
   @IsString()
   @IsOptional()

@@ -48,6 +48,7 @@ export class PortalService {
     organizationId: string,
     externalUserId: string,
     dto: CreatePortalSessionDto,
+    externalEmail?: string,
   ): Promise<PortalSession> {
     const supabase = this.supabaseService.getClient();
 
@@ -71,26 +72,21 @@ export class PortalService {
 
       customerId = customer.id;
     } else {
-      // Find customer by external_id
-      const { data: customer, error: customerError } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('organization_id', organizationId)
-        .eq('external_id', externalUserId)
-        .maybeSingle();
+      // Resolve by external_id, falling back to email-based lazy bind for
+      // imported customers whose external_id is still NULL.
+      const resolved = await this.resolveCustomerByExternalIdOrEmail(
+        organizationId,
+        externalUserId,
+        externalEmail,
+      );
 
-      if (customerError) {
-        this.logger.error('Error finding customer:', customerError);
-        throw new NotFoundException('Customer not found');
-      }
-
-      if (!customer) {
+      if (!resolved) {
         throw new NotFoundException(
           'Customer not found. Customer must complete checkout before accessing portal.',
         );
       }
 
-      customerId = customer.id;
+      customerId = resolved;
     }
 
     // 2. Create portal session with 24-hour expiry
@@ -124,6 +120,53 @@ export class PortalService {
       organizationId: portalSession.organization_id,
       expiresAt: portalSession.expires_at,
     };
+  }
+
+  // Resolves an imported customer either by external_id, or by email with
+  // race-safe lazy bind. Returns the BOS customer id, or null when no match.
+  private async resolveCustomerByExternalIdOrEmail(
+    organizationId: string,
+    externalUserId: string,
+    email?: string,
+  ): Promise<string | null> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: byExternalId } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('external_id', externalUserId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (byExternalId) return byExternalId.id;
+    if (!email) return null;
+
+    const { data: bound, error } = await supabase
+      .from('customers')
+      .update({ external_id: externalUserId } as any)
+      .eq('organization_id', organizationId)
+      .ilike('email', email)
+      .is('external_id', null)
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      this.logger.warn(
+        `Portal lazy-bind race for ${externalUserId} (${email}): ${error.message}`,
+      );
+      const { data: refetched } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('external_id', externalUserId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      return refetched?.id ?? null;
+    }
+
+    return bound?.id ?? null;
   }
 
   /**

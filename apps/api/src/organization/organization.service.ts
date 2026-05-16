@@ -793,6 +793,16 @@ export class OrganizationService {
       .eq('environment', 'live')
       .is('revoked_at', null);
 
+    // Step is "complete" when ANY successful Stripe import has run for this org.
+    // The OnboardingChecklist UI also honors a per-org localStorage dismissal,
+    // so merchants without existing Stripe data can hide this without running
+    // a needless import.
+    const { count: completedImports } = await supabase
+      .from('migration_jobs' as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('status', 'completed');
+
     const steps = [
       {
         id: 'verify_stripe',
@@ -807,6 +817,15 @@ export class OrganizationService {
         description: 'Set up your product catalog',
         completed: (productCount || 0) > 0,
         href: `/dashboard/${org.slug}/products`,
+      },
+      {
+        id: 'import_stripe',
+        label: 'Import existing Stripe data',
+        description:
+          'Pull customers, subscriptions, and products you already have in Stripe',
+        completed: (completedImports || 0) > 0,
+        href: `/dashboard/${org.slug}/settings/import-data`,
+        dismissible: true,
       },
       {
         id: 'generate_live_keys',

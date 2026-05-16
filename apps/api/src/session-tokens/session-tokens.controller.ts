@@ -12,6 +12,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { SessionTokensService } from './session-tokens.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateSessionTokenDto } from './dto/create-session-token.dto';
 import { SessionTokenResponseDto } from './dto/session-token-response.dto';
 
@@ -21,6 +22,7 @@ export class SessionTokensController {
   constructor(
     private readonly sessionTokensService: SessionTokensService,
     private readonly apiKeysService: ApiKeysService,
+    private readonly supabaseService: SupabaseService,
   ) {}
 
   /**
@@ -58,10 +60,23 @@ export class SessionTokensController {
       ? JSON.parse(sessionToken.allowed_operations as any)
       : undefined;
 
+    // Cheap count against the partial unique index on (org, external_id)
+    // WHERE external_id IS NOT NULL — so this counts ROWS WITHOUT that
+    // predicate but is still scoped by org. In steady state this is O(N
+    // unresolved), which is tiny once lazy-bind catches up.
+    const { count: unresolvedCustomers } = await this.supabaseService
+      .getClient()
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', apiKeyRecord.organization_id)
+      .is('external_id', null)
+      .is('deleted_at', null);
+
     return {
       sessionToken: token, // Full token string
       expiresAt: new Date(sessionToken.expires_at),
       allowedOperations,
+      unresolvedCustomers: unresolvedCustomers ?? 0,
     };
   }
 

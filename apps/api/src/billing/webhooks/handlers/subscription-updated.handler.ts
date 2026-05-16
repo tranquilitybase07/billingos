@@ -18,6 +18,7 @@ import { WebhookRouter } from '../webhook.router';
 import { StripeService } from '../../../stripe/stripe.service';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
+import { StripeIngestService } from '../../import/stripe-ingest.service';
 import { SyncStatusTask } from '../tasks/sync-status.task';
 import { DetectPriceChangeTask } from '../tasks/detect-price-change.task';
 import { HandleRenewalTask } from '../tasks/handle-renewal.task';
@@ -55,6 +56,7 @@ export class SubscriptionUpdatedHandler
     private readonly subscriptionsService: SubscriptionsService,
     @Inject(forwardRef(() => SubscriptionTransitionService))
     private readonly transitionService: SubscriptionTransitionService,
+    private readonly stripeIngest: StripeIngestService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {
     // Build the task pipeline. Tasks that need external dependencies
@@ -82,13 +84,46 @@ export class SubscriptionUpdatedHandler
       );
 
       // ── Fetch existing BOS record ──
-      const { data: existing, error: fetchError } = await ctx.supabase
+      const fetchResult = await ctx.supabase
         .from('subscriptions')
         .select(
           'id, customer_id, current_period_start, current_period_end, status, metadata',
         )
         .eq('stripe_subscription_id', subscription.id)
-        .single();
+        .maybeSingle();
+      const fetchError = fetchResult.error;
+      let existing = fetchResult.data;
+
+      // Lazy ingest: race window between OAuth-connect and import-run, or a
+      // subscription created out-of-band in Stripe. If we can resolve the
+      // org + customer + product mapping, mirror the subscription into BOS so
+      // downstream pipeline tasks have a row to operate on.
+      if (!fetchError && !existing) {
+        const orgId = await this.stripeIngest.resolveOrganizationId(
+          ctx.stripeAccountId,
+        );
+        if (orgId) {
+          const ingest = await this.stripeIngest.ingestSubscription(
+            orgId,
+            subscription,
+          );
+          if (ingest) {
+            const { data: refetched } = await ctx.supabase
+              .from('subscriptions')
+              .select(
+                'id, customer_id, current_period_start, current_period_end, status, metadata',
+              )
+              .eq('id', ingest.subscriptionId)
+              .maybeSingle();
+            existing = refetched ?? null;
+            if (existing) {
+              this.logger.log(
+                `Lazy-ingested subscription ${subscription.id} on update`,
+              );
+            }
+          }
+        }
+      }
 
       if (fetchError || !existing) {
         this.logger.warn(

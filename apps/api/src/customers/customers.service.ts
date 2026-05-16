@@ -464,6 +464,64 @@ export class CustomersService {
     return this.mapToResponseDto(customer);
   }
 
+  // Resolves a customer by external_id, with a race-safe lazy-bind fallback by
+  // email. Used by SDK endpoints to seamlessly handle imported customers whose
+  // external_id is still NULL. Returns null (does NOT throw) so endpoints can
+  // degrade gracefully (e.g. has_access=false instead of 404).
+  async findOrBindByEmail(
+    externalUserId: string,
+    organizationId: string,
+    email?: string,
+  ): Promise<CustomerResponseDto | null> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: byExternalId } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('external_id', externalUserId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (byExternalId) {
+      return this.mapToResponseDto(byExternalId);
+    }
+
+    if (!email) {
+      return null;
+    }
+
+    // Race-safe bind: only succeeds if external_id is still NULL.
+    // The partial unique index on (organization_id, external_id) where
+    // external_id IS NOT NULL protects against concurrent binders.
+    const { data: bound, error: bindError } = await supabase
+      .from('customers')
+      .update({ external_id: externalUserId })
+      .eq('organization_id', organizationId)
+      .ilike('email', email)
+      .is('external_id', null)
+      .is('deleted_at', null)
+      .select('*')
+      .maybeSingle();
+
+    if (bindError) {
+      // Unique-violation race: someone else bound this customer first. Re-fetch.
+      this.logger.warn(
+        `Lazy bind race for ${externalUserId} (${email}): ${bindError.message}`,
+      );
+      const { data: refetched } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('external_id', externalUserId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      return refetched ? this.mapToResponseDto(refetched) : null;
+    }
+
+    return bound ? this.mapToResponseDto(bound) : null;
+  }
+
   /**
    * Update customer by ID
    */

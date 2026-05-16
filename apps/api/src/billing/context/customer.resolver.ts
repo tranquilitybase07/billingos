@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { StripeService } from '../../stripe/stripe.service';
 import { CustomersService } from '../../customers/customers.service';
@@ -31,12 +31,29 @@ export class CustomerResolver {
     const supabase = this.supabaseService.getClient();
 
     // Check if customer already exists in our database
-    const { data: existing } = await supabase
+    let { data: existing } = await supabase
       .from('customers')
       .select('id, stripe_customer_id')
       .eq('organization_id', organizationId)
       .eq('external_id', externalUserId)
+      .is('deleted_at', null)
       .maybeSingle();
+
+    // Imported customer fallback: match by email and lazy-bind external_id.
+    // Prevents creating a duplicate Stripe customer for someone we already
+    // know about from a prior Stripe → BOS import.
+    if (!existing && email) {
+      const { data: bound } = await supabase
+        .from('customers')
+        .update({ external_id: externalUserId } as any)
+        .eq('organization_id', organizationId)
+        .ilike('email', email)
+        .is('external_id', null)
+        .is('deleted_at', null)
+        .select('id, stripe_customer_id')
+        .maybeSingle();
+      existing = bound;
+    }
 
     if (existing?.stripe_customer_id) {
       return {

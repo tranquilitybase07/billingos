@@ -36,7 +36,9 @@ async function bootstrap() {
   }
 
   if (process.env.EXTRA_CORS_ORIGINS) {
-    allowedOrigins.push(...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()));
+    allowedOrigins.push(
+      ...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()),
+    );
   }
 
   app.enableCors({

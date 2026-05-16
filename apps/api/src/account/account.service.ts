@@ -603,15 +603,18 @@ export class AccountService {
     // Dedup: the same Stripe account cannot be connected to multiple BOS orgs.
     const { data: existing } = await supabase
       .from('accounts')
-      .select('id')
+      .select('id, organizations!fk_organizations_account_id(slug, name)')
       .eq('stripe_id', stripeUserId)
       .is('deleted_at', null)
       .maybeSingle();
 
     if (existing) {
-      // Revert the Stripe-side authorization so the user can retry with a
-      // different account.
-      await this.safeDeauthorize(stripeUserId);
+      // Do NOT call deauthorize here: Stripe OAuth grants are per-platform,
+      // so revoking would nuke the existing org's working connection too.
+      const connectedOrg = Array.isArray(existing.organizations)
+        ? existing.organizations[0]
+        : existing.organizations;
+
       await this.logSyncEvent({
         organizationId: org.id,
         entityId: existing.id,
@@ -621,7 +624,12 @@ export class AccountService {
         errorMessage: 'account_already_connected',
         triggeredBy: parsed.user_id,
       });
-      throw new ConflictException('account_already_connected');
+      throw new ConflictException({
+        errorCode: 'account_already_connected',
+        connectedOrgSlug: connectedOrg?.slug ?? null,
+        connectedOrgName: connectedOrg?.name ?? null,
+        originOrgSlug: org.slug,
+      });
     }
 
     try {

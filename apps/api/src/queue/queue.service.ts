@@ -99,6 +99,24 @@ export class QueueService {
     return this.read('billing_alerts', qty, vtSecs);
   }
 
+  // Stripe → BOS import queue. Tied to the migration_jobs table; the worker
+  // hops through the migration_jobs row as it processes each message.
+  async sendStripeImport(message: QueueMessage): Promise<number | null> {
+    return this.send('stripe_import', message);
+  }
+
+  async readStripeImport(qty: number, vtSecs = 600): Promise<PgmqMessage[]> {
+    return this.read('stripe_import', qty, vtSecs);
+  }
+
+  async archiveStripeImport(msgId: number): Promise<boolean> {
+    return this.archive('stripe_import', msgId);
+  }
+
+  async deleteStripeImport(msgId: number): Promise<boolean> {
+    return this.delete('stripe_import', msgId);
+  }
+
   /**
    * Archive an alert (admin resolved it)
    */

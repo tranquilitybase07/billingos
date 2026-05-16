@@ -4,6 +4,7 @@ export interface SessionToken {
   api_key_id: string;
   token_id: string; // jti (JWT Token ID) for revocation
   external_user_id: string; // Merchant's user ID
+  external_email: string | null; // Optional: enables lazy-bind for imported customers
   external_organization_id: string | null; // Optional: for B2B
   allowed_operations: string[] | null; // NULL = all operations allowed
   created_at: string;
@@ -19,6 +20,7 @@ export interface SessionTokenPayload {
   exp: number; // Expires at (Unix timestamp)
   merchant_id: string; // Organization ID
   external_user_id: string; // Merchant's user ID
+  external_email?: string; // Optional: enables lazy-bind for imported customers
   external_organization_id?: string; // Optional: for B2B
   allowed_operations?: string[]; // Optional: scoped permissions
   metadata?: Record<string, any>; // Optional: IP, user agent, etc.

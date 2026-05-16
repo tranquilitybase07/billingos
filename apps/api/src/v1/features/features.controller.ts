@@ -53,10 +53,11 @@ export class V1FeaturesController {
       throw new BadRequestException('feature_key parameter is required');
     }
 
-    // Get customer record
-    const customerRecord = await this.customersService.findOneByExternalId(
+    // Get customer record (lazy-binds imported customers by email)
+    const customerRecord = await this.customersService.findOrBindByEmail(
       customer.externalUserId,
       customer.organizationId,
+      customer.externalEmail,
     );
 
     if (!customerRecord) {
@@ -113,10 +114,11 @@ export class V1FeaturesController {
       throw new BadRequestException('feature_key and quantity are required');
     }
 
-    // Get customer record
-    const customerRecord = await this.customersService.findOneByExternalId(
+    // Get customer record (lazy-binds imported customers by email)
+    const customerRecord = await this.customersService.findOrBindByEmail(
       customer.externalUserId,
       customer.organizationId,
+      customer.externalEmail,
     );
 
     if (!customerRecord) {
@@ -148,10 +150,11 @@ export class V1FeaturesController {
    */
   @Get('entitlements')
   async getEntitlements(@CurrentCustomer() customer: CustomerContext) {
-    // Get customer record
-    const customerRecord = await this.customersService.findOneByExternalId(
+    // Get customer record (lazy-binds imported customers by email)
+    const customerRecord = await this.customersService.findOrBindByEmail(
       customer.externalUserId,
       customer.organizationId,
+      customer.externalEmail,
     );
 
     if (!customerRecord) {
@@ -185,10 +188,11 @@ export class V1FeaturesController {
     @CurrentCustomer() customer: CustomerContext,
     @Query('feature_key') featureKey?: string,
   ) {
-    // Get customer record
-    const customerRecord = await this.customersService.findOneByExternalId(
+    // Get customer record (lazy-binds imported customers by email)
+    const customerRecord = await this.customersService.findOrBindByEmail(
       customer.externalUserId,
       customer.organizationId,
+      customer.externalEmail,
     );
 
     if (!customerRecord) {

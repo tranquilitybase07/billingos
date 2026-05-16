@@ -8,9 +8,15 @@ import {
   UserMultiple02Icon,
   CreditCardIcon,
   Key01Icon,
+  ArrowDataTransferHorizontalIcon,
 } from 'hugeicons-react'
 
-type SettingsTab = 'general' | 'members' | 'billing' | 'api-keys'
+type SettingsTab =
+  | 'general'
+  | 'members'
+  | 'billing'
+  | 'api-keys'
+  | 'import-data'
 
 interface SettingsTabNavProps {
   activeTab: SettingsTab
@@ -53,6 +59,12 @@ export function SettingsTabNav({ activeTab }: SettingsTabNavProps) {
             <Link href={`${base}/api-keys`}>
               <Key01Icon size={16} className="mr-2" />
               API Keys
+            </Link>
+          </TabsTrigger>
+          <TabsTrigger value="import-data" asChild>
+            <Link href={`${base}/import-data`}>
+              <ArrowDataTransferHorizontalIcon size={16} className="mr-2" />
+              Import Data
             </Link>
           </TabsTrigger>
         </TabsList>

@@ -45,6 +45,18 @@ export class SessionTokensService {
     const now = Math.floor(Date.now() / 1000); // Unix timestamp
     const expiresAt = now + expiresIn;
 
+    // Eagerly lazy-bind any imported customer matching this email so downstream
+    // SDK endpoints (portal, checkout, feature checks) work on the very first
+    // call — not just after a second round-trip. Best-effort; failures here
+    // never block token issuance.
+    if (createDto.email) {
+      await this.tryLazyBind(
+        organizationId,
+        createDto.externalUserId,
+        createDto.email,
+      );
+    }
+
     // Create payload
     const payload: SessionTokenPayload = {
       jti: tokenId,
@@ -55,6 +67,9 @@ export class SessionTokensService {
     };
 
     // Add optional fields
+    if (createDto.email) {
+      payload.external_email = createDto.email;
+    }
     if (createDto.externalOrganizationId) {
       payload.external_organization_id = createDto.externalOrganizationId;
     }
@@ -76,6 +91,7 @@ export class SessionTokensService {
         api_key_id: apiKeyId,
         token_id: tokenId,
         external_user_id: createDto.externalUserId,
+        external_email: createDto.email || null,
         external_organization_id: createDto.externalOrganizationId || null,
         allowed_operations: createDto.allowedOperations
           ? JSON.stringify(createDto.allowedOperations)
@@ -84,7 +100,7 @@ export class SessionTokensService {
         metadata: createDto.metadata
           ? JSON.stringify(createDto.metadata)
           : null,
-      })
+      } as any)
       .select()
       .single();
 
@@ -101,6 +117,37 @@ export class SessionTokensService {
       sessionToken: data as SessionToken,
       token,
     };
+  }
+
+  // Best-effort lazy bind for imported customers. If a customer row exists in
+  // this org with the given email and external_id IS NULL, set external_id to
+  // the merchant's user ID. Safe under concurrency thanks to the partial unique
+  // index on (organization_id, external_id) WHERE external_id IS NOT NULL.
+  private async tryLazyBind(
+    organizationId: string,
+    externalUserId: string,
+    email: string,
+  ): Promise<void> {
+    try {
+      const supabase = this.supabaseService.getClient();
+      const { error } = await supabase
+        .from('customers')
+        .update({ external_id: externalUserId } as any)
+        .eq('organization_id', organizationId)
+        .ilike('email', email)
+        .is('external_id', null)
+        .is('deleted_at', null);
+
+      if (error) {
+        this.logger.warn(
+          `Lazy bind skipped for ${externalUserId} (${email}): ${error.message}`,
+        );
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Lazy bind threw for ${externalUserId} (${email}): ${(e as Error).message}`,
+      );
+    }
   }
 
   /**
