@@ -2,6 +2,7 @@
 
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { DataTable, DataTableColumnHeader } from '@/components/atoms/datatable'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
 import { Button } from '@/components/ui/button'
 import { Download01Icon, FilterIcon, Layers01Icon } from 'hugeicons-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -489,18 +490,6 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
           </Button>
         </div>
 
-        {/* Empty state */}
-        {!isLoading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-            <p className="text-sm font-medium text-foreground">No cancellations yet</p>
-            <p className="text-xs text-muted-foreground max-w-xs">
-              {activeFilterCount > 0
-                ? 'No results match your current filters. Try clearing some filters.'
-                : 'Churned customers will appear here once someone cancels.'}
-            </p>
-          </div>
-        )}
-
         {/* Table */}
         <div className="overflow-x-auto">
           <DataTable
@@ -509,6 +498,21 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
             sorting={sorting}
             onSortingChange={setSorting}
             rowCount={filtered.length}
+            emptyState={
+              <TableEmptyState
+                title="No cancellations yet"
+                description={
+                  activeFilterCount > 0
+                    ? 'No results match your current filters.'
+                    : 'Churned customers will appear here once someone cancels.'
+                }
+                action={
+                  activeFilterCount > 0
+                    ? { label: 'Clear filters', onClick: () => setFilters(EMPTY_FILTERS) }
+                    : undefined
+                }
+              />
+            }
             columns={[
               {
                 id: 'customer',

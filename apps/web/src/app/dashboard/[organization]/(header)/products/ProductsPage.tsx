@@ -1,28 +1,83 @@
 'use client'
 
+import { useCallback, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { PlusSignIcon } from 'hugeicons-react'
+
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
-import Pagination from '@/components/Pagination/Pagination'
-import { ProductListItem } from '@/components/Products/ProductListItem'
 import { useProducts } from '@/hooks/queries/products'
+import {
+  DataTable,
+  DataTableColumnDef,
+  DataTableColumnHeader,
+} from '@/components/atoms/datatable'
+import { PillTabs, PillTabsList, PillTabsTrigger } from '@/components/atoms/PillTabs'
+import { SearchInput } from '@/components/atoms/SearchInput'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
+import {
+  ProductActionsCell,
+  ProductVisibilityCell,
+} from '@/components/Products/ProductTableCells'
+import ProductPriceLabel from '@/components/Products/ProductPriceLabel'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   DataTablePaginationState,
   DataTableSortingState,
   serializeSearchParams,
   sortingStateToQueryParam,
 } from '@/utils/datatable'
-import { PlusSignIcon, CubeIcon, Search01Icon } from 'hugeicons-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { useCallback, useState } from 'react'
+import { isMeteredPrice, isSeatBasedPrice, type Product } from '@/utils/product'
+
+type ShowTab = 'Active' | 'Archived' | 'All'
+
+const SHOW_TABS: ShowTab[] = ['Active', 'Archived', 'All']
+
+const TAB_TO_API: Record<ShowTab, boolean | null> = {
+  Active: false,
+  Archived: true,
+  All: null,
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function getPricingModel(product: Product): {
+  label: string
+  className: string
+} {
+  if (product.prices.some((p) => p.amount_type === 'free')) {
+    return {
+      label: 'Free',
+      className:
+        'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
+    }
+  }
+  if (product.prices.some(isMeteredPrice)) {
+    return {
+      label: 'Metered',
+      className:
+        'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+    }
+  }
+  if (product.prices.some(isSeatBasedPrice)) {
+    return {
+      label: 'Seat',
+      className:
+        'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+    }
+  }
+  if (product.is_recurring || product.recurring_interval) {
+    return { label: 'Recurring', className: '' }
+  }
+  return { label: 'One-time', className: '' }
+}
 
 export default function ClientPage({
   organizationId,
@@ -38,192 +93,240 @@ export default function ClientPage({
   query: string | undefined
 }) {
   const [query, setQuery] = useState(_query || '')
-  const [show, setShow] = useState('active')
+  const [showTab, setShowTab] = useState<ShowTab>('Active')
 
   const router = useRouter()
   const pathname = usePathname()
 
-  const onPageChange = useCallback(
-    (page: number) => {
-      const searchParams = serializeSearchParams(pagination, sorting)
-      searchParams.set('page', page.toString())
-      if (query) {
-        searchParams.set('query', query)
-      } else {
-        searchParams.delete('query')
-      }
+  const updateUrl = useCallback(
+    (nextPagination: DataTablePaginationState, nextSorting: DataTableSortingState, nextQuery: string) => {
+      const searchParams = serializeSearchParams(nextPagination, nextSorting)
+      if (nextQuery) searchParams.set('query', nextQuery)
+      else searchParams.delete('query')
       router.replace(`${pathname}?${searchParams}`)
     },
-    [pagination, router, sorting, pathname, query],
+    [router, pathname],
   )
 
-  const onLimitChange = useCallback(
-    (limit: string) => {
-      const searchParams = serializeSearchParams(
-        { ...pagination, pageSize: parseInt(limit), pageIndex: 0 },
-        sorting,
-      )
-      if (query) {
-        searchParams.set('query', query)
-      } else {
-        searchParams.delete('query')
-      }
-      router.replace(`${pathname}?${searchParams}`)
-    },
-    [pagination, router, sorting, pathname, query],
-  )
+  const onSortingChange: React.ComponentProps<typeof DataTable>['onSortingChange'] = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater
+    updateUrl({ ...pagination, pageIndex: 0 }, next, query)
+  }
 
-  const onSortingChange = useCallback(
-    (value: string) => {
-      const desc = value.startsWith('-')
-      const id = desc ? value.slice(1) : value
-      const newSorting: DataTableSortingState = [{ id, desc }]
-      const searchParams = serializeSearchParams(
-        { ...pagination, pageIndex: 0 },
-        newSorting,
-      )
-      if (query) {
-        searchParams.set('query', query)
-      } else {
-        searchParams.delete('query')
-      }
-      router.replace(`${pathname}?${searchParams}`)
-    },
-    [pagination, router, pathname, query],
-  )
+  const onPaginationChange: React.ComponentProps<typeof DataTable>['onPaginationChange'] = (updater) => {
+    const next = typeof updater === 'function' ? updater(pagination) : updater
+    updateUrl(next, sorting, query)
+  }
 
-  const currentSortingValue =
-    sorting.length > 0
-      ? `${sorting[0].desc ? '-' : ''}${sorting[0].id}`
-      : 'name'
+  const onQueryChange = (next: string) => {
+    setQuery(next)
+    updateUrl({ ...pagination, pageIndex: 0 }, sorting, next)
+  }
 
   const products = useProducts(organizationId, {
     query,
     page: pagination.pageIndex + 1,
     limit: pagination.pageSize,
     sorting: sortingStateToQueryParam(sorting),
-    is_archived: show === 'all' ? null : show === 'active' ? false : true,
+    is_archived: TAB_TO_API[showTab],
   })
+
+  const items = products.data?.items ?? []
+  const totalCount = products.data?.pagination.total_count ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalCount / pagination.pageSize))
+
+  const columns: DataTableColumnDef<Product>[] = useMemo(
+    () => [
+      {
+        id: 'name',
+        accessorKey: 'name',
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
+        cell: ({ row: { original: p } }) => (
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-sm font-medium text-foreground">{p.name}</span>
+            {p.version && p.version > 1 && (
+              <Badge variant="outline" className="text-[10px] font-normal py-0">
+                v{p.version}
+              </Badge>
+            )}
+            {p.version_status === 'superseded' && (
+              <Badge variant="secondary" className="text-[10px] font-normal py-0">
+                Old Version
+              </Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: 'pricing_model',
+        header: () => (
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            Pricing Model
+          </span>
+        ),
+        cell: ({ row: { original: p } }) => {
+          const model = getPricingModel(p)
+          return (
+            <Badge
+              variant="secondary"
+              className={`text-[10px] font-normal py-0 ${model.className}`}
+            >
+              {model.label}
+            </Badge>
+          )
+        },
+        enableSorting: false,
+      },
+      {
+        id: 'price',
+        accessorKey: 'price_amount',
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Price" />,
+        cell: ({ row: { original: p } }) => {
+          const priceCount = p.prices.length
+          return (
+            <div className="flex items-center gap-1.5 text-sm">
+              <ProductPriceLabel product={p} />
+              {priceCount > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  +{priceCount - 1} more
+                </span>
+              )}
+            </div>
+          )
+        },
+      },
+      {
+        id: 'status',
+        header: () => (
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            Status
+          </span>
+        ),
+        cell: ({ row: { original: p } }) => {
+          if (p.is_archived) {
+            return <Badge variant="destructive" className="text-[10px] font-normal py-0">Archived</Badge>
+          }
+          if (p.version_status === 'superseded') {
+            return <Badge variant="secondary" className="text-[10px] font-normal py-0">Superseded</Badge>
+          }
+          return (
+            <Badge
+              variant="secondary"
+              className="text-[10px] font-normal py-0 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+            >
+              Active
+            </Badge>
+          )
+        },
+        enableSorting: false,
+      },
+      {
+        id: 'visible',
+        header: () => (
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            Visible
+          </span>
+        ),
+        cell: ({ row: { original: p } }) => <ProductVisibilityCell product={p} />,
+        enableSorting: false,
+        size: 80,
+      },
+      {
+        id: 'created_at',
+        accessorKey: 'created_at',
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row: { original: p } }) => (
+          <span className="text-sm text-muted-foreground">{formatDate(p.created_at)}</span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => null,
+        cell: ({ row: { original: p } }) => (
+          <div className="flex justify-end">
+            <ProductActionsCell product={p} organizationSlug={organizationSlug} />
+          </div>
+        ),
+        enableSorting: false,
+        size: 60,
+      },
+    ],
+    [organizationSlug],
+  )
 
   return (
     <DashboardBody>
       <div className="flex flex-col gap-y-8">
-        <div>
-          <h1 className="text-2xl font-semibold">Products</h1>
-          <p className="text-muted-foreground">Manage your product catalog and pricing</p>
-        </div>
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative w-full md:max-w-64">
-              <Search01Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Search Products"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-            <Select value={show} onValueChange={setShow}>
-              <SelectTrigger className="w-full md:max-w-fit">
-                <SelectValue placeholder="Show archived products" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={currentSortingValue} onValueChange={onSortingChange}>
-              <SelectTrigger className="w-full md:max-w-fit">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name A-Z</SelectItem>
-                <SelectItem value="-name">Name Z-A</SelectItem>
-                <SelectItem value="-created_at">Newest</SelectItem>
-                <SelectItem value="created_at">Oldest</SelectItem>
-                <SelectItem value="price_amount">Price: Low to High</SelectItem>
-                <SelectItem value="-price_amount">
-                  Price: High to Low
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {(products.data?.pagination.total_count ?? 0) > 20 && (
-              <Select
-                value={pagination.pageSize.toString()}
-                onValueChange={onLimitChange}
-              >
-                <SelectTrigger className="w-full md:max-w-fit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">Show 20</SelectItem>
-                  <SelectItem value="50">Show 50</SelectItem>
-                  <SelectItem value="100">Show 100</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">Products</h1>
+            <p className="text-muted-foreground">Manage your product catalog and pricing</p>
           </div>
-          <Link
-            href={`/dashboard/${organizationSlug}/products/new`}
-            className="w-full md:w-fit"
-          >
-            <Button className="w-full gap-x-2 md:w-fit">
+          <Link href={`/dashboard/${organizationSlug}/products/new`}>
+            <Button className="gap-x-2">
               <PlusSignIcon size={16} />
               <span>New Product</span>
             </Button>
           </Link>
         </div>
-        {products.isLoading ? (
-          <div className="flex flex-col gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-20 w-full animate-pulse rounded-lg border bg-muted"
-              />
-            ))}
-          </div>
-        ) : products.data && products.data.items.length > 0 ? (
-          <Pagination
-            currentPage={pagination.pageIndex + 1}
-            pageSize={pagination.pageSize}
-            totalCount={products.data?.pagination.total_count || 0}
-            currentURL={serializeSearchParams(pagination, sorting)}
-            onPageChange={onPageChange}
-          >
-            <div className="flex flex-col gap-2">
-              {products.data.items
-                .sort((a, b) => {
-                  if (a.is_archived === b.is_archived) return 0
-                  return a.is_archived ? 1 : -1
-                })
-                .map((product) => (
-                  <ProductListItem
-                    key={product.id}
-                    organization={{ id: organizationId, slug: organizationSlug }}
-                    product={product}
-                  />
+
+        {/* Filter Bar */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <PillTabs
+              layoutId="products-show-indicator"
+              value={showTab}
+              onValueChange={(v) => setShowTab(v as ShowTab)}
+            >
+              <PillTabsList>
+                {SHOW_TABS.map((tab) => (
+                  <PillTabsTrigger key={tab} value={tab}>
+                    {tab}
+                  </PillTabsTrigger>
                 ))}
-            </div>
-          </Pagination>
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-y-6 rounded-lg border bg-card py-48 shadow-sm">
-            <CubeIcon size={48} className="text-muted-foreground/30" />
-            <div className="flex flex-col items-center gap-y-6">
-              <div className="flex flex-col items-center gap-y-2">
-                <h3 className="text-lg font-medium">No products found</h3>
-                <p className="text-muted-foreground">
-                  Start selling digital products today
-                </p>
-              </div>
-              <Link href={`/dashboard/${organizationSlug}/products/new`}>
-                <Button variant="secondary">
-                  <span>Create Product</span>
-                </Button>
-              </Link>
-            </div>
+              </PillTabsList>
+            </PillTabs>
+
+            <SearchInput
+              value={query}
+              onValueChange={onQueryChange}
+              placeholder="Search products..."
+            />
           </div>
-        )}
+        </div>
+
+        {/* Table */}
+        <DataTable
+          data={items}
+          columns={columns}
+          isLoading={products.isLoading}
+          sorting={sorting}
+          onSortingChange={onSortingChange}
+          pagination={pagination}
+          onPaginationChange={onPaginationChange}
+          pageCount={pageCount}
+          rowCount={totalCount}
+          getRowId={(row) => row.id}
+          onRowClick={(row) => {
+            router.push(`/dashboard/${organizationSlug}/products/${row.original.id}`)
+          }}
+          className="[&_tr]:cursor-pointer"
+          emptyState={
+            <TableEmptyState
+              title="No products found"
+              description={
+                query || showTab !== 'Active'
+                  ? 'No products match your current filters.'
+                  : 'Start selling digital products today.'
+              }
+              action={{
+                label: 'Create Product',
+                onClick: () => router.push(`/dashboard/${organizationSlug}/products/new`),
+                icon: <PlusSignIcon size={14} />,
+              }}
+            />
+          }
+        />
       </div>
     </DashboardBody>
   )

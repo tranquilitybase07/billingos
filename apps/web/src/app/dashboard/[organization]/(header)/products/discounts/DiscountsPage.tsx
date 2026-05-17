@@ -6,6 +6,7 @@ import { InlineModal } from '@/components/Modal/InlineModal'
 import { CreateDiscountModalContent } from '@/components/Discounts/CreateDiscountModalContent'
 import { EditDiscountModalContent } from '@/components/Discounts/EditDiscountModalContent'
 import { DataTable, DataTableColumnDef, DataTableColumnHeader } from '@/components/atoms/datatable'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
 import { useDiscounts, useDeleteDiscount } from '@/hooks/queries'
 import {
   DataTablePaginationState,
@@ -13,7 +14,7 @@ import {
   getAPIParams,
 } from '@/utils/datatable'
 import { getDiscountDisplay, Discount } from '@/utils/discount'
-import { PlusSignIcon, MoreVerticalIcon, Search01Icon, DiscountTag01Icon } from 'hugeicons-react'
+import { PlusSignIcon, MoreVerticalIcon, Search01Icon } from 'hugeicons-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -287,30 +288,24 @@ const ClientPage: React.FC<ClientPageProps> = ({
             <span>New Coupon</span>
           </Button>
         </div>
-        {discountsHook.isLoading || discounts.length > 0 ? (
-          <DataTable
-            data={sortedDiscounts}
-            columns={columns}
-            isLoading={discountsHook.isLoading}
-            sorting={sorting}
-            onSortingChange={setSorting}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-y-6 rounded-lg border bg-card py-48 shadow-sm">
-            <DiscountTag01Icon size={48} className="text-muted-foreground/30" />
-            <div className="flex flex-col items-center gap-y-6">
-              <div className="flex flex-col items-center gap-y-2">
-                <h3 className="text-lg font-medium">No coupons found</h3>
-                <p className="text-muted-foreground">
-                  Create coupon codes to offer special pricing
-                </p>
-              </div>
-              <Button onClick={() => setShowNewModal(true)} variant="secondary">
-                <span>Create Coupon</span>
-              </Button>
-            </div>
-          </div>
-        )}
+        <DataTable
+          data={sortedDiscounts}
+          columns={columns}
+          isLoading={discountsHook.isLoading}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          emptyState={
+            <TableEmptyState
+              title="No coupons found"
+              description="Create coupon codes to offer special pricing."
+              action={{
+                label: 'Create Coupon',
+                onClick: () => setShowNewModal(true),
+                icon: <PlusSignIcon size={14} />,
+              }}
+            />
+          }
+        />
       </div>
 
       {/* Create Coupon Modal */}

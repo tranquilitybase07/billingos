@@ -180,7 +180,7 @@ export function DataTable<TData, TValue>({
                     <TableRow
                       key={row.id}
                       className={twMerge(
-                        'transition-colors',
+                        'group transition-colors',
                         enableRowSelection || onRowClick
                           ? row.getCanSelect()
                             ? 'cursor-pointer'

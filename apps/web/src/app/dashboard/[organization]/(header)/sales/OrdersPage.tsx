@@ -7,6 +7,7 @@ import {
   DataTable,
   DataTableColumnHeader,
 } from '@/components/atoms/datatable'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -321,6 +322,21 @@ export default function OrdersPage({
             },
           ]}
           isLoading={false}
+          emptyState={
+            <TableEmptyState
+              title="No orders found"
+              description={
+                selectedProduct === 'all'
+                  ? 'Orders will appear here once customers make purchases.'
+                  : 'No orders match the selected product.'
+              }
+              action={
+                selectedProduct !== 'all'
+                  ? { label: 'Clear filter', onClick: () => setSelectedProduct('all') }
+                  : undefined
+              }
+            />
+          }
         />
       </div>
     </DashboardBody>

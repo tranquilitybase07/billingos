@@ -10,6 +10,10 @@ import type { Subscription, Product } from "@/hooks/queries/subscriptions";
 import type { Column, Row, ColumnDef } from "@tanstack/react-table";
 import { useMRR, useChurnRate } from "@/hooks/queries/analytics";
 import { DataTable, DataTableColumnHeader } from "@/components/atoms/datatable";
+import { FilterDropdown } from "@/components/atoms/FilterDropdown";
+import { SearchInput } from "@/components/atoms/SearchInput";
+import { ActiveFiltersBar, type ActiveFilter } from "@/components/atoms/ActiveFiltersBar";
+import { TableEmptyState } from "@/components/atoms/TableEmptyState";
 import { SubscriptionStatus } from "@/components/Subscriptions/SubscriptionStatus";
 import { PendingChangeBadge } from "@/components/Subscriptions/PendingChangeBadge";
 import { Badge } from "@/components/ui/badge";
@@ -18,23 +22,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MiniMetricChartBox } from "@/components/Metrics/MiniMetricChartBox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  Search01Icon,
-  PlusSignIcon,
-  Cancel01Icon,
-} from "hugeicons-react";
+import { PlusSignIcon, Cancel01Icon } from "hugeicons-react";
 import { CustomerDrawer, type EnrichedCustomer } from "@/components/Customers/CustomerDrawer";
 import { useDebounce } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/utils/metrics";
@@ -148,8 +141,8 @@ export default function CustomersPage({ params }: CustomersPageProps) {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [planFilter, setPlanFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [planFilter, setPlanFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -232,11 +225,18 @@ export default function CustomersPage({ params }: CustomersPageProps) {
   // Client-side status + plan filtering
   const filteredCustomers = useMemo(() => {
     return enrichedCustomers.filter((c) => {
-      if (statusFilter !== "all" && c.subscriptionStatus !== statusFilter) return false;
-      if (planFilter !== "all" && c.planName !== planFilter) return false;
+      if (statusFilter.length > 0 && (!c.subscriptionStatus || !statusFilter.includes(c.subscriptionStatus))) return false;
+      if (planFilter.length > 0 && (!c.planName || !planFilter.includes(c.planName))) return false;
       return true;
     });
   }, [enrichedCustomers, statusFilter, planFilter]);
+
+  const STATUS_OPTIONS: { value: string; label: string }[] = [
+    { value: "active", label: "Active" },
+    { value: "trialing", label: "Trialing" },
+    { value: "past_due", label: "Past Due" },
+    { value: "canceled", label: "Canceled" },
+  ];
 
   // Unique plan names for plan filter dropdown
   const uniquePlanNames = useMemo(() => {
@@ -244,6 +244,29 @@ export default function CustomersPage({ params }: CustomersPageProps) {
     enrichedCustomers.forEach((c) => { if (c.planName) names.add(c.planName); });
     return Array.from(names).sort();
   }, [enrichedCustomers]);
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setStatusFilter([]);
+    setPlanFilter([]);
+    setPage(1);
+  };
+
+  const activeFilters: ActiveFilter[] = [
+    ...(searchQuery
+      ? [{ id: "search", label: `Search: ${searchQuery}`, onRemove: () => { setSearchQuery(""); setPage(1); } }]
+      : []),
+    ...statusFilter.map((value) => ({
+      id: `status-${value}`,
+      label: `Status: ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value}`,
+      onRemove: () => { setStatusFilter((prev) => prev.filter((v) => v !== value)); setPage(1); },
+    })),
+    ...planFilter.map((name) => ({
+      id: `plan-${name}`,
+      label: `Plan: ${name}`,
+      onRemove: () => { setPlanFilter((prev) => prev.filter((p) => p !== name)); setPage(1); },
+    })),
+  ];
 
   // Stats
   const totalMRR = mrrData?.mrr ?? 0;
@@ -386,49 +409,39 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         />
 
         {/* Filters + Add Customer */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search01Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search customers..."
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <SearchInput
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-              className="pl-9 text-foreground"
+              onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
+              placeholder="Search customers..."
             />
+
+            <FilterDropdown
+              label="Status"
+              options={STATUS_OPTIONS}
+              selected={statusFilter}
+              onChange={(next) => { setStatusFilter(next); setPage(1); }}
+            />
+
+            <FilterDropdown
+              label="Plan"
+              options={uniquePlanNames.map((name) => ({ value: name, label: name }))}
+              selected={planFilter}
+              onChange={(next) => { setPlanFilter(next); setPage(1); }}
+              emptyLabel="No plans"
+            />
+
+            <Button
+              className="ml-auto bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setIsAddCustomerOpen(true)}
+            >
+              <PlusSignIcon size={16} className="mr-2" />
+              Add Customer
+            </Button>
           </div>
 
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="trialing">Trialing</SelectItem>
-              <SelectItem value="past_due">Past Due</SelectItem>
-              <SelectItem value="canceled">Canceled</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Plan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Plans</SelectItem>
-              {uniquePlanNames.map((name) => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            className="ml-auto bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={() => setIsAddCustomerOpen(true)}
-          >
-            <PlusSignIcon size={16} className="mr-2" />
-            Add Customer
-          </Button>
+          <ActiveFiltersBar filters={activeFilters} onClearAll={clearAllFilters} />
         </div>
 
         {/* Table */}
@@ -437,6 +450,21 @@ export default function CustomersPage({ params }: CustomersPageProps) {
           columns={columns}
           isLoading={isLoading}
           onRowClick={(row) => openDrawer(row.original.id)}
+          emptyState={
+            <TableEmptyState
+              title="No customers found"
+              description={
+                activeFilters.length > 0
+                  ? "No customers match your current filters."
+                  : "Customers will appear here once they sign up or you add them manually."
+              }
+              action={
+                activeFilters.length > 0
+                  ? { label: "Clear filters", onClick: clearAllFilters }
+                  : { label: "Add Customer", onClick: () => setIsAddCustomerOpen(true), icon: <PlusSignIcon size={14} /> }
+              }
+            />
+          }
         />
       </div>
 

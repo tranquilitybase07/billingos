@@ -44,7 +44,6 @@ export function SettingsTabNav({ activeTab }: SettingsTabNavProps) {
             <Link
               key={tab.id}
               href={`${base}${tab.path}`}
-              scroll={false}
               className={cn(
                 'relative inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors',
                 isActive ? 'text-foreground' : 'hover:text-foreground/80',

@@ -2,6 +2,7 @@
 
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
 import * as React from 'react'
+import { Tick01Icon } from 'hugeicons-react'
 
 import { cn } from '@/lib/utils'
 
@@ -10,6 +11,8 @@ const DropdownMenu = DropdownMenuPrimitive.Root
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal
+
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
 const DropdownMenuContent = ({
   ref,
@@ -51,6 +54,52 @@ const DropdownMenuItem = ({
 )
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 
+const DropdownMenuCheckboxItem = ({
+  ref,
+  className,
+  children,
+  checked,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) => (
+  <DropdownMenuPrimitive.CheckboxItem
+    ref={ref}
+    className={cn(
+      'focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center justify-between gap-2 rounded-xs py-1.5 pr-2 pl-2 text-sm transition-colors outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50',
+      className,
+    )}
+    checked={checked}
+    {...props}
+  >
+    <span className="flex-1 truncate">{children}</span>
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Tick01Icon size={14} className="text-foreground" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  </DropdownMenuPrimitive.CheckboxItem>
+)
+DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName
+
+const DropdownMenuRadioItem = ({
+  ref,
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      'focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center justify-between gap-2 rounded-xs py-1.5 pr-2 pl-2 text-sm transition-colors outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50',
+      className,
+    )}
+    {...props}
+  >
+    <span className="flex-1 truncate">{children}</span>
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Tick01Icon size={14} className="text-foreground" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  </DropdownMenuPrimitive.RadioItem>
+)
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName
+
 const DropdownMenuSeparator = ({
   ref,
   className,
@@ -66,9 +115,12 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
 
 export {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 }

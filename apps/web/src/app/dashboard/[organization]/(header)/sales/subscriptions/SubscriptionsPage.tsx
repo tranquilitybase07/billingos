@@ -4,25 +4,23 @@ import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { SubscriptionStatus } from '@/components/Subscriptions/SubscriptionStatus'
 import { PendingChangeBadge } from '@/components/Subscriptions/PendingChangeBadge'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useMRR } from '@/hooks/queries/analytics'
 import Link from 'next/link'
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useProducts } from '@/hooks/queries/products'
 import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
 import { downloadCSV } from '@/utils/csv'
 import { formatCurrency } from '@/utils/metrics'
-import { cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  Search01Icon,
-  Cancel01Icon,
-  ArrowUpDownIcon,
-  Download01Icon,
-  Tick01Icon,
-  ArrowDown01Icon,
-} from 'hugeicons-react'
+import { Download01Icon } from 'hugeicons-react'
 import { MiniMetricChartBox } from '@/components/Metrics/MiniMetricChartBox'
+import { PillTabs, PillTabsList, PillTabsTrigger } from '@/components/atoms/PillTabs'
+import { FilterDropdown } from '@/components/atoms/FilterDropdown'
+import { SortDropdown } from '@/components/atoms/SortDropdown'
+import { SearchInput } from '@/components/atoms/SearchInput'
+import { ActiveFiltersBar, type ActiveFilter } from '@/components/atoms/ActiveFiltersBar'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -53,28 +51,6 @@ function SubscriptionStatsCards({ mrr, activeSubscriptions, trialConversionRate,
   )
 }
 
-// ── Filter chip ────────────────────────────────────────────
-
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.9, opacity: 0 }}
-      layout
-      className="flex items-center gap-1.5 px-2.5 py-1 bg-muted border border-border rounded-md text-xs font-medium text-muted-foreground"
-    >
-      <span className="truncate max-w-[150px]">{label}</span>
-      <button
-        onClick={onRemove}
-        className="text-muted-foreground/60 hover:text-foreground transition-colors rounded-sm p-0.5"
-      >
-        <Cancel01Icon size={10} />
-      </button>
-    </motion.div>
-  )
-}
-
 // ── Types ──────────────────────────────────────────────────
 
 type StatusTab = 'All' | 'Active' | 'Trialing' | 'Canceled'
@@ -89,34 +65,29 @@ interface SubscriptionsPageProps {
 
 // ── Component ──────────────────────────────────────────────
 
+const STATUS_FILTER_TO_TAB: Record<string, StatusTab> = {
+  active: 'Active',
+  trialing: 'Trialing',
+  canceled: 'Canceled',
+}
+
 export default function SubscriptionsPage({
   organizationId,
   organizationSlug,
   productIdFilter,
+  statusFilter,
 }: SubscriptionsPageProps) {
   const { organization } = useOrganization()
   const orgCurrency = organization.default_currency || 'usd'
 
-  const [statusTab, setStatusTab] = useState<StatusTab>('All')
+  const [statusTab, setStatusTab] = useState<StatusTab>(
+    (statusFilter && STATUS_FILTER_TO_TAB[statusFilter]) || 'All',
+  )
   const [search, setSearch] = useState('')
   const [selectedProducts, setSelectedProducts] = useState<string[]>(
     productIdFilter ? [productIdFilter] : [],
   )
   const [sortOrder, setSortOrder] = useState<SortOption>('Newest')
-  const [isProductOpen, setIsProductOpen] = useState(false)
-  const [isSortOpen, setIsSortOpen] = useState(false)
-
-  const productRef = useRef<HTMLDivElement>(null)
-  const sortRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (productRef.current && !productRef.current.contains(e.target as Node)) setIsProductOpen(false)
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setIsSortOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   const { data: productsResponse, isLoading: isLoadingProducts } = useProducts(organizationId)
   const { data: subscriptions, isLoading: isLoadingSubscriptions } = useOrganizationSubscriptions(organizationId)
@@ -142,19 +113,33 @@ export default function SubscriptionsPage({
     return { activeCount: active, trialConversionRate, nrr: 0 }
   }, [subscriptions])
 
-  const toggleProduct = (id: string) => {
-    setSelectedProducts((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
-    )
+  const removeProduct = (id: string) => {
+    setSelectedProducts((prev) => prev.filter((p) => p !== id))
   }
-
-  const hasActiveFilters = statusTab !== 'All' || search !== '' || selectedProducts.length > 0
 
   const clearAllFilters = () => {
     setStatusTab('All')
     setSearch('')
     setSelectedProducts([])
   }
+
+  const activeFilters: ActiveFilter[] = [
+    ...(statusTab !== 'All'
+      ? [{ id: 'status', label: `Status: ${statusTab}`, onRemove: () => setStatusTab('All') }]
+      : []),
+    ...(search
+      ? [{ id: 'search', label: `Search: ${search}`, onRemove: () => setSearch('') }]
+      : []),
+    ...selectedProducts.map((id) => {
+      const p = productsList.find((p) => p.id === id)
+      return {
+        id: `product-${id}`,
+        label: `Product: ${p?.name ?? id}`,
+        onRemove: () => removeProduct(id),
+      }
+    }),
+  ]
+  const hasActiveFilters = activeFilters.length > 0
 
   const filteredSubscriptions = useMemo(() => {
     if (!subscriptions) return []
@@ -193,7 +178,7 @@ export default function SubscriptionsPage({
       })
 
     return result
-  }, [subscriptions, statusTab, selectedProducts, search, sortOrder, productsList])
+  }, [subscriptions, statusTab, selectedProducts, search, sortOrder])
 
   const handleExportCSV = () => {
     if (filteredSubscriptions.length === 0) return
@@ -213,7 +198,8 @@ export default function SubscriptionsPage({
   }
 
   const STATUS_TABS: StatusTab[] = ['All', 'Active', 'Trialing', 'Canceled']
-  const SORT_OPTIONS: SortOption[] = ['Newest', 'Oldest', 'Renewal soonest', 'A-Z']
+  const SORT_OPTIONS = ['Newest', 'Oldest', 'Renewal soonest', 'A-Z'] as const satisfies readonly SortOption[]
+  const productOptions = productsList.map((p) => ({ value: p.id, label: p.name }))
 
   return (
     <DashboardBody>
@@ -237,186 +223,56 @@ export default function SubscriptionsPage({
           <div className="flex items-center justify-between gap-4">
             {/* Left: status tabs + search */}
             <div className="flex items-center gap-3">
-              {/* Animated status tabs */}
-              <div className="flex items-center bg-muted/60 p-1 rounded-lg border border-border">
-                {STATUS_TABS.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setStatusTab(tab)}
-                    className={cn(
-                      'relative px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-                      statusTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                    )}
-                  >
-                    {statusTab === tab && (
-                      <motion.div
-                        layoutId="status-indicator"
-                        className="absolute inset-0 bg-background rounded-md shadow-sm"
-                        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                      />
-                    )}
-                    <span className="relative z-10 flex items-center gap-1.5">
+              <PillTabs
+                layoutId="subscriptions-status-indicator"
+                value={statusTab}
+                onValueChange={(v) => setStatusTab(v as StatusTab)}
+              >
+                <PillTabsList>
+                  {STATUS_TABS.map((tab) => (
+                    <PillTabsTrigger key={tab} value={tab} count={counts[tab]}>
                       {tab}
-                      <span className={cn('text-[11px]', statusTab === tab ? 'text-muted-foreground' : 'text-muted-foreground/60')}>
-                        {counts[tab]}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+                    </PillTabsTrigger>
+                  ))}
+                </PillTabsList>
+              </PillTabs>
 
-              {/* Search */}
-              <div className="relative group">
-                <Search01Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-foreground transition-colors" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by customer or email..."
-                  className="w-64 bg-muted/40 border border-border rounded-lg py-2 pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-all"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <Cancel01Icon size={12} />
-                  </button>
-                )}
-              </div>
+              <SearchInput
+                value={search}
+                onValueChange={setSearch}
+                placeholder="Search by customer or email..."
+              />
             </div>
 
             {/* Right: Products, Sort, Export */}
             <div className="flex items-center gap-2">
-              {/* Products multi-select */}
-              <div className="relative" ref={productRef}>
-                <button
-                  onClick={() => setIsProductOpen((v) => !v)}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
-                    selectedProducts.length > 0
-                      ? 'bg-muted border-border text-foreground'
-                      : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted/60',
-                  )}
-                >
-                  Products
-                  {selectedProducts.length > 0 && (
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-muted-foreground/20 text-[10px] font-medium">
-                      {selectedProducts.length}
-                    </span>
-                  )}
-                  <ArrowDown01Icon size={14} className="text-muted-foreground" />
-                </button>
-                <AnimatePresence>
-                  {isProductOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-1.5 w-56 bg-popover border border-border rounded-lg shadow-xl overflow-hidden z-20"
-                    >
-                      <div className="p-1.5 space-y-0.5">
-                        {productsList.map((product) => {
-                          const isSelected = selectedProducts.includes(product.id)
-                          return (
-                            <button
-                              key={product.id}
-                              onClick={() => toggleProduct(product.id)}
-                              className="w-full flex items-center justify-between px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-md transition-colors"
-                            >
-                              {product.name}
-                              {isSelected && <Tick01Icon size={14} className="text-foreground" />}
-                            </button>
-                          )
-                        })}
-                        {productsList.length === 0 && (
-                          <p className="px-2.5 py-2 text-sm text-muted-foreground">No products</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <FilterDropdown
+                label="Products"
+                options={productOptions}
+                selected={selectedProducts}
+                onChange={setSelectedProducts}
+                emptyLabel="No products"
+              />
 
-              {/* Sort dropdown */}
-              <div className="relative" ref={sortRef}>
-                <button
-                  onClick={() => setIsSortOpen((v) => !v)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-muted/40 border border-border rounded-lg hover:bg-muted/60 transition-colors"
-                >
-                  <ArrowUpDownIcon size={13} className="text-muted-foreground/60" />
-                  Sort: {sortOrder}
-                </button>
-                <AnimatePresence>
-                  {isSortOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-1.5 w-48 bg-popover border border-border rounded-lg shadow-xl overflow-hidden z-20"
-                    >
-                      <div className="p-1.5 space-y-0.5">
-                        {SORT_OPTIONS.map((option) => (
-                          <button
-                            key={option}
-                            onClick={() => { setSortOrder(option); setIsSortOpen(false) }}
-                            className="w-full flex items-center justify-between px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-md transition-colors"
-                          >
-                            {option}
-                            {sortOrder === option && <Tick01Icon size={14} className="text-foreground" />}
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <SortDropdown
+                value={sortOrder}
+                onChange={setSortOrder}
+                options={SORT_OPTIONS}
+              />
 
-              {/* Export */}
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleExportCSV}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-muted/40 border border-border rounded-lg hover:bg-muted/60 transition-colors"
+                className="h-9 bg-muted/40 text-muted-foreground hover:bg-muted/60"
               >
                 <Download01Icon size={14} className="text-muted-foreground/60" />
                 Export CSV
-              </button>
+              </Button>
             </div>
           </div>
 
-          {/* Active filter chips */}
-          <AnimatePresence>
-            {hasActiveFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="flex items-center gap-2 overflow-hidden"
-              >
-                <div className="flex flex-wrap items-center gap-2 py-1">
-                  {statusTab !== 'All' && (
-                    <FilterChip label={`Status: ${statusTab}`} onRemove={() => setStatusTab('All')} />
-                  )}
-                  {search && (
-                    <FilterChip label={`Search: ${search}`} onRemove={() => setSearch('')} />
-                  )}
-                  {selectedProducts.map((id) => {
-                    const p = productsList.find((p) => p.id === id)
-                    return (
-                      <FilterChip key={id} label={`Product: ${p?.name ?? id}`} onRemove={() => toggleProduct(id)} />
-                    )
-                  })}
-                  <button
-                    onClick={clearAllFilters}
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1 transition-colors"
-                  >
-                    Clear all
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <ActiveFiltersBar filters={activeFilters} onClearAll={clearAllFilters} />
         </div>
 
         {/* Table */}
@@ -452,18 +308,19 @@ export default function SubscriptionsPage({
               ))}
             </div>
           ) : filteredSubscriptions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-              <p className="text-sm font-medium text-foreground mb-1">No subscriptions found</p>
-              <p className="text-sm text-muted-foreground mb-4">No subscriptions match your current filters.</p>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  className="px-4 py-2 bg-muted text-foreground text-sm font-medium rounded-md hover:bg-muted/80 transition-colors"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
+            <TableEmptyState
+              title="No subscriptions found"
+              description={
+                hasActiveFilters
+                  ? 'No subscriptions match your current filters.'
+                  : 'New subscriptions will appear here once customers sign up.'
+              }
+              action={
+                hasActiveFilters
+                  ? { label: 'Clear filters', onClick: clearAllFilters }
+                  : undefined
+              }
+            />
           ) : (
             <div className="divide-y divide-border/30">
               {filteredSubscriptions.map((sub) => {
