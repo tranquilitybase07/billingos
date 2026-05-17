@@ -93,7 +93,7 @@ export function ProductActionsCell({ product, organizationSlug }: ProductActions
 
   const onArchive = useCallback(async () => {
     try {
-      await updateProduct.mutate({
+      await updateProduct.mutateAsync({
         id: product.id,
         body: { is_archived: true },
       })

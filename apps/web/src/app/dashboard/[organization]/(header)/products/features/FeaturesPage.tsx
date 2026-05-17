@@ -196,7 +196,7 @@ export default function FeaturesPage({
   // Empty state
   if (!features || features.length === 0) {
     return (
-      <>
+      <DashboardBody>
         <TableEmptyState
           title="No features found"
           description="Create your first feature to get started."
@@ -214,7 +214,7 @@ export default function FeaturesPage({
           organizationId={organizationId}
           onFeatureCreated={handleFeatureCreated}
         />
-      </>
+      </DashboardBody>
     )
   }
 

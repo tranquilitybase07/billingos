@@ -34,7 +34,7 @@ const PillTabs = ({
     <PillTabsContext.Provider value={{ activeValue, layoutId }}>
       <TabsPrimitive.Root
         value={value}
-        defaultValue={defaultValue}
+        defaultValue={value === undefined ? defaultValue : undefined}
         onValueChange={(v) => {
           if (value === undefined) setInternal(v)
           onValueChange?.(v)
