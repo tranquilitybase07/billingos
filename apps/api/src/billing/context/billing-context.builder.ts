@@ -40,42 +40,53 @@ export class BillingContextBuilder {
     externalUserId: string,
     dto: CreateCheckoutDto,
   ): Promise<BillingContext> {
-    // 1. Resolve organization + Stripe account
-    const organization = await this.resolveOrganization(organizationId);
+    // Wave 1: org + price/product are independent
+    const [organization, { product, price }] = await Promise.all([
+      this.resolveOrganization(organizationId),
+      this.resolveProductAndPrice(dto.priceId, organizationId),
+    ]);
 
-    // 2. Fetch price + product
-    const { product, price } = await this.resolveProductAndPrice(
-      dto.priceId,
-      organizationId,
-    );
+    const isFreeProduct = price.amountType === 'free' || price.amount === 0;
 
-    // 3. Resolve customer (get-or-create in BOS + Stripe)
+    // Wave 2: customer needs the org's stripeAccountId; features and
+    //         discount only need the product id. All three are independent.
     const customerEmail = dto.customerEmail || dto.customer?.email;
     const customerName = dto.customerName || dto.customer?.name;
 
-    const customer = await this.customerResolver.resolve(
-      organizationId,
-      externalUserId,
-      organization.stripeAccountId,
-      customerEmail,
-      customerName,
-      dto.metadata,
-    );
+    const [customer, features, discount] = await Promise.all([
+      this.customerResolver.resolve(
+        organizationId,
+        externalUserId,
+        organization.stripeAccountId,
+        customerEmail,
+        customerName,
+        dto.metadata,
+      ),
+      this.resolveProductFeatures(product.id),
+      dto.couponCode
+        ? this.discountService.resolveDiscount(
+            organizationId,
+            dto.couponCode,
+            product.id,
+          )
+        : Promise.resolve<DiscountContext | null>(null),
+    ]);
 
-    // 4. Check for duplicate active subscriptions (prevent re-subscribe)
-    if (!dto.existingSubscriptionId) {
-      await this.checkDuplicateSubscription(customer.id, product.id);
-    }
-
-    // 5. Detect transition (upgrade/downgrade/swap)
-    const isFreeProduct = price.amountType === 'free' || price.amount === 0;
-    const transition = await this.transitionDetector.detect(
-      customer.id,
-      product.id,
-      price.amount,
-      dto.existingSubscriptionId,
-      organization.stripeAccountId,
-    );
+    // Wave 3: dup-check + transition both depend on customer.id and run
+    //         in parallel. checkDuplicateSubscription throws on conflict —
+    //         Promise.all rejects fast, which is the desired behavior.
+    const [, transition] = await Promise.all([
+      dto.existingSubscriptionId
+        ? Promise.resolve()
+        : this.checkDuplicateSubscription(customer.id, product.id),
+      this.transitionDetector.detect(
+        customer.id,
+        product.id,
+        price.amount,
+        dto.existingSubscriptionId,
+        organization.stripeAccountId,
+      ),
+    ]);
 
     // 6. Determine if in-place upgrade (existing Stripe sub + new paid price)
     const isInPlaceUpgrade =
@@ -93,26 +104,28 @@ export class BillingContextBuilder {
     const isTrialToTrialUpgrade =
       isTrialUpgrade && (product.trialDays || 0) > 0;
 
-    // 6b. Trial-to-trial downgrade: old sub is trialing AND new product also has a trial period.
-    //     Grants a fresh trial on the new (lower) plan — same pattern as isTrialToTrialUpgrade.
-    const isTrialToTrialDowngrade =
+    // 6b. Trialing in-place downgrade: a trialing sub moving to any paid plan
+    //     (lower amount). The original trial_end is preserved by the Stripe
+    //     update — Stripe automatically bills the new (cheaper) price when the
+    //     trial naturally completes.
+    const isTrialingDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
       transition.oldSubscription.status === 'trialing' &&
-      (product.trialDays || 0) > 0 &&
+      !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
     // 6c. Determine if in-place downgrade (existing Stripe sub + new lower price).
     //     Non-trialing subs always route here. A trialing sub routes here only
-    //     when downgrading to a free product — otherwise isTrialToTrialDowngrade
-    //     (paid→paid trial) claims it above. Without this, trialing→free would
-    //     fall through to free_activation and orphan the Stripe trial sub.
+    //     when downgrading to a free product — paid destinations are claimed by
+    //     isTrialingDowngrade above. Without this, trialing→free would fall
+    //     through to free_activation and orphan the Stripe trial sub.
     const isInPlaceDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
       (transition.oldSubscription.status !== 'trialing' || isFreeProduct) &&
-      !isTrialToTrialDowngrade;
+      !isTrialingDowngrade;
 
     // 6d. Same-price plan switch: different product but identical price amount AND
     //     identical billing interval. Routed through subscriptions.update() with
@@ -132,7 +145,8 @@ export class BillingContextBuilder {
       transition.type === 'swap' &&
       !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
-      transition.oldSubscription.recurringInterval === price.recurringInterval &&
+      transition.oldSubscription.recurringInterval ===
+        price.recurringInterval &&
       transition.oldSubscription.status !== 'trialing';
 
     // 7. Determine trial eligibility (trial product + no transition)
@@ -142,19 +156,6 @@ export class BillingContextBuilder {
     const isAdaptivePricing = false;
     // const isAdaptivePricing =
     //   dto.adaptivePricing === true && !isInPlaceUpgrade && !isInPlaceDowngrade;
-
-    // 9. Fetch product features for display
-    const features = await this.resolveProductFeatures(product.id);
-
-    // 10. Resolve discount (if coupon code provided at checkout creation)
-    let discount: DiscountContext | null = null;
-    if (dto.couponCode) {
-      discount = await this.discountService.resolveDiscount(
-        organizationId,
-        dto.couponCode,
-        product.id,
-      );
-    }
 
     return {
       organization,
@@ -170,7 +171,7 @@ export class BillingContextBuilder {
       isTrialUpgrade,
       isTrialToTrialUpgrade,
       isInPlaceDowngrade,
-      isTrialToTrialDowngrade,
+      isTrialingDowngrade,
       isInPlaceSwap,
       metadata: dto.metadata || {},
     };
@@ -185,7 +186,7 @@ export class BillingContextBuilder {
 
     const { data: organization } = await supabase
       .from('organizations')
-      .select('default_currency, accounts!inner(stripe_id)')
+      .select('default_currency, checkout_mode, accounts!inner(stripe_id)')
       .eq('id', organizationId)
       .single();
 
@@ -207,6 +208,7 @@ export class BillingContextBuilder {
       id: organizationId,
       stripeAccountId,
       defaultCurrency: organization.default_currency || 'usd',
+      checkoutMode: organization.checkout_mode || 'hosted',
     };
   }
 

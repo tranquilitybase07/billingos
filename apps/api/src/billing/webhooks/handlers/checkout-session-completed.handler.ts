@@ -14,7 +14,10 @@ import { StripeService } from '../../../stripe/stripe.service';
 import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { SubscriptionTransitionService } from '../../../subscriptions/subscription-transition.service';
 import { EntitlementService } from '../../entitlements/entitlement.service';
-import { extractPeriodStart, extractPeriodEnd } from '../../utils/period-end.helper';
+import {
+  extractPeriodStart,
+  extractPeriodEnd,
+} from '../../utils/period-end.helper';
 
 /**
  * Handles `checkout.session.completed` webhook events.
@@ -60,7 +63,7 @@ export class CheckoutSessionCompletedHandler
     try {
       this.logger.log(`Checkout session completed: ${session.id}`);
 
-      // Only handle our adaptive mode sessions; ignore others (e.g. Stripe-hosted)
+      // Handles BillingOS-issued Checkout Sessions (standard hosted, adaptive).
       const metadata = (session.metadata || {}) as Record<string, string>;
       const metadataId = metadata.metadataId;
       const organizationId = metadata.organizationId;
@@ -146,11 +149,10 @@ export class CheckoutSessionCompletedHandler
 
       let stripeSub: any;
       try {
-        stripeSub = await this.stripeService
-          .getClient()
-          .subscriptions.retrieve(stripeSubscriptionId, {
-            stripeAccount: stripeAccountId,
-          });
+        stripeSub = await this.stripeService.getSubscription(
+          stripeSubscriptionId,
+          stripeAccountId,
+        );
       } catch (err) {
         this.logger.error(
           `Failed to retrieve Stripe subscription ${stripeSubscriptionId}:`,
@@ -330,6 +332,17 @@ export class CheckoutSessionCompletedHandler
           .eq('id', checkoutSession.id);
       }
 
+      // Track discount redemptions. The actual applied coupon is whatever
+      // Stripe ended up using (could be the BOS-pre-applied one or a promo
+      // code the customer typed during checkout).
+      await this.incrementDiscountRedemptions(
+        ctx,
+        session,
+        checkoutSession?.metadata as Record<string, unknown> | null,
+        organizationId,
+        subscriptionId,
+      );
+
       // Best-effort: populate customer country from card
       if (customer) {
         const dpm = stripeSub?.default_payment_method;
@@ -350,6 +363,100 @@ export class CheckoutSessionCompletedHandler
       this.logger.log(`Checkout session ${session.id} processed successfully`);
     } catch (error) {
       this.logger.error('Error handling checkout.session.completed:', error);
+    }
+  }
+
+  /**
+   * Increment `discounts.redemptions_count` for any coupon that Stripe
+   * actually applied to this session. Reads coupons from
+   * `session.total_details.breakdown.discounts` (set when the customer
+   * typed a promo code) and falls back to the BOS-pre-applied discount
+   * recorded in `checkout_sessions.metadata.appliedDiscountId`.
+   */
+  private async incrementDiscountRedemptions(
+    ctx: WebhookContext,
+    session: Stripe.Checkout.Session,
+    checkoutSessionMetadata: Record<string, unknown> | null,
+    organizationId: string,
+    subscriptionId: string,
+  ): Promise<void> {
+    try {
+      const supabase = ctx.supabase;
+      const totalDiscount = session.total_details?.amount_discount ?? 0;
+      const breakdownDiscounts =
+        (
+          session.total_details?.breakdown as
+            | { discounts?: Array<{ discount?: { coupon?: { id?: string } } }> }
+            | undefined
+        )?.discounts ?? [];
+
+      const stripeCouponIds = new Set<string>();
+      for (const d of breakdownDiscounts) {
+        const couponId = d.discount?.coupon?.id;
+        if (couponId) stripeCouponIds.add(couponId);
+      }
+
+      const matchedDiscountIds = new Set<string>();
+
+      if (stripeCouponIds.size > 0) {
+        const { data: discounts } = await supabase
+          .from('discounts')
+          .select('id, stripe_coupon_id')
+          .eq('organization_id', organizationId)
+          .in('stripe_coupon_id', Array.from(stripeCouponIds));
+
+        for (const d of discounts || []) {
+          if (d.id) {
+            matchedDiscountIds.add(d.id);
+          }
+        }
+      }
+
+      const preAppliedId = checkoutSessionMetadata?.appliedDiscountId as
+        | string
+        | undefined;
+      if (preAppliedId) matchedDiscountIds.add(preAppliedId);
+
+      if (matchedDiscountIds.size === 0) return;
+
+      // Persist applied-discount info on the subscription so the rest of
+      // the system (billing history, customer drawer) sees it. We only have
+      // a single discount column on subscriptions, so prefer the pre-applied
+      // one if both are present.
+      const primaryDiscountId =
+        preAppliedId || Array.from(matchedDiscountIds)[0];
+      const appliedDiscountCode =
+        (checkoutSessionMetadata?.appliedDiscountCode as string | undefined) ||
+        null;
+      await supabase
+        .from('subscriptions')
+        .update({
+          discount_id: primaryDiscountId,
+          discount_amount: totalDiscount > 0 ? totalDiscount : null,
+          discount_code: appliedDiscountCode,
+        })
+        .eq('id', subscriptionId);
+
+      for (const discountId of matchedDiscountIds) {
+        const { error: rpcError } = await supabase.rpc(
+          'increment_discount_redemptions',
+          { p_discount_id: discountId },
+        );
+        if (rpcError) {
+          this.logger.warn(
+            `increment_discount_redemptions failed for ${discountId}: ${rpcError.message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Incremented redemptions_count for ${matchedDiscountIds.size} discount(s) on session ${session.id}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Non-critical: failed to increment discount redemptions for session ${session.id}:`,
+        error,
+      );
     }
   }
 
@@ -385,11 +492,10 @@ export class CheckoutSessionCompletedHandler
         (customer.billing_address as Record<string, unknown>) || {};
       if (existingAddress.country) return;
 
-      const paymentMethod = await this.stripeService
-        .getClient()
-        .paymentMethods.retrieve(paymentMethodId, {
-          stripeAccount: stripeAccountId,
-        });
+      const paymentMethod = await this.stripeService.getPaymentMethod(
+        paymentMethodId,
+        stripeAccountId,
+      );
 
       const cardCountry = paymentMethod.card?.country;
       this.logger.log(

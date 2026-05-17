@@ -250,36 +250,7 @@ export class SubscriptionSchedulerService {
       }
     }
 
-    // Update subscription in database (include price_id)
-    const { error: subUpdateError } = await supabase
-      .from('subscriptions')
-      .update({
-        product_id: newPrice.product_id,
-        price_id: newPrice.id,
-        amount: newPrice.price_amount || 0,
-        currency: newPrice.price_currency || org?.default_currency || 'usd',
-        // Clear Stripe link when downgrading to free
-        stripe_subscription_id: newPrice.stripe_price_id
-          ? subscription.stripe_subscription_id
-          : null,
-        updated_at: new Date().toISOString(),
-        metadata: {
-          ...((subscription.metadata ?? {}) as Record<string, unknown>),
-          downgradeExecutedAt: new Date().toISOString(),
-          downgradeChangeId: change.id,
-          downgradeMethod: 'scheduled',
-        },
-      })
-      .eq('id', subscription.id)
-      .eq('organization_id', subscription.organization_id);
-
-    if (subUpdateError) {
-      throw new Error('Failed to update subscription in database');
-    }
-
-    // Swap features using EntitlementService
     const now = new Date();
-    // Estimate next period end based on price interval
     const periodEnd = new Date(now);
     const interval = newPrice.recurring_interval || 'month';
     const intervalCount = newPrice.recurring_interval_count || 1;
@@ -298,6 +269,47 @@ export class SubscriptionSchedulerService {
         break;
       default:
         periodEnd.setMonth(periodEnd.getMonth() + 1);
+    }
+
+    const isFreeDestination = !newPrice.stripe_price_id;
+
+    // Update subscription in database (include price_id)
+    const { error: subUpdateError } = await supabase
+      .from('subscriptions')
+      .update({
+        product_id: newPrice.product_id,
+        price_id: newPrice.id,
+        amount: newPrice.price_amount || 0,
+        currency: newPrice.price_currency || org?.default_currency || 'usd',
+        // Clear Stripe link when downgrading to free
+        stripe_subscription_id: isFreeDestination
+          ? null
+          : subscription.stripe_subscription_id,
+        updated_at: now.toISOString(),
+        ...(isFreeDestination
+          ? {
+              status: 'active',
+              trial_start: null,
+              trial_end: null,
+              current_period_start: now.toISOString(),
+              current_period_end: periodEnd.toISOString(),
+              cancel_at_period_end: false,
+              canceled_at: null,
+              ended_at: null,
+            }
+          : {}),
+        metadata: {
+          ...((subscription.metadata ?? {}) as Record<string, unknown>),
+          downgradeExecutedAt: now.toISOString(),
+          downgradeChangeId: change.id,
+          downgradeMethod: 'scheduled',
+        },
+      })
+      .eq('id', subscription.id)
+      .eq('organization_id', subscription.organization_id);
+
+    if (subUpdateError) {
+      throw new Error('Failed to update subscription in database');
     }
 
     await this.entitlementService.swapForSubscription({

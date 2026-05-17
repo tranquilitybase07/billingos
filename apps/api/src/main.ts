@@ -31,14 +31,14 @@ async function bootstrap() {
     'https://*.vercel.app', // All Vercel preview deployments
   ];
 
-  // Add FRONTEND_URL from env if it exists
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
   }
 
-  // Add any extra comma-separated origins (e.g. WSL2 or dev tunnel IPs)
   if (process.env.EXTRA_CORS_ORIGINS) {
-    allowedOrigins.push(...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()));
+    allowedOrigins.push(
+      ...process.env.EXTRA_CORS_ORIGINS.split(',').map((s) => s.trim()),
+    );
   }
 
   app.enableCors({

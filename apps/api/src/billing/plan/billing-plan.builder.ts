@@ -35,11 +35,12 @@ export class BillingPlanBuilder {
     // 3. Plan entitlement changes
     const entitlements = this.entitlementPlanner.plan(ctx);
 
-    // 4. Calculate proration (in-place upgrade/trial-to-trial downgrade)
+    // 4. Calculate proration (in-place upgrade / trialing downgrade)
     let proration: ProrationPreview | null = null;
-    if (ctx.isTrialToTrialDowngrade && ctx.transition) {
-      // Trial-to-trial downgrade: new plan also has a trial, so no charge.
-      // The old trial is discarded and a fresh trial starts on the new plan.
+    if (ctx.isTrialingDowngrade && ctx.transition) {
+      // Trialing downgrade: the original trial_end is preserved on the Stripe
+      // sub, so there is no immediate charge. Stripe will bill the new
+      // (cheaper) price when the trial naturally completes.
       proration = {
         creditAmount: 0,
         newPlanCharge: 0,
@@ -103,8 +104,10 @@ export class BillingPlanBuilder {
   }
 
   private buildSubscriptionAction(ctx: BillingContext): SubscriptionAction {
-    // Trial-to-trial downgrade → update existing subscription in-place with fresh trial
-    if (ctx.isTrialToTrialDowngrade && ctx.transition) {
+    // Trialing downgrade → update existing subscription in-place. Preserves
+    // the original trial_end so the customer keeps their evaluation window
+    // and Stripe naturally bills the new (cheaper) price at trial completion.
+    if (ctx.isTrialingDowngrade && ctx.transition) {
       return {
         kind: 'update_subscription',
         existingBosSubId: ctx.transition.oldSubscription.id,
@@ -203,6 +206,9 @@ export class BillingPlanBuilder {
         customerId: ctx.customer.id,
         productId: ctx.product.id,
         priceId: ctx.price.id,
+        billingInterval: ctx.price.recurringInterval,
+        billingIntervalCount: String(ctx.price.recurringIntervalCount),
+        trialDays: String(ctx.product.trialDays ?? 0),
         ...(ctx.transition
           ? { existingSubscriptionId: ctx.transition.oldSubscription.id }
           : {}),
@@ -219,7 +225,7 @@ export class BillingPlanBuilder {
     if (
       ctx.isInPlaceUpgrade ||
       ctx.isInPlaceDowngrade ||
-      ctx.isTrialToTrialDowngrade ||
+      ctx.isTrialingDowngrade ||
       ctx.isInPlaceSwap
     ) {
       return { kind: 'no_transition' };

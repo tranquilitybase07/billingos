@@ -35,6 +35,7 @@ interface CheckoutSession {
   expiresAt: string
   stripeAccountId?: string
   checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
+  uiMode?: 'hosted' | 'embedded'
   trialDays?: number
 }
 
@@ -55,35 +56,29 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
       setLoading(true)
       setError(null)
 
-      // Fetch session details from API
       const response = await api.get<CheckoutSession>(
-        `/v1/checkout/${sessionId}/status`
+        `/v1/checkout/${sessionId}/status`,
       )
-
-      // Debug logging
-      console.log('[useCheckoutSession] Session fetched from API:', {
-        sessionId,
-        customer: response.customer,
-        hasEmail: !!response.customer?.email,
-        hasName: !!response.customer?.name,
-        fullResponse: response,
-      })
-
+      // Defense in depth: the API is the source of truth for clientSecret,
+      // amounts, etc. Refuse to render anything that doesn't match the
+      // path-bound id (which is itself a UUID checked by the controller).
+      if (response.id !== sessionId) {
+        throw new Error('Checkout session id mismatch')
+      }
       setSession(response)
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to load checkout session')
+      const error =
+        err instanceof Error ? err : new Error('Failed to load checkout session')
       setError(error)
-      console.error('[useCheckoutSession] Error:', error)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (sessionId) {
-      fetchSession()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!sessionId) return
+    fetchSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   // Check for session expiry
@@ -93,14 +88,13 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
       const now = Date.now()
 
       if (now > expiryTime) {
-        setSession(prev => prev ? { ...prev, status: 'expired' } : null)
+        setSession((prev) => (prev ? { ...prev, status: 'expired' } : null))
         return
       }
 
-      // Set timer to mark as expired
       const timeUntilExpiry = expiryTime - now
       const timer = setTimeout(() => {
-        setSession(prev => prev ? { ...prev, status: 'expired' } : null)
+        setSession((prev) => (prev ? { ...prev, status: 'expired' } : null))
       }, timeUntilExpiry)
 
       return () => clearTimeout(timer)
@@ -111,6 +105,6 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
     session,
     loading,
     error,
-    refreshSession: fetchSession
+    refreshSession: fetchSession,
   }
 }

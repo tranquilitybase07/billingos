@@ -71,7 +71,9 @@ export class CustomerResolver {
       name,
       stripe_customer_id: stripeCustomer.id,
       metadata: metadata
-        ? Object.fromEntries(Object.entries(metadata).map(([k, v]) => [k, String(v)]))
+        ? Object.fromEntries(
+            Object.entries(metadata).map(([k, v]) => [k, String(v)]),
+          )
         : undefined,
     });
 

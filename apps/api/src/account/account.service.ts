@@ -425,7 +425,6 @@ export class AccountService {
 
     const supabase = this.supabaseService.getClient();
 
-    // Resolve the linked org so we can audit-log and check active subs.
     const { data: linkedOrg } = await supabase
       .from('organizations')
       .select('id')
@@ -437,20 +436,12 @@ export class AccountService {
       throw new NotFoundException('Linked organization not found');
     }
 
-    // Block disconnect when active subscriptions exist — these would lose
-    // their Stripe-side billing relationship and orphan customer payments.
-    const { count: activeSubs } = await supabase
-      .from('subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', linkedOrg.id)
-      .in('status', ['active', 'trialing', 'past_due']);
-
-    if ((activeSubs ?? 0) > 0) {
-      throw new BadRequestException(
-        `Cannot disconnect: ${activeSubs} active subscription(s) on this account. Cancel or migrate them first.`,
-      );
-    }
-
+    // Intentional: no active-subscription guard. Stripe is authoritative for
+    // subscriptions — the merchant's Stripe account is theirs to disconnect.
+    // Their existing subs continue billing on Stripe; BOS just loses
+    // observability (webhooks stop landing, feature_grants freeze at
+    // last-known state). That's the expected outcome of leaving BOS, not a
+    // failure mode we should gate against.
     let stripeError: Error | null = null;
     try {
       if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {

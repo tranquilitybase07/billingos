@@ -30,6 +30,7 @@ interface IframeMessage {
     | 'CHECKOUT_CLOSE'
     | 'HEIGHT_CHANGED'
     | 'PROCESSING'
+    | 'PAYMENT_FAILED'
     | '3DS_REQUIRED'
   payload?: any
 }

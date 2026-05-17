@@ -100,6 +100,92 @@ export type Database = {
           },
         ]
       }
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_email: string | null
+          admin_user_id: string | null
+          created_at: string
+          id: string
+          ip_address: unknown
+          payload: Json | null
+          resource_id: string | null
+          resource_type: string | null
+          result: Json | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          admin_email?: string | null
+          admin_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          payload?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          result?: Json | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          admin_email?: string | null
+          admin_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          payload?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          result?: Json | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          name: string | null
+          password_hash: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          name?: string | null
+          password_hash: string
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          name?: string | null
+          password_hash?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -741,6 +827,7 @@ export type Database = {
           account_id: string | null
           avatar_url: string | null
           blocked_at: string | null
+          checkout_mode: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at: string
           customer_email_settings: Json
           customer_invoice_next_number: number
@@ -771,6 +858,7 @@ export type Database = {
           account_id?: string | null
           avatar_url?: string | null
           blocked_at?: string | null
+          checkout_mode?: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at?: string
           customer_email_settings?: Json
           customer_invoice_next_number?: number
@@ -801,6 +889,7 @@ export type Database = {
           account_id?: string | null
           avatar_url?: string | null
           blocked_at?: string | null
+          checkout_mode?: Database["public"]["Enums"]["organization_checkout_mode"]
           created_at?: string
           customer_email_settings?: Json
           customer_invoice_next_number?: number
@@ -2192,6 +2281,10 @@ export type Database = {
           version_status: string
         }[]
       }
+      increment_discount_redemptions: {
+        Args: { p_discount_id: string }
+        Returns: number
+      }
       is_organization_admin: {
         Args: { org_id: string; user_id: string }
         Returns: boolean
@@ -2348,6 +2441,7 @@ export type Database = {
         | "completed"
         | "failed"
         | "expired"
+      organization_checkout_mode: "hosted" | "embedded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2484,6 +2578,7 @@ export const Constants = {
         "failed",
         "expired",
       ],
+      organization_checkout_mode: ["hosted", "embedded"],
     },
   },
 } as const

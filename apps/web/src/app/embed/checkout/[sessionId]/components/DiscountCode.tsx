@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 interface DiscountCodeProps {
   onApply?: (code: string) => Promise<{ success: boolean; discountLabel?: string; error?: string }>
-  onRemove?: () => void
+  onRemove?: () => void | Promise<void>
   appliedCode?: string | null
   appliedDiscountLabel?: string | null
 }
@@ -18,6 +18,7 @@ export function DiscountCode({ onApply, onRemove, appliedCode: initialAppliedCod
   const [errorMessage, setErrorMessage] = useState('')
   const [appliedCode, setAppliedCode] = useState(initialAppliedCode ?? '')
   const [discountLabel, setDiscountLabel] = useState(appliedDiscountLabel ?? '')
+  const [removing, setRemoving] = useState(false)
 
   const handleApply = async () => {
     if (!code.trim()) return
@@ -40,13 +41,19 @@ export function DiscountCode({ onApply, onRemove, appliedCode: initialAppliedCod
     }
   }
 
-  const handleRemove = () => {
-    onRemove?.()
-    setCode('')
-    setAppliedCode('')
-    setDiscountLabel('')
-    setStatus('idle')
-    setExpanded(false)
+  const handleRemove = async () => {
+    if (removing) return
+    setRemoving(true)
+    try {
+      await onRemove?.()
+    } finally {
+      setRemoving(false)
+      setCode('')
+      setAppliedCode('')
+      setDiscountLabel('')
+      setStatus('idle')
+      setExpanded(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -66,12 +73,20 @@ export function DiscountCode({ onApply, onRemove, appliedCode: initialAppliedCod
           )}
           <button
             onClick={handleRemove}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1"
+            disabled={removing}
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1 disabled:cursor-not-allowed"
             aria-label="Remove discount code"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            {removing ? (
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
           </button>
         </div>
       </div>
