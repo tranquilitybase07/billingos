@@ -67,6 +67,7 @@ export function useRevenueTrend(params: AnalyticsQueryParams) {
     queryKey: analyticsKeys.revenueTrend(params),
     queryFn: () => api.get<RevenueTrendResponse>(url),
     enabled: !!organization_id,
+    staleTime: 15 * 60 * 1000, // matches backend Redis TTL
   });
 }
 
@@ -82,6 +83,7 @@ export function useSubscriptionGrowth(params: AnalyticsQueryParams) {
     queryKey: analyticsKeys.subscriptionGrowth(params),
     queryFn: () => api.get<SubscriptionGrowthResponse>(url),
     enabled: !!organization_id,
+    staleTime: 15 * 60 * 1000, // matches backend Redis TTL
   });
 }
 
@@ -97,6 +99,7 @@ export function useChurnRate(params: AnalyticsQueryParams) {
     queryKey: analyticsKeys.churnRate(params),
     queryFn: () => api.get<ChurnRateResponse>(url),
     enabled: !!organization_id,
+    staleTime: 15 * 60 * 1000, // matches backend Redis TTL
   });
 }
 
