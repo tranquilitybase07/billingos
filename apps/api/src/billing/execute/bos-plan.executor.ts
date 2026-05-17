@@ -285,7 +285,12 @@ export class BosPlanExecutor {
       } as Json,
     });
 
-    if (subError) {
+    if (subError?.code === '23505') {
+      // Idempotent re-delivery — earlier run already saved this Stripe sub.
+      this.logger.warn(
+        `Subscription ${subscription.id} already in BOS — skipping insert on idempotent re-delivery`,
+      );
+    } else if (subError) {
       this.logger.error('Failed to store subscription:', subError);
       await this.cleanupOrphanedSubscription(
         subscription.id,

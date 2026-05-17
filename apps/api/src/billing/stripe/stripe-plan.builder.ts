@@ -49,12 +49,17 @@ export class StripePlanBuilder {
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
           isPlainSwap: ctx.isInPlaceSwap,
-          // Trial-to-trial (upgrade or downgrade): grant fresh trial, no credit/charge
-          ...(ctx.isTrialToTrialUpgrade || ctx.isTrialToTrialDowngrade
+          ...(ctx.isTrialToTrialUpgrade || ctx.isTrialingDowngrade
             ? {
-                newTrialEnd: Math.floor(
-                  (Date.now() + ctx.product.trialDays * 86400000) / 1000,
-                ),
+                newTrialEnd: ctx.transition!.oldSubscription.currentPeriodEnd
+                  ? Math.floor(
+                      new Date(
+                        ctx.transition!.oldSubscription.currentPeriodEnd,
+                      ).getTime() / 1000,
+                    )
+                  : Math.floor(
+                      (Date.now() + ctx.product.trialDays * 86400000) / 1000,
+                    ),
                 trialCreditAmount: 0,
               }
             : {
@@ -111,7 +116,13 @@ export class StripePlanBuilder {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 1);
 
-      const hasExistingSub = !!ctx.transition;
+      // A BOS-only free sub (no stripe_subscription_id) is not a real
+      // billing transition — treat the customer as new for trial / payment
+      // method purposes. Only `sub_*` Stripe subs gate out the trial.
+      const hasExistingSub =
+        !!ctx.transition?.oldSubscription.stripeSubscriptionId?.startsWith(
+          'sub_',
+        );
       const params: Stripe.Checkout.SessionCreateParams = {
         mode: 'subscription',
         currency: sub.currency,
@@ -156,7 +167,10 @@ export class StripePlanBuilder {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
-    const hasExistingSub = !!ctx.transition;
+    const hasExistingSub =
+      !!ctx.transition?.oldSubscription.stripeSubscriptionId?.startsWith(
+        'sub_',
+      );
     const hasPreAppliedDiscount = !!ctx.discount?.stripeCouponId;
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',

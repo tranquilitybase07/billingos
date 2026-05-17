@@ -415,7 +415,7 @@ export class BillingService {
       ctx.isInPlaceUpgrade ||
       ctx.isInPlaceDowngrade ||
       ctx.isFreeProduct ||
-      ctx.isTrialToTrialDowngrade
+      ctx.isTrialingDowngrade
     );
   }
 
@@ -736,7 +736,7 @@ export class BillingService {
     plan: BillingPlan,
   ): PipelineResult['checkoutMode'] {
     if (ctx.isFreeProduct) return 'free';
-    if (ctx.isTrialToTrialDowngrade) return 'upgrade';
+    if (ctx.isTrialingDowngrade) return 'upgrade';
     if (ctx.isTrialUpgrade) return 'upgrade';
     if (ctx.isInPlaceUpgrade) return 'upgrade';
     if (ctx.isInPlaceSwap) return 'upgrade';

@@ -425,7 +425,6 @@ export class AccountService {
 
     const supabase = this.supabaseService.getClient();
 
-    // Resolve the linked org so we can audit-log and check active subs.
     const { data: linkedOrg } = await supabase
       .from('organizations')
       .select('id')
@@ -435,20 +434,6 @@ export class AccountService {
 
     if (!linkedOrg) {
       throw new NotFoundException('Linked organization not found');
-    }
-
-    // Block disconnect when active subscriptions exist — these would lose
-    // their Stripe-side billing relationship and orphan customer payments.
-    const { count: activeSubs } = await supabase
-      .from('subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', linkedOrg.id)
-      .in('status', ['active', 'trialing', 'past_due']);
-
-    if ((activeSubs ?? 0) > 0) {
-      throw new BadRequestException(
-        `Cannot disconnect: ${activeSubs} active subscription(s) on this account. Cancel or migrate them first.`,
-      );
     }
 
     let stripeError: Error | null = null;

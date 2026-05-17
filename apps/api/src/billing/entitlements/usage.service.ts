@@ -190,17 +190,54 @@ export class UsageService {
 
   /**
    * Get usage metrics for a customer's features.
-   * Shows current consumption vs limits.
    */
   async getUsageMetrics(customerId: string, featureName?: string) {
     const supabase = this.supabaseService.getClient();
 
-    // Build query for usage records
+    // Step 1: active grants — the source of truth for "what does this customer
+    // have right now?" Filter to subs in billing-active states only.
+    const { data: activeGrants, error: grantsError } = await supabase
+      .from('feature_grants')
+      .select(
+        `
+        feature_id,
+        subscription_id,
+        subscriptions!inner ( status )
+      `,
+      )
+      .eq('customer_id', customerId)
+      .is('revoked_at', null)
+      .in('subscriptions.status', ['active', 'trialing', 'past_due']);
+
+    if (grantsError) {
+      this.logger.error('Error fetching active grants:', grantsError);
+      throw new BadRequestException('Failed to fetch usage metrics');
+    }
+
+    if (!activeGrants || activeGrants.length === 0) {
+      return [];
+    }
+
+    const activeKeys = new Set(
+      activeGrants.map((g) => `${g.feature_id}:${g.subscription_id}`),
+    );
+    const activeFeatureIds = Array.from(
+      new Set(activeGrants.map((g) => g.feature_id)),
+    );
+    const activeSubIds = Array.from(
+      new Set(activeGrants.map((g) => g.subscription_id)),
+    );
+
+    // Step 2: usage records scoped to the active grants. period_end >= now
+    // still applies — a row whose period is fully in the past has no
+    // remaining quota to report.
     let query = supabase
       .from('usage_records')
       .select(
         `
         id,
+        feature_id,
+        subscription_id,
         consumed_units,
         limit_units,
         period_start,
@@ -221,9 +258,11 @@ export class UsageService {
       `,
       )
       .eq('customer_id', customerId)
-      .gte('period_end', new Date().toISOString());
+      .in('feature_id', activeFeatureIds)
+      .in('subscription_id', activeSubIds)
+      .gte('period_end', new Date().toISOString())
+      .order('period_start', { ascending: false });
 
-    // If specific feature requested, filter by it
     if (featureName) {
       const { data: feature } = await supabase
         .from('features')
@@ -243,32 +282,46 @@ export class UsageService {
       throw new BadRequestException('Failed to fetch usage metrics');
     }
 
-    // Transform into metrics format
-    const metrics = (records || []).map((record: any) => ({
-      feature_key: record.features?.name,
-      feature_title: record.features?.title,
-      product_name: record.subscriptions?.products?.name,
-      consumed: record.consumed_units || 0,
-      limit: record.limit_units || 0,
-      remaining: Math.max(
-        0,
-        (record.limit_units || 0) - (record.consumed_units || 0),
-      ),
-      percentage_used:
-        record.limit_units > 0
-          ? Math.round(
-              ((record.consumed_units || 0) / record.limit_units) * 100,
-            )
-          : 0,
-      period_start: record.period_start,
-      period_end: record.period_end,
-      resets_in_days: Math.ceil(
-        (new Date(record.period_end).getTime() - new Date().getTime()) /
-          (1000 * 60 * 60 * 24),
-      ),
-    }));
+    // Step 3: filter to rows whose (feature_id, subscription_id) is in the
+    // active-grants set, and dedupe to one row per feature_id (most recent
+    // period — query is already ordered period_start desc).
+    const seenFeatures = new Set<string>();
+    const filtered: any[] = [];
+    for (const record of (records as any[]) || []) {
+      const key = `${record.feature_id}:${record.subscription_id}`;
+      if (!activeKeys.has(key)) continue;
+      if (seenFeatures.has(record.feature_id)) continue;
+      seenFeatures.add(record.feature_id);
+      filtered.push(record);
+    }
 
-    return metrics;
+    // Transform into metrics format.
+    return filtered.map((record) => {
+      const rawLimit = record.limit_units;
+      const unlimited = rawLimit === null || rawLimit === undefined;
+      const limit = unlimited ? 0 : Number(rawLimit);
+      const consumed = Number(record.consumed_units) || 0;
+      const remaining = unlimited ? 0 : Math.max(0, limit - consumed);
+      const percentageUsed =
+        !unlimited && limit > 0 ? Math.round((consumed / limit) * 100) : 0;
+
+      return {
+        feature_key: record.features?.name,
+        feature_title: record.features?.title,
+        product_name: record.subscriptions?.products?.name,
+        consumed,
+        limit,
+        remaining,
+        unlimited,
+        percentage_used: percentageUsed,
+        period_start: record.period_start,
+        period_end: record.period_end,
+        resets_in_days: Math.ceil(
+          (new Date(record.period_end).getTime() - new Date().getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      };
+    });
   }
 
   /**

@@ -11,6 +11,7 @@ import { AdminService } from './admin.service';
 import { AdminTokenGuard } from './guards/admin-token.guard';
 import { ReplayWebhookDto } from './dto/replay-webhook.dto';
 import { ReconcileDto } from './dto/reconcile.dto';
+import { CopyProductsDto } from './dto/copy-products.dto';
 
 /**
  * Admin operations called from the billingos-admin dashboard. Every endpoint
@@ -65,5 +66,13 @@ export class AdminController {
   @Get('customers/:id/stripe-snapshot')
   async getCustomerSnapshot(@Param('id') id: string) {
     return this.adminService.getCustomerSnapshot(id);
+  }
+
+  @Post('orgs/copy-products')
+  async copyProducts(@Body() dto: CopyProductsDto) {
+    return this.adminService.copyProducts({
+      sourceOrgId: dto.source_org_id,
+      targetOrgId: dto.target_org_id,
+    });
   }
 }
