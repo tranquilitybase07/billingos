@@ -49,12 +49,33 @@ export class StripePlanBuilder {
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
           isPlainSwap: ctx.isInPlaceSwap,
-          // Trial-to-trial (upgrade or downgrade): grant fresh trial, no credit/charge
-          ...(ctx.isTrialToTrialUpgrade || ctx.isTrialToTrialDowngrade
+          // Both trial→trial upgrade and trialing→paid downgrade preserve the
+          // remaining trial window via the old sub's currentPeriodEnd. This is
+          // anti-abuse: a customer mid-trial on plan A who jumps to plan B
+          // doesn't get a fresh new trial (which would chain free time
+          // indefinitely across plan changes). Matches Stripe's default — an
+          // `update()` with a new price doesn't introduce a trial unless you
+          // explicitly request it. To offer a "fresh trial on upgrade"
+          // promotion, that should be an explicit flag, not the default.
+          //
+          // Fallback (when currentPeriodEnd is unexpectedly missing): grant
+          // the new plan's trialDays from now. If trialDays is also 0 we'd
+          // bill immediately, which is unsafe — guard with a minimum 1-day
+          // grace window so a misconfigured product can't auto-charge a
+          // mid-trial customer.
+          ...(ctx.isTrialToTrialUpgrade || ctx.isTrialingDowngrade
             ? {
-                newTrialEnd: Math.floor(
-                  (Date.now() + ctx.product.trialDays * 86400000) / 1000,
-                ),
+                newTrialEnd: ctx.transition!.oldSubscription.currentPeriodEnd
+                  ? Math.floor(
+                      new Date(
+                        ctx.transition!.oldSubscription.currentPeriodEnd,
+                      ).getTime() / 1000,
+                    )
+                  : Math.floor(
+                      (Date.now() +
+                        Math.max(ctx.product.trialDays, 1) * 86400000) /
+                        1000,
+                    ),
                 trialCreditAmount: 0,
               }
             : {
@@ -111,7 +132,13 @@ export class StripePlanBuilder {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 1);
 
-      const hasExistingSub = !!ctx.transition;
+      // A BOS-only free sub (no stripe_subscription_id) is not a real
+      // billing transition — treat the customer as new for trial / payment
+      // method purposes. Only `sub_*` Stripe subs gate out the trial.
+      const hasExistingSub =
+        !!ctx.transition?.oldSubscription.stripeSubscriptionId?.startsWith(
+          'sub_',
+        );
       const params: Stripe.Checkout.SessionCreateParams = {
         mode: 'subscription',
         currency: sub.currency,
@@ -156,7 +183,10 @@ export class StripePlanBuilder {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
-    const hasExistingSub = !!ctx.transition;
+    const hasExistingSub =
+      !!ctx.transition?.oldSubscription.stripeSubscriptionId?.startsWith(
+        'sub_',
+      );
     const hasPreAppliedDiscount = !!ctx.discount?.stripeCouponId;
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',

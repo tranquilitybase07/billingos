@@ -104,26 +104,28 @@ export class BillingContextBuilder {
     const isTrialToTrialUpgrade =
       isTrialUpgrade && (product.trialDays || 0) > 0;
 
-    // 6b. Trial-to-trial downgrade: old sub is trialing AND new product also has a trial period.
-    //     Grants a fresh trial on the new (lower) plan — same pattern as isTrialToTrialUpgrade.
-    const isTrialToTrialDowngrade =
+    // 6b. Trialing in-place downgrade: a trialing sub moving to any paid plan
+    //     (lower amount). The original trial_end is preserved by the Stripe
+    //     update — Stripe automatically bills the new (cheaper) price when the
+    //     trial naturally completes.
+    const isTrialingDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
       transition.oldSubscription.status === 'trialing' &&
-      (product.trialDays || 0) > 0 &&
+      !isFreeProduct &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_');
 
     // 6c. Determine if in-place downgrade (existing Stripe sub + new lower price).
     //     Non-trialing subs always route here. A trialing sub routes here only
-    //     when downgrading to a free product — otherwise isTrialToTrialDowngrade
-    //     (paid→paid trial) claims it above. Without this, trialing→free would
-    //     fall through to free_activation and orphan the Stripe trial sub.
+    //     when downgrading to a free product — paid destinations are claimed by
+    //     isTrialingDowngrade above. Without this, trialing→free would fall
+    //     through to free_activation and orphan the Stripe trial sub.
     const isInPlaceDowngrade =
       transition !== null &&
       transition.type === 'downgrade' &&
       !!transition.oldSubscription.stripeSubscriptionId?.startsWith('sub_') &&
       (transition.oldSubscription.status !== 'trialing' || isFreeProduct) &&
-      !isTrialToTrialDowngrade;
+      !isTrialingDowngrade;
 
     // 6d. Same-price plan switch: different product but identical price amount AND
     //     identical billing interval. Routed through subscriptions.update() with
@@ -169,7 +171,7 @@ export class BillingContextBuilder {
       isTrialUpgrade,
       isTrialToTrialUpgrade,
       isInPlaceDowngrade,
-      isTrialToTrialDowngrade,
+      isTrialingDowngrade,
       isInPlaceSwap,
       metadata: dto.metadata || {},
     };

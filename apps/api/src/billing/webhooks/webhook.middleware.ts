@@ -107,11 +107,18 @@ export class WebhookMiddleware {
       });
 
     if (insertError) {
+      if ((insertError as { code?: string }).code === '23505') {
+        this.logger.warn(
+          `Concurrent webhook delivery for ${event.id} — already inserted by parallel request, skipping dispatch`,
+        );
+        return;
+      }
       this.logger.error(
         `Failed to store webhook event ${event.id}:`,
         insertError,
       );
-      // Continue processing even if storage fails (non-critical)
+      // Non-duplicate failures (e.g., DB down): keep processing — the webhook
+      // event itself is more valuable than the audit row.
     }
 
     // 5. Build context and dispatch

@@ -322,15 +322,44 @@ export class SetupIntentSucceededHandler
         },
       };
 
-      const { data: subscription, error: subError } = await supabase
+      const insertResult = await supabase
         .from('subscriptions')
         .insert(subscriptionData)
         .select()
         .single();
 
-      if (subError) {
+      let subscription = insertResult.data;
+      let subError = insertResult.error;
+
+      if (subError?.code === '23505') {
+        this.logger.warn(
+          `Subscription ${stripeSubscription.id} already in BOS — recovering from idempotent re-delivery`,
+        );
+        const { data: existing, error: patchError } = await supabase
+          .from('subscriptions')
+          .update({
+            discount_id: subscriptionData.discount_id,
+            discount_amount: subscriptionData.discount_amount,
+            discount_code: subscriptionData.discount_code,
+            metadata: subscriptionData.metadata,
+          })
+          .eq('organization_id', customerOrgId)
+          .eq('stripe_subscription_id', stripeSubscription.id)
+          .select()
+          .single();
+        if (patchError || !existing) {
+          this.logger.error(
+            `Failed to load existing subscription ${stripeSubscription.id} after duplicate:`,
+            patchError,
+          );
+          return;
+        }
+        subscription = existing;
+        subError = null;
+      }
+
+      if (subError || !subscription) {
         this.logger.error('Failed to save trial subscription:', subError);
-        // Cancel the Stripe subscription since we can't track it
         try {
           await this.stripeService.cancelSubscription(
             stripeSubscription.id,

@@ -395,23 +395,35 @@ export class CheckoutDiscountService {
     const priceId = metadata.priceId as string;
     const productId = metadata.productId as string;
 
-    const [customerResult, priceResult, productResult] = await Promise.all([
-      supabase
-        .from('customers')
-        .select('stripe_customer_id')
-        .eq('id', customerId)
-        .single(),
-      supabase
-        .from('product_prices')
-        .select('stripe_price_id')
-        .eq('id', priceId)
-        .single(),
-      supabase
-        .from('products')
-        .select('trial_days')
-        .eq('id', productId)
-        .single(),
-    ]);
+    const existingSubscriptionId = metadata.existingSubscriptionId as
+      | string
+      | undefined;
+
+    const [customerResult, priceResult, productResult, existingSubResult] =
+      await Promise.all([
+        supabase
+          .from('customers')
+          .select('stripe_customer_id')
+          .eq('id', customerId)
+          .single(),
+        supabase
+          .from('product_prices')
+          .select('stripe_price_id')
+          .eq('id', priceId)
+          .single(),
+        supabase
+          .from('products')
+          .select('trial_days')
+          .eq('id', productId)
+          .single(),
+        existingSubscriptionId
+          ? supabase
+              .from('subscriptions')
+              .select('stripe_subscription_id')
+              .eq('id', existingSubscriptionId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
 
     const stripeCustomerId = customerResult.data?.stripe_customer_id;
     const stripePriceId = priceResult.data?.stripe_price_id;
@@ -420,6 +432,21 @@ export class CheckoutDiscountService {
     if (!stripeCustomerId || !stripePriceId) {
       throw new BadRequestException(
         'Unable to recreate checkout session — missing customer or price',
+      );
+    }
+
+    // existingSubResult is set up as a Promise.resolve fallback above when no
+    // existingSubscriptionId is passed (then there's no error to check). When
+    // it IS a real query, surface DB failures explicitly — otherwise a
+    // transient DB error would leave hasExistingSub=false and grant a trial
+    // the customer shouldn't get.
+    if (
+      existingSubscriptionId &&
+      'error' in existingSubResult &&
+      existingSubResult.error
+    ) {
+      throw new BadRequestException(
+        `Failed to resolve existing subscription: ${existingSubResult.error.message}`,
       );
     }
 
@@ -437,7 +464,8 @@ export class CheckoutDiscountService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1);
 
-    const hasExistingSub = !!metadata.existingSubscriptionId;
+    const hasExistingSub =
+      !!existingSubResult.data?.stripe_subscription_id?.startsWith('sub_');
 
     const newStripeSession = await stripeClient.checkout.sessions.create(
       {
