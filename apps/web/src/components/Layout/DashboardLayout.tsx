@@ -64,14 +64,9 @@ export const DashboardBody = (props: {
       {/* Main content */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Page content */}
-        <motion.div
-          className={cn('flex w-full flex-col p-6', className)}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <div className={cn('flex w-full flex-col p-6', className)}>
           {children}
-        </motion.div>
+        </div>
       </div>
 
       {/* Optional context view (right sidebar) */}

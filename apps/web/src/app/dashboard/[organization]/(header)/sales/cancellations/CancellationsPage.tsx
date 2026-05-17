@@ -68,7 +68,7 @@ function StatsCards({
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card) => (
-        <div key={card.label} className="rounded-xl border border-border bg-card p-5 flex flex-col gap-1">
+        <div key={card.label} className="rounded-xl bg-card p-5 flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">{card.label}</span>
           <span
             className={`text-2xl font-semibold text-foreground leading-tight ${card.truncate ? 'truncate' : ''}`}

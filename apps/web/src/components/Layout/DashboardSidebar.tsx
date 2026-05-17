@@ -220,7 +220,7 @@ export const DashboardSidebar = () => {
                           isItemActive && "text-sidebar-foreground bg-gradient-to-r from-sidebar-primary/20 to-transparent"
                         )}
                       >
-                        <Link href={item.href} className="flex items-center gap-3">
+                        <Link href={item.href} scroll={false} className="flex items-center gap-3">
                           <item.icon
                             size={20}
                             className={cn(
@@ -258,7 +258,7 @@ export const DashboardSidebar = () => {
                 isSettingsActive && "text-sidebar-foreground bg-gradient-to-r from-sidebar-primary/20 to-transparent"
               )}
             >
-              <Link href={settingsHref} className="flex items-center gap-3">
+              <Link href={settingsHref} scroll={false} className="flex items-center gap-3">
                 <Settings01Icon
                   size={20}
                   className={cn(

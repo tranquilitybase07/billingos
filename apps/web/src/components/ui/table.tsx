@@ -73,7 +73,7 @@ const TableRow = ({
   <tr
     ref={ref}
     className={cn(
-      'hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors',
+      'hover:bg-muted/10 data-[state=selected]:bg-muted border-b border-border/30 transition-colors',
       className,
     )}
     {...props}
@@ -91,7 +91,7 @@ const TableHead = ({
   <th
     ref={ref}
     className={cn(
-      'text-muted-foreground h-12 px-4 text-left align-middle font-medium [&:has([role=checkbox])]:pr-0',
+      'text-muted-foreground/60 h-10 px-4 text-left align-middle text-[11px] font-medium uppercase tracking-wider [&:has([role=checkbox])]:pr-0',
       className,
     )}
     {...props}
@@ -108,7 +108,7 @@ const TableCell = ({
 }) => (
   <td
     ref={ref}
-    className={cn('p-4 align-middle [&:has([role=checkbox])]:pr-0', className)}
+    className={cn('px-4 py-5 align-middle [&:has([role=checkbox])]:pr-0', className)}
     {...props}
   />
 )
