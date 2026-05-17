@@ -132,7 +132,7 @@ export function DataTable<TData, TValue>({
     <div className={twMerge('flex flex-col gap-6', className)}>
       <div
         className={twMerge(
-          'border-border overflow-hidden rounded-2xl border',
+          'overflow-hidden',
           wrapperClassName,
         )}
       >
@@ -141,7 +141,7 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className={twMerge('bg-secondary', headerClassName)}
+                className={twMerge('bg-transparent hover:bg-transparent border-border/40', headerClassName)}
               >
                 {headerGroup.headers.map((header) => {
                   return (
@@ -180,7 +180,7 @@ export function DataTable<TData, TValue>({
                     <TableRow
                       key={row.id}
                       className={twMerge(
-                        'transition-colors',
+                        'group transition-colors',
                         enableRowSelection || onRowClick
                           ? row.getCanSelect()
                             ? 'cursor-pointer'

@@ -17,8 +17,10 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+  const headerClass = 'text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60'
+
   if (!column.getCanSort()) {
-    return <div className={className}>{title}</div>
+    return <div className={twMerge(headerClass, className)}>{title}</div>
   }
 
   return (
@@ -26,7 +28,7 @@ export function DataTableColumnHeader<TData, TValue>({
       <Button
         type="button"
         variant="ghost"
-        className="p-0 hover:bg-transparent dark:hover:bg-transparent"
+        className={twMerge('p-0 hover:bg-transparent dark:hover:bg-transparent', headerClass)}
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
         <span>{title}</span>

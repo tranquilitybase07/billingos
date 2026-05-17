@@ -7,8 +7,8 @@ import { EditFeatureDialog } from '@/components/Features/EditFeatureDialog'
 import { DeleteFeatureConfirmation } from '@/components/Features/DeleteFeatureConfirmation'
 import { FeatureTypeTag } from '@/components/Features/FeatureTypeTag'
 import { DataTable, DataTableColumnDef, DataTableColumnHeader } from '@/components/atoms/datatable'
+import { TableEmptyState } from '@/components/atoms/TableEmptyState'
 import {
-  Layers01Icon,
   PlusSignIcon,
   Edit01Icon,
   Delete01Icon,
@@ -196,22 +196,17 @@ export default function FeaturesPage({
   // Empty state
   if (!features || features.length === 0) {
     return (
-      <>
-        <div className="flex h-full flex-col items-center justify-center pt-32">
-          <div className="flex flex-col items-center justify-center gap-y-8">
-            <Layers01Icon size={48} className="text-muted-foreground/30" />
-            <div className="flex flex-col items-center justify-center gap-y-2">
-              <h3 className="text-xl">No Features</h3>
-              <p className="text-muted-foreground">
-                Create your first feature to get started
-              </p>
-            </div>
-            <Button onClick={showCreateModal}>
-              <PlusSignIcon size={16} className="mr-2" />
-              Create Feature
-            </Button>
-          </div>
-        </div>
+      <DashboardBody>
+        <TableEmptyState
+          title="No features found"
+          description="Create your first feature to get started."
+          action={{
+            label: 'Create Feature',
+            onClick: showCreateModal,
+            icon: <PlusSignIcon size={14} />,
+          }}
+          className="py-32"
+        />
 
         <CreateFeatureDialog
           isOpen={isCreateModalShown}
@@ -219,7 +214,7 @@ export default function FeaturesPage({
           organizationId={organizationId}
           onFeatureCreated={handleFeatureCreated}
         />
-      </>
+      </DashboardBody>
     )
   }
 
