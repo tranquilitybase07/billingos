@@ -68,6 +68,19 @@ export class AdminController {
     return this.adminService.getCustomerSnapshot(id);
   }
 
+  /**
+   * Clone non-archived current-version products (with their prices, features,
+   * and product_feature links) from a source org into a target org. Real
+   * Stripe products and prices are created in the target's connected Stripe
+   * account. Used for seeding test orgs from an existing setup.
+   *
+   * Partial-success semantics: copies proceed product-by-product. If one
+   * product fails mid-batch (e.g., Stripe error on its prices), earlier
+   * successful copies remain in both Stripe and BOS. The failing product's
+   * Stripe product is rolled back. Callers receive `{ copied, skipped,
+   * errors }` and may need to re-run / clean up manually if errors list is
+   * non-empty.
+   */
   @Post('orgs/copy-products')
   async copyProducts(@Body() dto: CopyProductsDto) {
     return this.adminService.copyProducts({

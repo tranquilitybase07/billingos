@@ -457,7 +457,16 @@ export class AdminService {
       .order('display_order', { ascending: true });
     if (linksErr) throw new Error(`load feature links: ${linksErr.message}`);
 
-    const sourceMetadata = (sp.metadata ?? {}) as Record<string, string>;
+    // Stripe metadata only accepts Record<string, string>. The source
+    // product's metadata column is Json (can contain nested objects, arrays,
+    // numbers). Keep only top-level string values so Stripe doesn't 400 on a
+    // nested payload at runtime.
+    const sourceMetadataRaw = (sp.metadata ?? {}) as Record<string, unknown>;
+    const sourceMetadata = Object.fromEntries(
+      Object.entries(sourceMetadataRaw).filter(
+        ([, v]) => typeof v === 'string',
+      ),
+    ) as Record<string, string>;
     const stripeProduct = await this.stripeService.createProduct(
       {
         name: sp.name,
@@ -528,6 +537,28 @@ export class AdminService {
           `insert product: ${insertErr?.message ?? 'no row returned'}`,
         );
       }
+
+      // Audit: per backend rules, all Stripe sync operations log to
+      // stripe_sync_events. Best-effort — failures here must never break the
+      // copy.
+      await supabase
+        .from('stripe_sync_events')
+        .insert({
+          organization_id: args.targetOrgId,
+          entity_type: 'product',
+          entity_id: newProduct.id,
+          stripe_object_id: stripeProduct.id,
+          operation: 'create',
+          status: 'success',
+          triggered_by: 'admin.copyProducts',
+        })
+        .then(({ error }) => {
+          if (error) {
+            this.logger.warn(
+              `Failed to log stripe_sync_events for ${stripeProduct.id}: ${error.message}`,
+            );
+          }
+        });
 
       for (const { stripe_price_id, source: price } of stripePrices) {
         const { error: priceInsertErr } = await supabase

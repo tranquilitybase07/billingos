@@ -49,6 +49,20 @@ export class StripePlanBuilder {
             ctx.transition!.oldSubscription.recurringInterval !==
             ctx.price.recurringInterval,
           isPlainSwap: ctx.isInPlaceSwap,
+          // Both trial→trial upgrade and trialing→paid downgrade preserve the
+          // remaining trial window via the old sub's currentPeriodEnd. This is
+          // anti-abuse: a customer mid-trial on plan A who jumps to plan B
+          // doesn't get a fresh new trial (which would chain free time
+          // indefinitely across plan changes). Matches Stripe's default — an
+          // `update()` with a new price doesn't introduce a trial unless you
+          // explicitly request it. To offer a "fresh trial on upgrade"
+          // promotion, that should be an explicit flag, not the default.
+          //
+          // Fallback (when currentPeriodEnd is unexpectedly missing): grant
+          // the new plan's trialDays from now. If trialDays is also 0 we'd
+          // bill immediately, which is unsafe — guard with a minimum 1-day
+          // grace window so a misconfigured product can't auto-charge a
+          // mid-trial customer.
           ...(ctx.isTrialToTrialUpgrade || ctx.isTrialingDowngrade
             ? {
                 newTrialEnd: ctx.transition!.oldSubscription.currentPeriodEnd
@@ -58,7 +72,9 @@ export class StripePlanBuilder {
                       ).getTime() / 1000,
                     )
                   : Math.floor(
-                      (Date.now() + ctx.product.trialDays * 86400000) / 1000,
+                      (Date.now() +
+                        Math.max(ctx.product.trialDays, 1) * 86400000) /
+                        1000,
                     ),
                 trialCreditAmount: 0,
               }

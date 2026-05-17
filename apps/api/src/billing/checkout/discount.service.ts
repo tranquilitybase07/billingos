@@ -435,6 +435,21 @@ export class CheckoutDiscountService {
       );
     }
 
+    // existingSubResult is set up as a Promise.resolve fallback above when no
+    // existingSubscriptionId is passed (then there's no error to check). When
+    // it IS a real query, surface DB failures explicitly — otherwise a
+    // transient DB error would leave hasExistingSub=false and grant a trial
+    // the customer shouldn't get.
+    if (
+      existingSubscriptionId &&
+      'error' in existingSubResult &&
+      existingSubResult.error
+    ) {
+      throw new BadRequestException(
+        `Failed to resolve existing subscription: ${existingSubResult.error.message}`,
+      );
+    }
+
     // Expire old Stripe Checkout Session
     await stripeClient.checkout.sessions.expire(
       oldStripeSessionId,

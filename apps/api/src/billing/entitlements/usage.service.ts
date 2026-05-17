@@ -285,9 +285,10 @@ export class UsageService {
     // Step 3: filter to rows whose (feature_id, subscription_id) is in the
     // active-grants set, and dedupe to one row per feature_id (most recent
     // period — query is already ordered period_start desc).
+    type UsageRow = NonNullable<typeof records>[number];
     const seenFeatures = new Set<string>();
-    const filtered: any[] = [];
-    for (const record of (records as any[]) || []) {
+    const filtered: UsageRow[] = [];
+    for (const record of records ?? []) {
       const key = `${record.feature_id}:${record.subscription_id}`;
       if (!activeKeys.has(key)) continue;
       if (seenFeatures.has(record.feature_id)) continue;

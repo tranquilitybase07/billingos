@@ -436,6 +436,12 @@ export class AccountService {
       throw new NotFoundException('Linked organization not found');
     }
 
+    // Intentional: no active-subscription guard. Stripe is authoritative for
+    // subscriptions — the merchant's Stripe account is theirs to disconnect.
+    // Their existing subs continue billing on Stripe; BOS just loses
+    // observability (webhooks stop landing, feature_grants freeze at
+    // last-known state). That's the expected outcome of leaving BOS, not a
+    // failure mode we should gate against.
     let stripeError: Error | null = null;
     try {
       if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {
