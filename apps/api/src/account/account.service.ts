@@ -436,36 +436,105 @@ export class AccountService {
       throw new NotFoundException('Linked organization not found');
     }
 
-    // Intentional: no active-subscription guard. Stripe is authoritative for
-    // subscriptions — the merchant's Stripe account is theirs to disconnect.
-    // Their existing subs continue billing on Stripe; BOS just loses
-    // observability (webhooks stop landing, feature_grants freeze at
-    // last-known state). That's the expected outcome of leaving BOS, not a
-    // failure mode we should gate against.
+    await this.teardownConnectedAccount(account, linkedOrg.id, userId);
+
+    this.logger.log(
+      `Disconnected account ${accountId} (stripe=${account.stripe_id}, type=${account.stripe_connection_type}) for user ${userId}`,
+    );
+
+    return { success: true };
+  }
+
+  /**
+   * Tear down a connected Stripe account during organization deletion.
+   * Looks up the account linked to the org and runs the same Stripe-side
+   * teardown + audit logging used by the standalone disconnect flow. Authz
+   * is the caller's responsibility — this method assumes the caller has
+   * already verified org-admin access.
+   */
+  async teardownForOrganizationDelete(
+    organizationId: string,
+    triggeredBy: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: org, error: orgErr } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (orgErr || !org || !org.account_id) {
+      return;
+    }
+
+    const { data: account, error: acctErr } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', org.account_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (acctErr || !account) {
+      this.logger.warn(
+        `Account ${org.account_id} for org ${organizationId} already gone — skipping teardown`,
+      );
+      return;
+    }
+
+    if (!account.stripe_id) {
+      this.logger.warn(
+        `Account ${account.id} for org ${organizationId} has no stripe_id — skipping Stripe teardown, deletion will continue`,
+      );
+      return;
+    }
+
+    await this.teardownConnectedAccount(account, organizationId, triggeredBy);
+  }
+
+  /**
+   * Stripe-side teardown + BOS soft-delete for a connected account.
+   * Stripe is authoritative for subscriptions — the merchant's Stripe account
+   * is theirs to disconnect. Their existing subs continue billing on Stripe;
+   * BOS just loses observability. That's the expected outcome of leaving BOS,
+   * not a failure mode we should gate against.
+   */
+  private async teardownConnectedAccount(
+    account: Account,
+    organizationId: string,
+    triggeredBy: string,
+  ): Promise<void> {
+    if (!account.stripe_id) {
+      throw new BadRequestException('Account has no Stripe ID to disconnect');
+    }
+
+    const supabase = this.supabaseService.getClient();
+
     let stripeError: Error | null = null;
     try {
       if (account.stripe_connection_type === STRIPE_CONNECTION_TYPE.STANDARD) {
         await this.stripeService.deauthorizeOAuthAccount(account.stripe_id);
       } else {
+        // TODO(express): Express accounts are paused product-side; this
+        // branch is currently unreachable from the org-delete flow. Reused
+        // by the standalone disconnect for Stripe-account-creator parity.
         await this.stripeService.deleteConnectAccount(account.stripe_id);
       }
     } catch (err) {
       stripeError = err instanceof Error ? err : new Error(String(err));
-      // Stripe-side cleanup failed (already revoked, network blip). Log to
-      // sync events so the failure is auditable, then continue with BOS
-      // cleanup so the user isn't permanently stuck.
       this.logger.warn(
-        `Stripe-side disconnect failed for ${account.stripe_id} (continuing):`,
+        `Stripe-side teardown failed for ${account.stripe_id} (continuing):`,
         err,
       );
       await this.logSyncEvent({
-        organizationId: linkedOrg.id,
+        organizationId,
         entityId: account.id,
         stripeObjectId: account.stripe_id,
         operation: 'delete',
         status: 'failure',
         errorMessage: stripeError.message,
-        triggeredBy: userId,
+        triggeredBy,
       });
     }
 
@@ -478,10 +547,10 @@ export class AccountService {
         status: 'created',
         status_updated_at: now,
       })
-      .eq('account_id', accountId);
+      .eq('account_id', account.id);
 
     if (orgErr) {
-      this.logger.error('Failed to unlink org during disconnect:', orgErr);
+      this.logger.error('Failed to unlink org during teardown:', orgErr);
       throw new BadRequestException(
         'Failed to unlink account from organization',
       );
@@ -490,7 +559,7 @@ export class AccountService {
     const { error: acctErr } = await supabase
       .from('accounts')
       .update({ deleted_at: now })
-      .eq('id', accountId);
+      .eq('id', account.id);
 
     if (acctErr) {
       this.logger.error('Failed to soft-delete account row:', acctErr);
@@ -499,20 +568,14 @@ export class AccountService {
 
     if (!stripeError) {
       await this.logSyncEvent({
-        organizationId: linkedOrg.id,
+        organizationId,
         entityId: account.id,
         stripeObjectId: account.stripe_id,
         operation: 'delete',
         status: 'success',
-        triggeredBy: userId,
+        triggeredBy,
       });
     }
-
-    this.logger.log(
-      `Disconnected account ${accountId} (stripe=${account.stripe_id}, type=${account.stripe_connection_type}) for user ${userId}`,
-    );
-
-    return { success: true };
   }
 
   /**

@@ -9,20 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Loading03Icon, Delete02Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 import { OrgAvatarUpload } from './_components/OrgAvatarUpload'
+import { DeleteOrgDialog } from './_components/DeleteOrgDialog'
+import { revalidateUserOrganizations } from '@/app/actions/organizations'
 
 export default function SettingsPage() {
   const { organization } = useOrganization()
@@ -33,6 +24,7 @@ export default function SettingsPage() {
     email: organization.email || '',
     website: organization.website || '',
   })
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const updateOrganization = useUpdateOrganization(organization.id)
   const deleteOrganization = useDeleteOrganization(organization.id)
@@ -61,6 +53,10 @@ export default function SettingsPage() {
   const handleDelete = async () => {
     try {
       await deleteOrganization.mutateAsync()
+      // Bust the server-side fetch cache tag so the sidebar/layout re-reads
+      // the org list when /dashboard re-renders.
+      await revalidateUserOrganizations()
+      setDeleteDialogOpen(false)
       toast({
         title: 'Organization deleted',
         description: 'Your organization has been permanently deleted',
@@ -165,40 +161,21 @@ export default function SettingsPage() {
                 Permanently delete "{organization.name}" and all its data.
               </p>
             </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  <Delete02Icon size={16} className="mr-2" />
-                  Delete Organization
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the
-                    organization "{organization.name}" and remove all associated data.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    disabled={deleteOrganization.isPending}
-                  >
-                    {deleteOrganization.isPending ? (
-                      <>
-                        <Loading03Icon size={16} className="mr-2 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      'Delete Organization'
-                    )}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Delete02Icon size={16} className="mr-2" />
+              Delete Organization
+            </Button>
+            <DeleteOrgDialog
+              open={deleteDialogOpen}
+              onOpenChange={setDeleteDialogOpen}
+              onConfirm={handleDelete}
+              isPending={deleteOrganization.isPending}
+              orgName={organization.name}
+              hasStripeAccount={!!organization.account_id}
+            />
           </div>
         </CardContent>
       </Card>
