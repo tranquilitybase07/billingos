@@ -48,7 +48,7 @@ export async function updateSession(request: NextRequest) {
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
   const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
   const onboardingStep = request.cookies.get(ONBOARDING_STEP_COOKIE)?.value;
-  const hasOnboarded = onboardingStep === 'complete';
+  const hasOnboarded = onboardingStep === "complete";
 
   if (!user && isDashboard) {
     // Redirect to login if accessing dashboard without auth
@@ -58,10 +58,16 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    // User is authenticated but on auth page
-    // If not onboarded yet, send to onboarding; otherwise dashboard
+    // Honor returnTo when present (e.g. invite accept flow), else
+    // route by onboarding state.
+    const returnTo = request.nextUrl.searchParams.get("returnTo");
     const url = request.nextUrl.clone();
-    url.pathname = hasOnboarded ? "/dashboard" : "/onboarding";
+    url.search = "";
+    if (returnTo && returnTo.startsWith("/")) {
+      url.pathname = returnTo;
+    } else {
+      url.pathname = hasOnboarded ? "/dashboard" : "/onboarding";
+    }
     return NextResponse.redirect(url);
   }
 

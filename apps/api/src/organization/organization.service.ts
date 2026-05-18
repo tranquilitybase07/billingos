@@ -5,16 +5,21 @@ import {
   ConflictException,
   ForbiddenException,
   BadRequestException,
+  GoneException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes, createHash } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { EmailService } from '../email/email.service';
 import { User } from '../user/entities/user.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { SubmitBusinessDetailsDto } from './dto/submit-business-details.dto';
 import {
+  InvitationLookup,
   Organization,
+  OrganizationInvitation,
   OrganizationMember,
   PaymentStatus,
   PaymentStep,
@@ -33,7 +38,20 @@ export class OrganizationService {
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
+
+  private hashToken(rawToken: string): string {
+    return createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private buildInviteUrl(rawToken: string): string {
+    const appUrl =
+      this.configService.get<string>('APP_URL') ||
+      this.configService.get<string>('NEXT_PUBLIC_APP_URL') ||
+      'http://localhost:3000';
+    return `${appUrl.replace(/\/$/, '')}/invite/${rawToken}`;
+  }
 
   /**
    * Create a new organization
@@ -395,16 +413,18 @@ export class OrganizationService {
   }
 
   /**
-   * Invite member to organization
+   * Create a pending invitation and email the invitee a magic accept link.
+   * Works regardless of whether the invitee already has an account.
    */
   async inviteMember(
     organizationId: string,
     userId: string,
     email: string,
-  ): Promise<OrganizationMember> {
+    role: 'admin' | 'member' = 'member',
+  ): Promise<OrganizationInvitation> {
     const supabase = this.supabaseService.getClient();
+    const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user is admin (if account exists) or member (if no account yet)
     const org = await this.findOne(organizationId, userId);
 
     if (org.account_id) {
@@ -413,70 +433,391 @@ export class OrganizationService {
       await this.checkMembership(organizationId, userId);
     }
 
-    // Find user by email
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .is('deleted_at', null)
-      .single();
-
-    if (!existingUser) {
-      throw new NotFoundException(
-        'User not found. They need to sign up first before being invited.',
-      );
-    }
-
-    const invitedUserId = existingUser.id;
-
-    // Check if already a member
+    // Reject if invitee already has an active membership
     const { data: existingMember } = await supabase
       .from('user_organizations')
-      .select('user_id')
+      .select('user_id, users!inner(email)')
       .eq('organization_id', organizationId)
-      .eq('user_id', invitedUserId)
       .is('deleted_at', null)
-      .single();
+      .eq('users.email', normalizedEmail)
+      .maybeSingle();
 
     if (existingMember) {
       throw new ConflictException(
-        'User is already a member of this organization',
+        'A member with this email already belongs to the organization',
       );
     }
 
-    // Add to organization
-    const { data, error } = await supabase
-      .from('user_organizations')
+    // Reject if a pending invite already exists for this email
+    const { data: existingPending } = await supabase
+      .from('organization_invitations')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('email', normalizedEmail)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (existingPending) {
+      throw new ConflictException(
+        'An invitation has already been sent to this email. Resend or revoke it from the Members page.',
+      );
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+
+    const { data: invitation, error } = await supabase
+      .from('organization_invitations')
       .insert({
-        user_id: invitedUserId,
         organization_id: organizationId,
+        email: normalizedEmail,
+        role,
+        token_hash: tokenHash,
+        invited_by: userId,
       })
       .select()
       .single();
 
-    if (error) {
-      this.logger.error('Failed to add member:', error);
-      throw new ConflictException('Failed to add member to organization');
+    if (error || !invitation) {
+      this.logger.error('Failed to create invitation:', error);
+      throw new ConflictException('Failed to create invitation');
     }
 
-    this.logger.log(
-      `User ${invitedUserId} invited to organization ${organizationId}`,
-    );
-
-    // TODO: Send invitation email
-
-    // Return member with user details
-    const { data: userDetails } = await supabase
+    const { data: inviter } = await supabase
       .from('users')
-      .select('id, email, avatar_url')
-      .eq('id', invitedUserId)
+      .select('email')
+      .eq('id', userId)
       .single();
 
+    await this.emailService.sendInvitationEmail({
+      to: normalizedEmail,
+      organizationName: org.name,
+      inviterEmail: inviter?.email || 'BillingOS',
+      inviteUrl: this.buildInviteUrl(rawToken),
+      expiresAt: new Date(invitation.expires_at),
+    });
+
+    this.logger.log(
+      `Invitation ${invitation.id} sent to ${normalizedEmail} for org ${organizationId}`,
+    );
+
     return {
-      ...data,
-      email: userDetails?.email,
-      avatar_url: userDetails?.avatar_url,
-      is_admin: false,
+      id: invitation.id,
+      organization_id: invitation.organization_id,
+      email: invitation.email,
+      role: invitation.role as 'admin' | 'member',
+      status: invitation.status as OrganizationInvitation['status'],
+      expires_at: invitation.expires_at,
+      accepted_at: invitation.accepted_at,
+      invited_by: invitation.invited_by,
+      invited_by_email: inviter?.email,
+      created_at: invitation.created_at,
+    };
+  }
+
+  /**
+   * List pending invitations for the Members page.
+   */
+  async listInvitations(
+    organizationId: string,
+    userId: string,
+  ): Promise<OrganizationInvitation[]> {
+    const supabase = this.supabaseService.getClient();
+    await this.checkMembership(organizationId, userId);
+
+    const { data, error } = await supabase
+      .from('organization_invitations')
+      .select(
+        'id, organization_id, email, role, status, expires_at, accepted_at, invited_by, created_at, users:invited_by(email)',
+      )
+      .eq('organization_id', organizationId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      this.logger.error('Failed to list invitations:', error);
+      throw new Error('Failed to list invitations');
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      organization_id: row.organization_id,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      expires_at: row.expires_at,
+      accepted_at: row.accepted_at,
+      invited_by: row.invited_by,
+      invited_by_email: row.users?.email,
+      created_at: row.created_at,
+    }));
+  }
+
+  /**
+   * Revoke a pending invitation.
+   */
+  async revokeInvitation(
+    organizationId: string,
+    userId: string,
+    invitationId: string,
+  ): Promise<void> {
+    const supabase = this.supabaseService.getClient();
+    await this.checkIsAdmin(organizationId, userId);
+
+    const { data, error } = await supabase
+      .from('organization_invitations')
+      .update({ status: 'revoked' })
+      .eq('id', invitationId)
+      .eq('organization_id', organizationId)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error('Failed to revoke invitation:', error);
+      throw new Error('Failed to revoke invitation');
+    }
+
+    if (!data) {
+      throw new NotFoundException('Pending invitation not found');
+    }
+  }
+
+  /**
+   * Resend the invitation email. Rotates the token and bumps expiry.
+   */
+  async resendInvitation(
+    organizationId: string,
+    userId: string,
+    invitationId: string,
+  ): Promise<OrganizationInvitation> {
+    const supabase = this.supabaseService.getClient();
+    await this.checkIsAdmin(organizationId, userId);
+
+    const { data: existing } = await supabase
+      .from('organization_invitations')
+      .select('id, email, status')
+      .eq('id', invitationId)
+      .eq('organization_id', organizationId)
+      .single();
+
+    if (!existing || existing.status !== 'pending') {
+      throw new NotFoundException('Pending invitation not found');
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const { data: invitation, error } = await supabase
+      .from('organization_invitations')
+      .update({
+        token_hash: tokenHash,
+        expires_at: expiresAt.toISOString(),
+      })
+      .eq('id', invitationId)
+      .select()
+      .single();
+
+    if (error || !invitation) {
+      this.logger.error('Failed to resend invitation:', error);
+      throw new Error('Failed to resend invitation');
+    }
+
+    const org = await this.findOne(organizationId, userId);
+    const { data: inviter } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
+    await this.emailService.sendInvitationEmail({
+      to: invitation.email,
+      organizationName: org.name,
+      inviterEmail: inviter?.email || 'BillingOS',
+      inviteUrl: this.buildInviteUrl(rawToken),
+      expiresAt,
+    });
+
+    return {
+      id: invitation.id,
+      organization_id: invitation.organization_id,
+      email: invitation.email,
+      role: invitation.role as 'admin' | 'member',
+      status: invitation.status as OrganizationInvitation['status'],
+      expires_at: invitation.expires_at,
+      accepted_at: invitation.accepted_at,
+      invited_by: invitation.invited_by,
+      invited_by_email: inviter?.email,
+      created_at: invitation.created_at,
+    };
+  }
+
+  /**
+   * Public lookup for the /invite/[token] page. Hashes the raw token and joins org + inviter.
+   */
+  async lookupInvitation(rawToken: string): Promise<InvitationLookup> {
+    const supabase = this.supabaseService.getClient();
+    const tokenHash = this.hashToken(rawToken);
+
+    const { data: invitation } = await supabase
+      .from('organization_invitations')
+      .select(
+        `
+        id,
+        email,
+        role,
+        status,
+        expires_at,
+        organization:organizations!inner ( id, name, slug, avatar_url ),
+        inviter:users!organization_invitations_invited_by_fkey ( email )
+        `,
+      )
+      .eq('token_hash', tokenHash)
+      .single();
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new GoneException(`Invitation already ${invitation.status}`);
+    }
+
+    if (new Date(invitation.expires_at) < new Date()) {
+      await supabase
+        .from('organization_invitations')
+        .update({ status: 'expired' })
+        .eq('id', invitation.id);
+      throw new GoneException('Invitation has expired');
+    }
+
+    const org: any = Array.isArray(invitation.organization)
+      ? invitation.organization[0]
+      : invitation.organization;
+    const inviter: any = Array.isArray(invitation.inviter)
+      ? invitation.inviter[0]
+      : invitation.inviter;
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      role: invitation.role as 'admin' | 'member',
+      status: invitation.status as InvitationLookup['status'],
+      expires_at: invitation.expires_at,
+      organization: {
+        id: org?.id,
+        name: org?.name,
+        slug: org?.slug,
+        avatar_url: org?.avatar_url ?? null,
+      },
+      inviter: {
+        email: inviter?.email ?? '',
+      },
+    };
+  }
+
+  /**
+   * Accept an invitation. Caller must be authenticated; their email must match
+   * the invitation. Creates the membership and marks the invitation accepted.
+   */
+  async acceptInvitation(
+    rawToken: string,
+    user: User,
+  ): Promise<{ organizationSlug: string; organizationId: string }> {
+    const supabase = this.supabaseService.getClient();
+    const tokenHash = this.hashToken(rawToken);
+
+    const { data: invitation } = await supabase
+      .from('organization_invitations')
+      .select('id, organization_id, email, status, expires_at')
+      .eq('token_hash', tokenHash)
+      .single();
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new GoneException(`Invitation already ${invitation.status}`);
+    }
+
+    if (new Date(invitation.expires_at) < new Date()) {
+      await supabase
+        .from('organization_invitations')
+        .update({ status: 'expired' })
+        .eq('id', invitation.id);
+      throw new GoneException('Invitation has expired');
+    }
+
+    if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
+      throw new ForbiddenException(
+        `This invitation was sent to ${invitation.email}. Sign in with that email to accept.`,
+      );
+    }
+
+    // Reactivate a soft-deleted membership if one exists, otherwise insert.
+    const { data: existingMembership } = await supabase
+      .from('user_organizations')
+      .select('user_id, deleted_at')
+      .eq('organization_id', invitation.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingMembership) {
+      if (existingMembership.deleted_at) {
+        const { error: reactivateErr } = await supabase
+          .from('user_organizations')
+          .update({ deleted_at: null })
+          .eq('organization_id', invitation.organization_id)
+          .eq('user_id', user.id);
+        if (reactivateErr) {
+          this.logger.error('Failed to reactivate membership:', reactivateErr);
+          throw new Error('Failed to accept invitation');
+        }
+      }
+    } else {
+      const { error: insertErr } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: user.id,
+          organization_id: invitation.organization_id,
+        });
+      if (insertErr) {
+        this.logger.error('Failed to create membership:', insertErr);
+        throw new Error('Failed to accept invitation');
+      }
+    }
+
+    await supabase
+      .from('organization_invitations')
+      .update({
+        status: 'accepted',
+        accepted_at: new Date().toISOString(),
+        accepted_by: user.id,
+      })
+      .eq('id', invitation.id);
+
+    // Mark the user as onboarded so middleware doesn't bounce them to /onboarding.
+    await supabase
+      .from('users')
+      .update({ onboarding_step: 'complete' })
+      .eq('id', user.id)
+      .neq('onboarding_step', 'complete');
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('slug')
+      .eq('id', invitation.organization_id)
+      .single();
+
+    this.logger.log(
+      `User ${user.id} accepted invitation ${invitation.id} for org ${invitation.organization_id}`,
+    );
+
+    return {
+      organizationSlug: org?.slug ?? '',
+      organizationId: invitation.organization_id,
     };
   }
 

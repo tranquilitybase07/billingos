@@ -13,16 +13,28 @@ import { ArrowDown01Icon, ArrowUp01Icon } from 'hugeicons-react';
 interface LoginProps {
   returnTo?: string;
   isSignup?: boolean;
+  initialEmail?: string;
+  emailLocked?: boolean;
 }
 
-export default function Login({ returnTo, isSignup = false }: LoginProps) {
+export default function Login({
+  returnTo,
+  isSignup = false,
+  initialEmail,
+  emailLocked = false,
+}: LoginProps) {
   const [showMagicLink, setShowMagicLink] = useState(false);
 
   return (
     <div className="flex flex-col gap-y-6">
       {/* PRIMARY: Email/Password Form */}
       <div className="flex w-full flex-col gap-y-4">
-        <EmailPasswordForm isSignup={isSignup} returnTo={returnTo} />
+        <EmailPasswordForm
+          isSignup={isSignup}
+          returnTo={returnTo}
+          initialEmail={initialEmail}
+          emailLocked={emailLocked}
+        />
       </div>
 
       {/* SECONDARY: Magic Link (Collapsible) */}

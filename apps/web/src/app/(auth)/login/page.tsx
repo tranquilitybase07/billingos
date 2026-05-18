@@ -7,7 +7,17 @@ export const metadata = {
   description: 'Sign in to your BillingOS account',
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string; email?: string }>;
+}) {
+  const { returnTo, email } = await searchParams;
+  const signupHref = returnTo
+    ? `/signup?returnTo=${encodeURIComponent(returnTo)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
+    : '/signup';
+  const emailLocked = !!returnTo && returnTo.startsWith('/invite/');
+
   return (
     <div className="flex h-screen w-full grow items-center justify-center">
       <div className="flex w-full max-w-md flex-col justify-between gap-16 rounded-4xl p-12">
@@ -17,11 +27,15 @@ export default function LoginPage() {
             Welcome back
           </h1>
         </div>
-        <Login />
+        <Login
+          returnTo={returnTo}
+          initialEmail={email}
+          emailLocked={emailLocked}
+        />
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{' '}
           <Link
-            href="/signup"
+            href={signupHref}
             className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             Sign up

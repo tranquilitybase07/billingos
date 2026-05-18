@@ -498,7 +498,7 @@ export type Database = {
           billing_address: Json | null
           created_at: string | null
           deleted_at: string | null
-          email: string
+          email: string | null
           email_verified: boolean
           external_id: string | null
           id: string
@@ -512,7 +512,7 @@ export type Database = {
           billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email: string
+          email?: string | null
           email_verified?: boolean
           external_id?: string | null
           id?: string
@@ -526,7 +526,7 @@ export type Database = {
           billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email?: string
+          email?: string | null
           email_verified?: boolean
           external_id?: string | null
           id?: string
@@ -818,6 +818,123 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      migration_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          organization_id: string
+          pending_binding_count: number
+          progress: Json
+          status: string
+          stuck_customers: Json
+          totals: Json
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          organization_id: string
+          pending_binding_count?: number
+          progress?: Json
+          status?: string
+          stuck_customers?: Json
+          totals?: Json
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          organization_id?: string
+          pending_binding_count?: number
+          progress?: Json
+          status?: string
+          stuck_customers?: Json
+          totals?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          organization_id: string
+          role: string
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          organization_id: string
+          role?: string
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          organization_id?: string
+          role?: string
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_invitations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1439,6 +1556,7 @@ export type Database = {
           api_key_id: string
           created_at: string
           expires_at: string
+          external_email: string | null
           external_organization_id: string | null
           external_user_id: string
           id: string
@@ -1453,6 +1571,7 @@ export type Database = {
           api_key_id: string
           created_at?: string
           expires_at: string
+          external_email?: string | null
           external_organization_id?: string | null
           external_user_id: string
           id?: string
@@ -1467,6 +1586,7 @@ export type Database = {
           api_key_id?: string
           created_at?: string
           expires_at?: string
+          external_email?: string | null
           external_organization_id?: string | null
           external_user_id?: string
           id?: string
@@ -1486,6 +1606,55 @@ export type Database = {
           },
           {
             foreignKeyName: "session_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_product_mappings: {
+        Row: {
+          bos_product_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          stripe_product_id: string
+          updated_at: string
+        }
+        Insert: {
+          bos_product_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          stripe_product_id: string
+          updated_at?: string
+        }
+        Update: {
+          bos_product_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          stripe_product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_product_mappings_bos_product_id_fkey"
+            columns: ["bos_product_id"]
+            isOneToOne: false
+            referencedRelation: "product_version_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_product_mappings_bos_product_id_fkey"
+            columns: ["bos_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_product_mappings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
