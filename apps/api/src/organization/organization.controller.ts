@@ -110,7 +110,45 @@ export class OrganizationController {
     @CurrentUser() user: User,
     @Body() inviteDto: InviteMemberDto,
   ) {
-    return this.organizationService.inviteMember(id, user.id, inviteDto.email);
+    return this.organizationService.inviteMember(
+      id,
+      user.id,
+      inviteDto.email,
+      inviteDto.role,
+    );
+  }
+
+  /**
+   * List pending invitations
+   */
+  @Get(':id/invitations')
+  listInvitations(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.organizationService.listInvitations(id, user.id);
+  }
+
+  /**
+   * Revoke a pending invitation (admin only)
+   */
+  @Delete(':id/invitations/:invitationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  revokeInvitation(
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.organizationService.revokeInvitation(id, user.id, invitationId);
+  }
+
+  /**
+   * Resend an invitation (admin only) — rotates token, resets expiry, re-emails.
+   */
+  @Post(':id/invitations/:invitationId/resend')
+  resendInvitation(
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.organizationService.resendInvitation(id, user.id, invitationId);
   }
 
   /**

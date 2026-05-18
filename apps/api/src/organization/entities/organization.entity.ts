@@ -41,6 +41,36 @@ export interface OrganizationMember {
   is_admin?: boolean; // Computed: whether user is the account admin
 }
 
+export interface OrganizationInvitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: 'admin' | 'member';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  expires_at: string;
+  accepted_at: string | null;
+  invited_by: string;
+  invited_by_email?: string;
+  created_at: string;
+}
+
+export interface InvitationLookup {
+  id: string;
+  email: string;
+  role: 'admin' | 'member';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  expires_at: string;
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    avatar_url: string | null;
+  };
+  inviter: {
+    email: string;
+  };
+}
+
 export interface PaymentStep {
   id: string;
   title: string;

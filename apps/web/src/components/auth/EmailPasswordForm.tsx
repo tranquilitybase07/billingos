@@ -12,10 +12,17 @@ import { ViewIcon, ViewOffIcon } from 'hugeicons-react'
 interface EmailPasswordFormProps {
   isSignup?: boolean
   returnTo?: string
+  initialEmail?: string
+  emailLocked?: boolean
 }
 
-export function EmailPasswordForm({ isSignup = false, returnTo }: EmailPasswordFormProps) {
-  const [email, setEmail] = useState('')
+export function EmailPasswordForm({
+  isSignup = false,
+  returnTo,
+  initialEmail = '',
+  emailLocked = false,
+}: EmailPasswordFormProps) {
+  const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -151,7 +158,7 @@ export function EmailPasswordForm({ isSignup = false, returnTo }: EmailPasswordF
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          disabled={isLoading}
+          disabled={isLoading || emailLocked}
           autoComplete="email"
           required
         />

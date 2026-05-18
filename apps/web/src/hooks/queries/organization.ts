@@ -9,7 +9,10 @@ import type {
   SubmitBusinessDetailsDTO,
   PaymentStatus,
   OrganizationMember,
+  OrganizationInvitation,
   InviteMemberDTO,
+  AcceptInvitationResponse,
+  InvitationLookup,
   OnboardingStatusResponse,
 } from "@/lib/api/types";
 
@@ -23,6 +26,9 @@ export const organizationKeys = {
   paymentStatus: (id: string) =>
     [...organizationKeys.detail(id), "payment-status"] as const,
   members: (id: string) => [...organizationKeys.detail(id), "members"] as const,
+  invitations: (id: string) =>
+    [...organizationKeys.detail(id), "invitations"] as const,
+  invitation: (token: string) => ["invitation", token] as const,
   onboardingStatus: (id: string, env: string) =>
     [...organizationKeys.detail(id), "onboarding-status", env] as const,
 };
@@ -131,20 +137,89 @@ export function useListMembers(organizationId: string) {
   });
 }
 
-// Invite Member
+// Invite Member — creates a pending invitation; email is sent server-side.
 export function useInviteMember(organizationId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: InviteMemberDTO) =>
-      api.post<OrganizationMember>(
+      api.post<OrganizationInvitation>(
         `/organizations/${organizationId}/members/invite`,
         data,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: organizationKeys.members(organizationId),
+        queryKey: organizationKeys.invitations(organizationId),
       });
+    },
+  });
+}
+
+// List pending invitations
+export function useListInvitations(organizationId: string) {
+  return useQuery({
+    queryKey: organizationKeys.invitations(organizationId),
+    queryFn: () =>
+      api.get<OrganizationInvitation[]>(
+        `/organizations/${organizationId}/invitations`,
+      ),
+    enabled: !!organizationId,
+  });
+}
+
+// Revoke a pending invitation
+export function useRevokeInvitation(organizationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      api.delete(
+        `/organizations/${organizationId}/invitations/${invitationId}`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: organizationKeys.invitations(organizationId),
+      });
+    },
+  });
+}
+
+// Resend an invitation (rotates token + expiry, re-emails)
+export function useResendInvitation(organizationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      api.post<OrganizationInvitation>(
+        `/organizations/${organizationId}/invitations/${invitationId}/resend`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: organizationKeys.invitations(organizationId),
+      });
+    },
+  });
+}
+
+// Public invitation lookup by raw token (used by /invite/[token])
+export function useInvitationLookup(token: string) {
+  return useQuery({
+    queryKey: organizationKeys.invitation(token),
+    queryFn: () => api.get<InvitationLookup>(`/invitations/${token}`),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+// Accept an invitation (auth required)
+export function useAcceptInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (token: string) =>
+      api.post<AcceptInvitationResponse>(`/invitations/${token}/accept`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
     },
   });
 }
