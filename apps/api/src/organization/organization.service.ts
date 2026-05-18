@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { AccountService } from '../account/account.service';
 import { User } from '../user/entities/user.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -32,6 +33,7 @@ export class OrganizationService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly accountService: AccountService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -280,21 +282,83 @@ export class OrganizationService {
   }
 
   /**
-   * Delete organization (soft delete)
+   * Delete organization end-to-end.
+   *
+   * - Deauthorizes the OAuth-connected Stripe account (Standard). Express is
+   *   paused product-side; reused teardown still handles it for parity with
+   *   the standalone disconnect flow.
+   * - Revokes all session tokens and API keys for the org (SDK calls 401).
+   * - Soft-deletes memberships.
+   * - Soft-deletes the org row and renames the slug so it can be re-used —
+   *   idx_organizations_slug is a full-table UNIQUE index.
+   *
+   * Subscriptions, customers, invoices etc. on the merchant's Stripe account
+   * are deliberately not touched. The UI warns the user that active
+   * subscriptions will keep billing through Stripe.
    */
   async remove(id: string, userId: string): Promise<void> {
     const supabase = this.supabaseService.getClient();
 
-    // Only admin can delete
     await this.checkIsAdmin(id, userId);
 
-    const { error } = await supabase
+    const { data: org, error: loadErr } = await supabase
       .from('organizations')
-      .update({ deleted_at: new Date().toISOString() })
+      .select('id, slug, account_id')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (loadErr || !org) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (org.account_id) {
+      await this.accountService.teardownForOrganizationDelete(id, userId);
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: tokenErr } = await supabase
+      .from('session_tokens')
+      .update({ revoked_at: now })
+      .eq('organization_id', id)
+      .is('revoked_at', null);
+
+    if (tokenErr) {
+      this.logger.error('Failed to revoke session tokens:', tokenErr);
+      throw new Error('Failed to revoke session tokens');
+    }
+
+    const { error: keyErr } = await supabase
+      .from('api_keys')
+      .update({ revoked_at: now })
+      .eq('organization_id', id)
+      .is('revoked_at', null);
+
+    if (keyErr) {
+      this.logger.error('Failed to revoke API keys:', keyErr);
+      throw new Error('Failed to revoke API keys');
+    }
+
+    const { error: memberErr } = await supabase
+      .from('user_organizations')
+      .update({ deleted_at: now })
+      .eq('organization_id', id)
+      .is('deleted_at', null);
+
+    if (memberErr) {
+      this.logger.error('Failed to soft-delete memberships:', memberErr);
+      throw new Error('Failed to soft-delete memberships');
+    }
+
+    const freedSlug = `${org.slug}-deleted-${Date.now()}`;
+    const { error: delErr } = await supabase
+      .from('organizations')
+      .update({ deleted_at: now, slug: freedSlug })
       .eq('id', id);
 
-    if (error) {
-      this.logger.error('Failed to delete organization:', error);
+    if (delErr) {
+      this.logger.error('Failed to soft-delete organization:', delErr);
       throw new Error('Failed to delete organization');
     }
 

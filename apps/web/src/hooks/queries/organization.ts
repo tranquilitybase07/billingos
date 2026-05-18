@@ -88,9 +88,11 @@ export function useDeleteOrganization(id: string) {
 
   return useMutation({
     mutationFn: () => api.delete(`/organizations/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
+    onSuccess: async () => {
       queryClient.removeQueries({ queryKey: organizationKeys.detail(id) });
+      await queryClient.invalidateQueries({
+        queryKey: organizationKeys.lists(),
+      });
     },
   });
 }
