@@ -32,8 +32,7 @@ export function DeleteOrgDialog({
   hasStripeAccount,
 }: DeleteOrgDialogProps) {
   const [confirmText, setConfirmText] = useState('')
-  const canConfirm =
-    confirmText.trim().toLowerCase() === orgName.trim().toLowerCase()
+  const canConfirm = confirmText === orgName
 
   const handleOpenChange = (next: boolean) => {
     if (!next) setConfirmText('')

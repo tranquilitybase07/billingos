@@ -483,6 +483,13 @@ export class AccountService {
       return;
     }
 
+    if (!account.stripe_id) {
+      this.logger.warn(
+        `Account ${account.id} for org ${organizationId} has no stripe_id — skipping Stripe teardown, deletion will continue`,
+      );
+      return;
+    }
+
     await this.teardownConnectedAccount(account, organizationId, triggeredBy);
   }
 

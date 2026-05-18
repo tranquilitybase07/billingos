@@ -355,7 +355,8 @@ export class OrganizationService {
     const { error: delErr } = await supabase
       .from('organizations')
       .update({ deleted_at: now, slug: freedSlug })
-      .eq('id', id);
+      .eq('id', id)
+      .is('deleted_at', null);
 
     if (delErr) {
       this.logger.error('Failed to soft-delete organization:', delErr);
@@ -975,7 +976,13 @@ export class OrganizationService {
   }
 
   /**
-   * Helper: Check if user is admin
+   * Helper: Check if user is admin.
+   *
+   * Once a Stripe account is connected, the account's `admin_id` is the
+   * sole admin. Before Stripe is connected there's no role distinction in
+   * the data model, so any active member is treated as an admin — without
+   * this fallback, orgs in the "created" state become un-administratable
+   * (can't be updated, can't be deleted).
    */
   private async isAdmin(
     organizationId: string,
@@ -983,13 +990,35 @@ export class OrganizationService {
   ): Promise<boolean> {
     const supabase = this.supabaseService.getClient();
 
-    const { data } = await supabase
+    const { data: org } = await supabase
       .from('organizations')
-      .select('accounts!inner(admin_id)')
+      .select('account_id')
       .eq('id', organizationId)
-      .single();
+      .is('deleted_at', null)
+      .maybeSingle();
 
-    return data?.accounts?.admin_id === userId;
+    if (!org) return false;
+
+    if (org.account_id) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('admin_id')
+        .eq('id', org.account_id)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      return account?.admin_id === userId;
+    }
+
+    const { data: membership } = await supabase
+      .from('user_organizations')
+      .select('user_id')
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    return !!membership;
   }
 
   /**
