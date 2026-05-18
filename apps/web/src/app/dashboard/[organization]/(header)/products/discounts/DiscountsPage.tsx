@@ -263,7 +263,7 @@ const ClientPage: React.FC<ClientPageProps> = ({
   ]
 
   return (
-    <DashboardBody wide>
+    <DashboardBody>
       <div className="flex flex-col gap-8">
         <div>
           <h1 className="text-2xl font-semibold">Coupons</h1>

@@ -16,7 +16,6 @@ import {
   useDisconnectAccount,
   useGetOAuthUrl,
 } from '@/hooks/queries/account'
-import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,7 +39,6 @@ import {
 } from 'hugeicons-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { SettingsTabNav } from '../_components/SettingsTabNav'
 import { InfoRow } from './_components/InfoRow'
 import { CurrencySelector } from './_components/CurrencySelector'
 import { DisconnectAccountDialog } from './_components/DisconnectAccountDialog'
@@ -222,21 +220,16 @@ export default function BillingPage() {
 
   if (isLoading) {
     return (
-      <DashboardBody className="gap-6">
-        <SettingsTabNav activeTab="billing" />
-        <div className="flex items-center justify-center py-12">
-          <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
-        </div>
-      </DashboardBody>
+      <div className="flex items-center justify-center py-12">
+        <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
+      </div>
     )
   }
 
   // State A: Account Active
   if (hasAccount && isAccountActive) {
     return (
-      <DashboardBody className="gap-6">
-        <SettingsTabNav activeTab="billing" />
-
+      <>
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -319,15 +312,14 @@ export default function BillingPage() {
             </CardContent>
           </Card>
         )}
-      </DashboardBody>
+      </>
     )
   }
 
   // State B: Account Pending (exists but not fully onboarded)
   if (hasAccount && !isAccountActive) {
     return (
-      <DashboardBody className="gap-6">
-        <SettingsTabNav activeTab="billing" />
+      <>
 
         <Card>
           <CardHeader>
@@ -398,14 +390,13 @@ export default function BillingPage() {
           isPending={disconnectAccount.isPending}
           connectionType={isStandardConnection ? 'standard' : 'express'}
         />
-      </DashboardBody>
+      </>
     )
   }
 
   // State C: No Account — choose a connection mode
   return (
-    <DashboardBody className="gap-6">
-      <SettingsTabNav activeTab="billing" />
+    <>
 
       <Card>
         <CardHeader>
@@ -617,6 +608,6 @@ export default function BillingPage() {
           </div>
         </CardContent>
       </Card>
-    </DashboardBody>
+    </>
   )
 }

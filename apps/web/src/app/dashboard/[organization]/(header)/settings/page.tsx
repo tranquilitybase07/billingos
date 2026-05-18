@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { useUpdateOrganization, useDeleteOrganization } from '@/hooks/queries/organization'
-import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +22,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Loading03Icon, Delete02Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
-import { SettingsTabNav } from './_components/SettingsTabNav'
 import { OrgAvatarUpload } from './_components/OrgAvatarUpload'
 
 export default function SettingsPage() {
@@ -78,9 +76,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <DashboardBody className="gap-6">
-      <SettingsTabNav activeTab="general" />
-
+    <>
       {/* Organization Profile */}
       <Card>
         <CardHeader>
@@ -206,6 +202,6 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-    </DashboardBody>
+    </>
   )
 }

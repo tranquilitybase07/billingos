@@ -8,7 +8,6 @@ import {
   useInviteMember,
   useRemoveMember,
 } from '@/hooks/queries/organization'
-import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,7 +49,6 @@ import {
   UserMultiple02Icon,
 } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
-import { SettingsTabNav } from '../_components/SettingsTabNav'
 
 export default function MembersPage() {
   const { organization } = useOrganization()
@@ -105,18 +103,14 @@ export default function MembersPage() {
 
   if (isLoading) {
     return (
-      <DashboardBody>
-        <div className="flex items-center justify-center py-12">
-          <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
-        </div>
-      </DashboardBody>
+      <div className="flex items-center justify-center py-12">
+        <Loading03Icon size={32} className="animate-spin text-muted-foreground" />
+      </div>
     )
   }
 
   return (
-    <DashboardBody className="gap-6">
-      <SettingsTabNav activeTab="members" />
-
+    <>
       {/* Members Table */}
       <Card>
         <CardHeader>
@@ -301,6 +295,6 @@ export default function MembersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardBody>
+    </>
   )
 }

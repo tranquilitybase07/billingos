@@ -57,10 +57,16 @@ export const DashboardBody = (props: {
     className,
     contextView,
     contextViewClassName,
+    wide,
   } = props
 
   return (
-    <div className="flex h-full w-full flex-row gap-4 p-4">
+    <div
+      className={cn(
+        'mx-auto flex h-full w-full flex-row gap-4 p-4',
+        !wide && 'max-w-screen-2xl',
+      )}
+    >
       {/* Main content */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Page content */}

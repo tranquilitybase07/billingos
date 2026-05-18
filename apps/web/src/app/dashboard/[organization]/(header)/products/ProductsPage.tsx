@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { PlusSignIcon } from 'hugeicons-react'
 
 import { DashboardBody } from '@/components/Layout/DashboardLayout'
+import { useDebounce } from '@/hooks/use-debounce'
 import { useProducts } from '@/hooks/queries/products'
 import {
   DataTable,
@@ -93,6 +94,7 @@ export default function ClientPage({
   query: string | undefined
 }) {
   const [query, setQuery] = useState(_query || '')
+  const debouncedQuery = useDebounce(query, 300)
   const [showTab, setShowTab] = useState<ShowTab>('Active')
 
   const router = useRouter()
@@ -110,21 +112,27 @@ export default function ClientPage({
 
   const onSortingChange: React.ComponentProps<typeof DataTable>['onSortingChange'] = (updater) => {
     const next = typeof updater === 'function' ? updater(sorting) : updater
-    updateUrl({ ...pagination, pageIndex: 0 }, next, query)
+    updateUrl({ ...pagination, pageIndex: 0 }, next, debouncedQuery)
   }
 
   const onPaginationChange: React.ComponentProps<typeof DataTable>['onPaginationChange'] = (updater) => {
     const next = typeof updater === 'function' ? updater(pagination) : updater
-    updateUrl(next, sorting, query)
+    updateUrl(next, sorting, debouncedQuery)
   }
 
   const onQueryChange = (next: string) => {
     setQuery(next)
-    updateUrl({ ...pagination, pageIndex: 0 }, sorting, next)
   }
 
+  const lastSyncedQuery = useRef(_query || '')
+  useEffect(() => {
+    if (lastSyncedQuery.current === debouncedQuery) return
+    lastSyncedQuery.current = debouncedQuery
+    updateUrl({ ...pagination, pageIndex: 0 }, sorting, debouncedQuery)
+  }, [debouncedQuery, pagination, sorting, updateUrl])
+
   const products = useProducts(organizationId, {
-    query,
+    query: debouncedQuery,
     page: pagination.pageIndex + 1,
     limit: pagination.pageSize,
     sorting: sortingStateToQueryParam(sorting),
@@ -315,7 +323,7 @@ export default function ClientPage({
             <TableEmptyState
               title="No products found"
               description={
-                query || showTab !== 'Active'
+                debouncedQuery || showTab !== 'Active'
                   ? 'No products match your current filters.'
                   : 'Start selling digital products today.'
               }

@@ -7,7 +7,6 @@ import {
   useCreateApiKey,
   useRevokeApiKey,
 } from '@/hooks/queries/api-keys'
-import { DashboardBody } from '@/components/Layout/DashboardLayout'
 import {
   Card,
   CardContent,
@@ -59,7 +58,6 @@ import {
 } from 'hugeicons-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { ApiKey, ApiKeyPairCreated, CreateApiKeyDTO } from '@/lib/api/types'
-import { SettingsTabNav } from '../_components/SettingsTabNav'
 
 export default function ApiKeysPage() {
   const { organization } = useOrganization()
@@ -202,9 +200,7 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <DashboardBody className="space-y-6">
-      <SettingsTabNav activeTab="api-keys" />
-
+    <>
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">API Keys</h2>
@@ -484,6 +480,6 @@ import { BillingOSProvider } from '@billingos/react'
           </div>
         </CardContent>
       </Card>
-    </DashboardBody>
+    </>
   )
 }
