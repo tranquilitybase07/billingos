@@ -12,7 +12,7 @@ export default function SignupPage() {
     <div className="flex h-screen w-full grow items-center justify-center">
       <div className="flex w-full max-w-md flex-col justify-between gap-16 rounded-4xl p-12">
         <div className="flex flex-col items-center">
-          <Logo size={60} />
+          <Logo size={40} />
           <h1 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-white">
             Get started with BillingOS
           </h1>

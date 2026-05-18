@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import GithubLoginButton from './GithubLoginButton';
+// import { useState } from 'react';
+// import GithubLoginButton from './GithubLoginButton';
 import GoogleLoginButton from './GoogleLoginButton';
-import AppleLoginButton from './AppleLoginButton';
-import MagicLinkForm from './MagicLinkForm';
+// import AppleLoginButton from './AppleLoginButton';
+// import MagicLinkForm from './MagicLinkForm';
 import { EmailPasswordForm } from './EmailPasswordForm';
 import LabeledSeparator from '@/components/atoms/LabeledSeparator';
 import Link from 'next/link';
-import { ArrowDown01Icon, ArrowUp01Icon } from 'hugeicons-react';
+// import { ArrowDown01Icon, ArrowUp01Icon } from 'hugeicons-react';
 
 interface LoginProps {
   returnTo?: string;
@@ -16,7 +16,7 @@ interface LoginProps {
 }
 
 export default function Login({ returnTo, isSignup = false }: LoginProps) {
-  const [showMagicLink, setShowMagicLink] = useState(false);
+  // const [showMagicLink, setShowMagicLink] = useState(false);
 
   return (
     <div className="flex flex-col gap-y-6">
@@ -26,6 +26,7 @@ export default function Login({ returnTo, isSignup = false }: LoginProps) {
       </div>
 
       {/* SECONDARY: Magic Link (Collapsible) */}
+      {/*
       <div className="flex w-full flex-col gap-y-3">
         <LabeledSeparator label="OR" />
 
@@ -48,19 +49,15 @@ export default function Login({ returnTo, isSignup = false }: LoginProps) {
           </div>
         )}
       </div>
+      */}
 
-      {/* TERTIARY: OAuth Providers (Icon-only) */}
+      {/* TERTIARY: OAuth Providers */}
       <div className="flex w-full flex-col gap-y-3">
         <LabeledSeparator label="OR" />
 
-        <div className="flex items-center justify-center gap-3">
-          <GoogleLoginButton returnTo={returnTo} variant="icon" />
-          <GithubLoginButton returnTo={returnTo} variant="icon" />
-          <AppleLoginButton returnTo={returnTo} variant="icon" />
-        </div>
-        <p className="text-center text-xs text-muted-foreground">
-          Continue with social
-        </p>
+        <GoogleLoginButton returnTo={returnTo} fullWidth />
+        {/* <GithubLoginButton returnTo={returnTo} variant="icon" /> */}
+        {/* <AppleLoginButton returnTo={returnTo} variant="icon" /> */}
       </div>
 
       {/* Terms of Service */}
