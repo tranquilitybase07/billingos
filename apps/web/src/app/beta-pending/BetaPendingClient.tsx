@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -67,15 +67,6 @@ export function BetaPendingClient() {
     useState<SubscriptionType | null>(null);
   const [userCount, setUserCount] = useState<UserCount | null>(null);
   const [website, setWebsite] = useState('');
-
-  useEffect(() => {
-    if (!user?.beta_application) return;
-    const app = user.beta_application;
-    setBuilding(app.building ?? '');
-    setSubscriptionType(app.subscription_type ?? null);
-    setUserCount(app.user_count ?? null);
-    setWebsite(app.website ?? '');
-  }, [user]);
 
   const submitApplication = useMutation({
     mutationFn: (payload: Record<string, string>) =>
@@ -193,15 +184,15 @@ export function BetaPendingClient() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-6 py-14">
-      <div className="w-full max-w-xl space-y-10">
-        <div className="flex flex-col items-center gap-5">
-          <Logo size={48} />
-          <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">
+    <div className="min-h-screen flex flex-col items-center px-6 py-6 sm:py-8">
+      <div className="w-full max-w-xl space-y-5 sm:space-y-6">
+        <div className="flex flex-col items-center gap-3">
+          <Logo size={36} />
+          <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-0.5 text-xs font-medium text-blue-400">
             Private Beta
           </span>
-          <div className="text-center space-y-3">
-            <h1 className="text-4xl font-semibold tracking-tight">
+          <div className="text-center space-y-1.5">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
               You’re almost in
             </h1>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -211,11 +202,11 @@ export function BetaPendingClient() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+          <div className="space-y-1.5">
             <label
               htmlFor="building"
-              className="block text-base font-medium text-foreground"
+              className="block text-sm font-medium text-foreground"
             >
               What are you building?
             </label>
@@ -226,13 +217,13 @@ export function BetaPendingClient() {
               placeholder="Briefly describe your product or company..."
               required
               maxLength={2000}
-              rows={5}
+              rows={3}
               className="resize-none"
             />
           </div>
 
-          <div className="space-y-3">
-            <label className="block text-base font-medium text-foreground">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground">
               What kind of subscriptions?
             </label>
             <div className="flex flex-wrap gap-2">
@@ -248,8 +239,8 @@ export function BetaPendingClient() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <label className="block text-base font-medium text-foreground">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground">
               How many users do you already have?
             </label>
             <div className="flex flex-wrap gap-2">
@@ -265,10 +256,10 @@ export function BetaPendingClient() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <label
               htmlFor="website"
-              className="block text-base font-medium text-foreground"
+              className="block text-sm font-medium text-foreground"
             >
               Website <span className="text-muted-foreground">(optional)</span>
             </label>
@@ -283,14 +274,14 @@ export function BetaPendingClient() {
 
           <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white text-base py-6 rounded-lg"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-5 rounded-lg"
             disabled={!canSubmit}
           >
             {submitApplication.isPending ? 'Submitting…' : 'Join the waitlist'}
           </Button>
         </form>
 
-        <div className="flex items-center justify-between pt-4 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
           <button
             type="button"
             onClick={handleSignOut}
@@ -329,7 +320,7 @@ function PillButton({
         'rounded-full px-4 py-2 text-sm border transition-colors',
         'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
         selected &&
-          'border-blue-500 bg-blue-500/15 text-foreground hover:bg-blue-500/20',
+        'border-blue-500 bg-blue-500/15 text-foreground hover:bg-blue-500/20',
       )}
     >
       {children}
