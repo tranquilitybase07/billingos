@@ -29,6 +29,7 @@ import { SandboxModule } from './sandbox/sandbox.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminModule } from './admin/admin.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { BetaAccessGuard } from './auth/guards/beta-access.guard';
 import {
   getClientIp,
   getContextPath,
@@ -107,6 +108,10 @@ import {
     {
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: BetaAccessGuard,
     },
   ],
 })

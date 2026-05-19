@@ -1,10 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UpdateOnboardingDto, UpdateUserDto } from './dto/user.dto';
+import { SubmitBetaApplicationDto } from './dto/beta-application.dto';
 import { User } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(private supabaseService: SupabaseService) {}
 
   async findById(id: string): Promise<User> {
@@ -62,6 +70,34 @@ export class UserService {
     return this.update(id, {
       accepted_terms_of_service: true,
     });
+  }
+
+  async submitBetaApplication(
+    id: string,
+    dto: SubmitBetaApplicationDto,
+  ): Promise<User> {
+    const supabase = this.supabaseService.getClient();
+
+    const payload = {
+      ...dto,
+      submitted_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ beta_application: payload })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      this.logger.error(
+        `submitBetaApplication failed for user ${id}: ${error?.message ?? 'no row returned'}`,
+      );
+      throw new BadRequestException('Failed to submit beta application');
+    }
+
+    return data as User;
   }
 
   async getOnboarding(userId: string): Promise<{

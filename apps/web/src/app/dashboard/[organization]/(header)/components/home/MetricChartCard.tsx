@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
+import { toPng } from 'html-to-image'
 import { Area, AreaChart, XAxis, YAxis } from 'recharts'
 import { ArrowUpRight01Icon } from 'hugeicons-react'
 import {
@@ -52,9 +53,57 @@ export function MetricChartCard({
     const [selectedBackground, setSelectedBackground] = useState<
         'color' | 'silver'
     >('color')
+    const [isDownloading, setIsDownloading] = useState(false)
+    const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+    const previewRef = useRef<HTMLDivElement>(null)
 
-    const startDate = data[0]?.date || 'Jan 01'
-    const endDate = data[data.length - 1]?.date || 'Dec 31'
+    const formatRangeDate = (raw?: string) => {
+        if (!raw) return ''
+        const [year, month] = raw.split('-')
+        if (!year || !month) return raw
+        const d = new Date(Number(year), Number(month) - 1, 1)
+        return d.toLocaleString('en-US', { month: 'short', year: 'numeric' })
+    }
+
+    const startDate = formatRangeDate(data[0]?.date) || 'Jan 2025'
+    const endDate = formatRangeDate(data[data.length - 1]?.date) || 'Dec 2025'
+
+    const handleDownload = async () => {
+        if (!previewRef.current) return
+        setIsDownloading(true)
+        try {
+            const dataUrl = await toPng(previewRef.current, {
+                cacheBust: true,
+                pixelRatio: 2,
+            })
+            const link = document.createElement('a')
+            link.download = `${title.toLowerCase().replace(/\s+/g, '-')}-billingos.png`
+            link.href = dataUrl
+            link.click()
+        } catch (err) {
+            console.error('Failed to download chart image', err)
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
+    const handleCopy = async () => {
+        if (!previewRef.current) return
+        try {
+            const dataUrl = await toPng(previewRef.current, {
+                cacheBust: true,
+                pixelRatio: 2,
+            })
+            const blob = await (await fetch(dataUrl)).blob()
+            await navigator.clipboard.write([
+                new ClipboardItem({ [blob.type]: blob }),
+            ])
+            setCopyState('copied')
+            setTimeout(() => setCopyState('idle'), 1500)
+        } catch (err) {
+            console.error('Failed to copy chart image', err)
+        }
+    }
 
     return (
         <CardFlat>
@@ -135,8 +184,8 @@ export function MetricChartCard({
 
             {/* Share Modal */}
             <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
-                <DialogContent className="max-w-3xl h-[550px] p-0 overflow-hidden">
-                    <div className="h-full overflow-y-auto p-6 space-y-6">
+                <DialogContent className="max-w-3xl p-0 overflow-hidden">
+                    <div className="p-6 space-y-6">
                         <DialogHeader>
                             <DialogTitle className="text-sm font-medium">
                                 Share {title} Metric
@@ -144,7 +193,7 @@ export function MetricChartCard({
                         </DialogHeader>
 
                         {/* Preview Card */}
-                        <div className="rounded-2xl p-8 relative overflow-hidden min-h-[400px]">
+                        <div ref={previewRef} className="rounded-2xl p-6 relative overflow-hidden">
                             <Image
                                 src={
                                     selectedBackground === 'color'
@@ -156,77 +205,83 @@ export function MetricChartCard({
                                 unoptimized
                                 className="object-cover rounded-2xl"
                             />
-                            <div className="relative rounded-xl bg-gradient-to-b from-gray-800 to-gray-950 p-8">
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium text-white">
+                            <div className="relative rounded-xl bg-gradient-to-b from-gray-800 to-gray-950 p-6 pb-4">
+                                <div className="space-y-3">
+                                    <h3 className="text-base font-medium text-white">
                                         {title}
                                     </h3>
-                                    <div className="text-4xl font-light text-white">{value || '$0'}</div>
+                                    <div className="text-3xl font-light text-white">{value || '$0'}</div>
                                     <div className="flex items-center gap-2 text-sm text-white/60">
                                         <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                                        <span>{startDate} - {endDate}</span>
+                                        <span>{startDate} – {endDate}</span>
                                     </div>
 
                                     {/* Chart Preview */}
-                                    <div className="relative h-32 mt-8 w-full">
-                                        <ChartContainer config={config} className="h-full w-full aspect-auto">
-                                            <AreaChart
-                                                accessibilityLayer
-                                                data={data}
-                                                margin={{
-                                                    left: 0,
-                                                    right: 0,
-                                                    top: 0,
-                                                    bottom: 0,
-                                                }}
-                                            >
-                                                <defs>
-                                                    <linearGradient id={`fillPreview${title.replace(/\s+/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                                                        <stop
-                                                            offset="5%"
-                                                            stopColor={config[dataKey]?.color || `var(--color-${dataKey})`}
-                                                            stopOpacity={0.3}
-                                                        />
-                                                        <stop
-                                                            offset="95%"
-                                                            stopColor={config[dataKey]?.color || `var(--color-${dataKey})`}
-                                                            stopOpacity={0}
-                                                        />
-                                                    </linearGradient>
-                                                </defs>
-                                                <Area
-                                                    dataKey={dataKey}
-                                                    type="monotone"
-                                                    fill={`url(#fillPreview${title.replace(/\s+/g, '')})`}
-                                                    fillOpacity={0.4}
-                                                    stroke={config[dataKey]?.color || `var(--color-${dataKey})`}
-                                                    strokeWidth={2}
-                                                />
-                                            </AreaChart>
-                                        </ChartContainer>
-                                        <div className="absolute bottom-0 left-0 text-xs text-white/40 translate-y-full pt-2">
-                                            {startDate}
+                                    <div className="mt-6 w-full">
+                                        <div className="relative h-24 w-full">
+                                            <ChartContainer config={config} className="h-full w-full aspect-auto">
+                                                <AreaChart
+                                                    accessibilityLayer
+                                                    data={data}
+                                                    margin={{
+                                                        left: 0,
+                                                        right: 0,
+                                                        top: 0,
+                                                        bottom: 0,
+                                                    }}
+                                                >
+                                                    <defs>
+                                                        <linearGradient id={`fillPreview${title.replace(/\s+/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+                                                            <stop
+                                                                offset="5%"
+                                                                stopColor={config[dataKey]?.color || `var(--color-${dataKey})`}
+                                                                stopOpacity={0.3}
+                                                            />
+                                                            <stop
+                                                                offset="95%"
+                                                                stopColor={config[dataKey]?.color || `var(--color-${dataKey})`}
+                                                                stopOpacity={0}
+                                                            />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <Area
+                                                        dataKey={dataKey}
+                                                        type="monotone"
+                                                        fill={`url(#fillPreview${title.replace(/\s+/g, '')})`}
+                                                        fillOpacity={0.4}
+                                                        stroke={config[dataKey]?.color || `var(--color-${dataKey})`}
+                                                        strokeWidth={2}
+                                                    />
+                                                </AreaChart>
+                                            </ChartContainer>
                                         </div>
-                                        <div className="absolute bottom-0 right-0 text-xs text-white/40 translate-y-full pt-2">
-                                            {endDate}
+                                        <div className="mt-3 flex items-center justify-between text-xs text-white/40">
+                                            <span>{startDate}</span>
+                                            <span>{endDate}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Branding */}
-                            <div className="relative mt-10 flex items-center justify-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                                    <div className="h-6 w-6 rounded-full border-2 border-white"></div>
-                                </div>
-                                <span className="text-3xl font-medium text-white">
-                                    Billing OS
+                            <div className="relative mt-6 flex items-center justify-center gap-2">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 217 218"
+                                    fill="none"
+                                    className="h-6 w-6"
+                                >
+                                    <path d="M41.5 193.5L22 174.5L73.5 121.5H0.5V94H75L21.5 42L41 22L93.5 74.5V0.5H122V74.5L174.5 22L194 42L142 94H216.5V122H126C123.381 123.252 122.422 124.382 122 127.5V217H93.5V142L41.5 193.5Z" fill="#1570EF" stroke="#1570EF" />
+                                    <rect x="159.016" y="139.862" width="54.2889" height="28.145" rx="14.0725" transform="rotate(44 159.016 139.862)" fill="white" />
+                                </svg>
+                                <span className="text-xl font-semibold tracking-tight text-white">
+                                    BillingOS
                                 </span>
                             </div>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center justify-between mt-6">
+                        <div className="flex items-center justify-between">
                             <div className="flex gap-2">
                                 <TooltipProvider>
                                     <Tooltip>
@@ -281,10 +336,17 @@ export function MetricChartCard({
                                 <Button
                                     variant="ghost"
                                     className="hover:bg-base hover:cursor-pointer"
+                                    onClick={handleCopy}
                                 >
-                                    Copy
+                                    {copyState === 'copied' ? 'Copied!' : 'Copy'}
                                 </Button>
-                                <Button className="hover:cursor-pointer">Download</Button>
+                                <Button
+                                    className="hover:cursor-pointer"
+                                    onClick={handleDownload}
+                                    disabled={isDownloading}
+                                >
+                                    {isDownloading ? 'Downloading...' : 'Download'}
+                                </Button>
                             </div>
                         </div>
                     </div>

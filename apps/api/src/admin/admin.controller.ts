@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
@@ -12,6 +13,7 @@ import { AdminTokenGuard } from './guards/admin-token.guard';
 import { ReplayWebhookDto } from './dto/replay-webhook.dto';
 import { ReconcileDto } from './dto/reconcile.dto';
 import { CopyProductsDto } from './dto/copy-products.dto';
+import { ListBetaApplicationsDto } from './dto/list-beta-applications.dto';
 
 /**
  * Admin operations called from the billingos-admin dashboard. Every endpoint
@@ -87,5 +89,35 @@ export class AdminController {
       sourceOrgId: dto.source_org_id,
       targetOrgId: dto.target_org_id,
     });
+  }
+
+  /**
+   * List users awaiting private-beta approval. Defaults to status=pending.
+   * Used by ops to triage the waitlist.
+   */
+  @Get('beta-applications')
+  async listBetaApplications(@Query() query: ListBetaApplicationsDto) {
+    return this.adminService.listBetaApplications({
+      status: query.status ?? 'pending',
+      limit: query.limit ?? 50,
+    });
+  }
+
+  /**
+   * Approve a user for the private beta. Idempotent. The admin dashboard
+   * records the operator + reason in `admin_audit_log` before calling this,
+   * so no body is needed here.
+   */
+  @Post('users/:id/approve')
+  async approveUser(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.adminService.setAccessStatus(id, 'approved');
+  }
+
+  /**
+   * Deny a user. Idempotent.
+   */
+  @Post('users/:id/deny')
+  async denyUser(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.adminService.setAccessStatus(id, 'denied');
   }
 }
