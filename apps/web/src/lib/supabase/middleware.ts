@@ -68,24 +68,12 @@ export async function updateSession(request: NextRequest) {
   // pending/denied accounts to /beta-pending. Cost is one row read per
   // authenticated request while the flag is on; the gate disappears entirely
   // when PRIVATE_BETA_ENABLED is unset/false.
-  const betaEnabled = isPrivateBetaEnabled();
-  console.log(
-    `[beta-gate] path=${request.nextUrl.pathname} user=${user?.id ?? "anon"} ` +
-      `enabled=${betaEnabled} (PRIVATE_BETA_ENABLED=${JSON.stringify(process.env.PRIVATE_BETA_ENABLED)})`,
-  );
-
-  if (user && betaEnabled) {
-    const { data: profile, error: profileError } = await supabase
+  if (user && isPrivateBetaEnabled()) {
+    const { data: profile } = await supabase
       .from("users")
       .select("access_status, is_admin")
       .eq("id", user.id)
       .maybeSingle();
-
-    console.log(
-      `[beta-gate] profile lookup user=${user.id} ` +
-        `error=${profileError?.message ?? "none"} ` +
-        `profile=${JSON.stringify(profile)}`,
-    );
 
     // Fail closed: if we can't determine the user's status, treat them as
     // pending. Otherwise a transient DB error would silently bypass the gate.
@@ -93,9 +81,6 @@ export async function updateSession(request: NextRequest) {
       !!profile && (profile.is_admin || profile.access_status === "approved");
 
     if (!isApproved && !isBetaPending && !isAuthPage) {
-      console.log(
-        `[beta-gate] -> redirect ${request.nextUrl.pathname} → ${BETA_PENDING_PATH}`,
-      );
       const url = request.nextUrl.clone();
       url.pathname = BETA_PENDING_PATH;
       return NextResponse.redirect(url);

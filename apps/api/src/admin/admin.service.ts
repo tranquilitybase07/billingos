@@ -1,5 +1,6 @@
 import {
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   BadRequestException,
@@ -330,7 +331,12 @@ export class AdminService {
       .order('created_at', { ascending: false })
       .limit(args.limit);
 
-    if (error) throw new BadRequestException(error.message);
+    if (error) {
+      this.logger.error(`listBetaApplications failed: ${error.message}`);
+      throw new InternalServerErrorException(
+        'Failed to list beta applications',
+      );
+    }
     return { users: data ?? [] };
   }
 
@@ -338,10 +344,7 @@ export class AdminService {
    * Set a user's `access_status`. Idempotent — repeats are safe and just
    * refresh `access_status_updated_at`.
    */
-  async setAccessStatus(
-    userId: string,
-    status: 'approved' | 'denied',
-  ) {
+  async setAccessStatus(userId: string, status: 'approved' | 'denied') {
     const supabase = this.supabaseService.getClient();
 
     const { data, error } = await supabase
@@ -355,7 +358,14 @@ export class AdminService {
       .select('id, email, access_status, access_status_updated_at')
       .maybeSingle();
 
-    if (error) throw new BadRequestException(error.message);
+    if (error) {
+      this.logger.error(
+        `setAccessStatus(${status}) for ${userId} failed: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to update user access status',
+      );
+    }
     if (!data) throw new NotFoundException(`User ${userId} not found`);
 
     this.logger.log(
@@ -411,9 +421,7 @@ export class AdminService {
       .eq('organization_id', input.targetOrgId)
       .eq('is_archived', false);
 
-    const collisionNames = new Set(
-      (targetExisting ?? []).map((p) => p.name as string),
-    );
+    const collisionNames = new Set((targetExisting ?? []).map((p) => p.name));
 
     const featureCache = new Map<
       string,

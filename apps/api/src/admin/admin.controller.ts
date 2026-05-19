@@ -13,7 +13,6 @@ import { AdminTokenGuard } from './guards/admin-token.guard';
 import { ReplayWebhookDto } from './dto/replay-webhook.dto';
 import { ReconcileDto } from './dto/reconcile.dto';
 import { CopyProductsDto } from './dto/copy-products.dto';
-import { AccessDecisionDto } from './dto/access-decision.dto';
 import { ListBetaApplicationsDto } from './dto/list-beta-applications.dto';
 
 /**
@@ -105,13 +104,12 @@ export class AdminController {
   }
 
   /**
-   * Approve a user for the private beta. Idempotent.
+   * Approve a user for the private beta. Idempotent. The admin dashboard
+   * records the operator + reason in `admin_audit_log` before calling this,
+   * so no body is needed here.
    */
   @Post('users/:id/approve')
-  async approveUser(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() _dto: AccessDecisionDto,
-  ) {
+  async approveUser(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.adminService.setAccessStatus(id, 'approved');
   }
 
@@ -119,10 +117,7 @@ export class AdminController {
    * Deny a user. Idempotent.
    */
   @Post('users/:id/deny')
-  async denyUser(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() _dto: AccessDecisionDto,
-  ) {
+  async denyUser(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.adminService.setAccessStatus(id, 'denied');
   }
 }

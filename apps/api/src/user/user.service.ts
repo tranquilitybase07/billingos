@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UpdateOnboardingDto, UpdateUserDto } from './dto/user.dto';
 import { SubmitBetaApplicationDto } from './dto/beta-application.dto';
@@ -6,6 +11,8 @@ import { User } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(private supabaseService: SupabaseService) {}
 
   async findById(id: string): Promise<User> {
@@ -84,9 +91,10 @@ export class UserService {
       .single();
 
     if (error || !data) {
-      throw new Error(
-        `Failed to submit beta application: ${error?.message ?? 'no row'}`,
+      this.logger.error(
+        `submitBetaApplication failed for user ${id}: ${error?.message ?? 'no row returned'}`,
       );
+      throw new BadRequestException('Failed to submit beta application');
     }
 
     return data as User;
