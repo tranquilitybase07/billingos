@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UpdateOnboardingDto, UpdateUserDto } from './dto/user.dto';
+import { SubmitBetaApplicationDto } from './dto/beta-application.dto';
 import { User } from './entities/user.entity';
 
 @Injectable()
@@ -62,6 +63,33 @@ export class UserService {
     return this.update(id, {
       accepted_terms_of_service: true,
     });
+  }
+
+  async submitBetaApplication(
+    id: string,
+    dto: SubmitBetaApplicationDto,
+  ): Promise<User> {
+    const supabase = this.supabaseService.getClient();
+
+    const payload = {
+      ...dto,
+      submitted_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ beta_application: payload })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `Failed to submit beta application: ${error?.message ?? 'no row'}`,
+      );
+    }
+
+    return data as User;
   }
 
   async getOnboarding(userId: string): Promise<{

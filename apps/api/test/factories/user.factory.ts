@@ -12,6 +12,7 @@ export interface UserFactoryParams {
   avatar_url?: string;
   is_admin: boolean;
   accepted_terms_of_service: boolean;
+  access_status: 'pending' | 'approved' | 'denied';
   meta: Record<string, any>;
   onboarding_step: string;
   onboarding_answers: Record<string, unknown>;
@@ -30,6 +31,7 @@ export const userFactory = Factory.define<UserFactoryParams>(
       avatar_url: params?.avatar_url ?? mockData.url('/avatar.jpg'),
       is_admin: params?.is_admin ?? false,
       accepted_terms_of_service: params?.accepted_terms_of_service ?? true,
+      access_status: params?.access_status ?? 'approved',
       meta: params?.meta || {},
       onboarding_step: params?.onboarding_step || 'questions',
       onboarding_answers: params?.onboarding_answers || {},

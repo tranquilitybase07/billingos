@@ -5,6 +5,12 @@ const LAST_VISITED_ORG_COOKIE = "billingos_last_org";
 const ENVIRONMENT_COOKIE = "billingos-environment";
 const ONBOARDING_STEP_COOKIE = "billingos_onboarding_step";
 
+const BETA_PENDING_PATH = "/beta-pending";
+
+function isPrivateBetaEnabled(): boolean {
+  return process.env.PRIVATE_BETA_ENABLED?.trim().toLowerCase() === "true";
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -47,6 +53,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/auth");
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
   const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
+  const isBetaPending = request.nextUrl.pathname.startsWith(BETA_PENDING_PATH);
   const onboardingStep = request.cookies.get(ONBOARDING_STEP_COOKIE)?.value;
   const hasOnboarded = onboardingStep === 'complete';
 
@@ -54,6 +61,55 @@ export async function updateSession(request: NextRequest) {
     // Redirect to login if accessing dashboard without auth
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Private beta gate: pull access_status for the signed-in user and route
+  // pending/denied accounts to /beta-pending. Cost is one row read per
+  // authenticated request while the flag is on; the gate disappears entirely
+  // when PRIVATE_BETA_ENABLED is unset/false.
+  const betaEnabled = isPrivateBetaEnabled();
+  console.log(
+    `[beta-gate] path=${request.nextUrl.pathname} user=${user?.id ?? "anon"} ` +
+      `enabled=${betaEnabled} (PRIVATE_BETA_ENABLED=${JSON.stringify(process.env.PRIVATE_BETA_ENABLED)})`,
+  );
+
+  if (user && betaEnabled) {
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("access_status, is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    console.log(
+      `[beta-gate] profile lookup user=${user.id} ` +
+        `error=${profileError?.message ?? "none"} ` +
+        `profile=${JSON.stringify(profile)}`,
+    );
+
+    // Fail closed: if we can't determine the user's status, treat them as
+    // pending. Otherwise a transient DB error would silently bypass the gate.
+    const isApproved =
+      !!profile && (profile.is_admin || profile.access_status === "approved");
+
+    if (!isApproved && !isBetaPending && !isAuthPage) {
+      console.log(
+        `[beta-gate] -> redirect ${request.nextUrl.pathname} → ${BETA_PENDING_PATH}`,
+      );
+      const url = request.nextUrl.clone();
+      url.pathname = BETA_PENDING_PATH;
+      return NextResponse.redirect(url);
+    }
+
+    if (isApproved && isBetaPending) {
+      const url = request.nextUrl.clone();
+      url.pathname = hasOnboarded ? "/dashboard" : "/onboarding";
+      return NextResponse.redirect(url);
+    }
+  } else if (user && isBetaPending) {
+    // Gate is off — nobody should hang out on the pending page.
+    const url = request.nextUrl.clone();
+    url.pathname = hasOnboarded ? "/dashboard" : "/onboarding";
     return NextResponse.redirect(url);
   }
 
@@ -75,6 +131,13 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect unauthenticated users away from onboarding
   if (!user && isOnboarding) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect unauthenticated users away from beta-pending
+  if (!user && isBetaPending) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

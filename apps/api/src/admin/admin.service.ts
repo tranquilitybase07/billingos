@@ -310,6 +310,61 @@ export class AdminService {
     };
   }
 
+  /**
+   * List users by access_status for private-beta triage. Returns the user
+   * row + the submitted beta_application payload (if any), most recent first.
+   */
+  async listBetaApplications(args: {
+    status: 'pending' | 'approved' | 'denied';
+    limit: number;
+  }) {
+    const supabase = this.supabaseService.getClient();
+
+    const { data, error } = await supabase
+      .from('users')
+      .select(
+        'id, email, created_at, access_status, access_status_updated_at, beta_application',
+      )
+      .eq('access_status', args.status)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(args.limit);
+
+    if (error) throw new BadRequestException(error.message);
+    return { users: data ?? [] };
+  }
+
+  /**
+   * Set a user's `access_status`. Idempotent — repeats are safe and just
+   * refresh `access_status_updated_at`.
+   */
+  async setAccessStatus(
+    userId: string,
+    status: 'approved' | 'denied',
+  ) {
+    const supabase = this.supabaseService.getClient();
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        access_status: status,
+        access_status_updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .select('id, email, access_status, access_status_updated_at')
+      .maybeSingle();
+
+    if (error) throw new BadRequestException(error.message);
+    if (!data) throw new NotFoundException(`User ${userId} not found`);
+
+    this.logger.log(
+      `Admin set access_status=${status} for user ${userId} (${data.email})`,
+    );
+
+    return { ok: true, user: data };
+  }
+
   async copyProducts(input: { sourceOrgId: string; targetOrgId: string }) {
     if (input.sourceOrgId === input.targetOrgId) {
       throw new BadRequestException('source and target must differ');
