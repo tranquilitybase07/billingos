@@ -7,7 +7,9 @@ export const metadata = {
   description: 'Sign in to your BillingOS account',
 };
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams
+
   return (
     <div className="flex h-screen w-full grow items-center justify-center">
       <div className="flex w-full max-w-md flex-col justify-between gap-16 rounded-4xl p-12">
@@ -17,6 +19,13 @@ export default function LoginPage() {
             Welcome back
           </h1>
         </div>
+
+        {error === 'auth_failed' && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Your reset link has expired or is invalid. Please request a new one.
+          </div>
+        )}
+
         <Login />
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{' '}
