@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,9 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     'That reset link is no longer valid. Request a new one below.',
 }
 
-export function ForgotPasswordForm() {
-  const searchParams = useSearchParams()
-  const errorCode = searchParams.get('error')
+export function ForgotPasswordForm({ errorCode }: { errorCode?: string }) {
   const errorMessage = errorCode
     ? ERROR_MESSAGES[errorCode] ?? 'Something went wrong with that link. Request a new one below.'
     : null
@@ -50,10 +47,11 @@ export function ForgotPasswordForm() {
       if (error) throw error
 
       setSent(true)
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined
       toast({
         title: 'Something went wrong',
-        description: error.message || 'Please try again',
+        description: message || 'Please try again',
         variant: 'destructive',
       })
     } finally {

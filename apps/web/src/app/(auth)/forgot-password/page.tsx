@@ -7,7 +7,13 @@ export const metadata = {
   description: 'Reset your BillingOS password',
 }
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
+
   return (
     <div className="flex h-screen w-full grow items-center justify-center">
       <div className="flex w-full max-w-md flex-col justify-between gap-16 rounded-4xl p-12">
@@ -20,7 +26,7 @@ export default function ForgotPasswordPage() {
             Enter your email and we&apos;ll send you a reset link
           </p>
         </div>
-        <ForgotPasswordForm />
+        <ForgotPasswordForm errorCode={error} />
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Remember your password?{' '}
           <Link

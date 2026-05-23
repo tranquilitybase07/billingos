@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
   if (errorCode) {
     const target =
       returnTo === "/reset-password" ? "/forgot-password" : "/login";
-    return NextResponse.redirect(`${origin}${target}?error=${errorCode}`);
+    const params = new URLSearchParams({ error: errorCode });
+    return NextResponse.redirect(`${origin}${target}?${params}`);
   }
 
   if (code) {
