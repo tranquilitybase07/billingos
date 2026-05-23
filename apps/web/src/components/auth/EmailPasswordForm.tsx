@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { ViewIcon, ViewOffIcon } from 'hugeicons-react'
+import Link from 'next/link'
 
 interface EmailPasswordFormProps {
   isSignup?: boolean
@@ -184,10 +185,19 @@ export function EmailPasswordForm({ isSignup = false, returnTo }: EmailPasswordF
             )}
           </button>
         </div>
-        {isSignup && (
+        {isSignup ? (
           <p className="text-xs text-muted-foreground">
             Password must be at least 6 characters long
           </p>
+        ) : (
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
         )}
       </div>
 

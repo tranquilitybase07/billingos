@@ -50,12 +50,13 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/signup") ||
+    request.nextUrl.pathname.startsWith("/forgot-password") ||
     request.nextUrl.pathname.startsWith("/auth");
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
   const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
   const isBetaPending = request.nextUrl.pathname.startsWith(BETA_PENDING_PATH);
   const onboardingStep = request.cookies.get(ONBOARDING_STEP_COOKIE)?.value;
-  const hasOnboarded = onboardingStep === 'complete';
+  const hasOnboarded = onboardingStep === "complete";
 
   if (!user && isDashboard) {
     // Redirect to login if accessing dashboard without auth
