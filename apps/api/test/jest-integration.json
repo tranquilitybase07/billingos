@@ -1,16 +1,19 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "../src",
+  "rootDir": "..",
   "testRegex": ".*\\.integration\\.spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "testEnvironment": "node",
-  "testTimeout": 30000,
+  "testTimeout": 60000,
   "maxWorkers": 1,
+  "globalSetup": "<rootDir>/test/setup/global-setup.ts",
+  "globalTeardown": "<rootDir>/test/setup/global-teardown.ts",
+  "setupFiles": ["<rootDir>/test/setup/load-env.ts"],
   "moduleNameMapper": {
-    "^../test/(.*)$": "<rootDir>/../test/$1"
+    "^@shared/(.*)$": "<rootDir>/../../packages/shared/$1",
+    "^@/(.*)$": "<rootDir>/src/$1"
   },
-  "modulePathIgnorePatterns": ["<rootDir>/../dist/"],
-  "globalSetup": "<rootDir>/../test/integration/global-setup.ts"
+  "modulePathIgnorePatterns": ["<rootDir>/dist/"]
 }

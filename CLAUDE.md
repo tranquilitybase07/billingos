@@ -121,6 +121,10 @@ For new features, create `docs/[feature-name]/` with:
 - `progress.md` — track implementation as you go
 - `final.md` — summary, deviations, and maintenance notes
 
+## Integration Testing
+
+Run integration tests via `pnpm --filter api test:integration`. Requires Supabase local, Redis, and `stripe listen --forward-to localhost:3002/stripe/webhooks` running. See `docs/integration-testing/setup.md` for full setup + `docs/integration-testing/plan.md` for the phased roadmap.
+
 ## Related Projects
 
 | Project | Description |
