@@ -1,13 +1,27 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 
+const ERROR_MESSAGES: Record<string, string> = {
+  otp_expired:
+    'That reset link has expired or was already used. Request a new one below.',
+  access_denied:
+    'That reset link is no longer valid. Request a new one below.',
+}
+
 export function ForgotPasswordForm() {
+  const searchParams = useSearchParams()
+  const errorCode = searchParams.get('error')
+  const errorMessage = errorCode
+    ? ERROR_MESSAGES[errorCode] ?? 'Something went wrong with that link. Request a new one below.'
+    : null
+
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -77,6 +91,14 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {errorMessage && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300"
+        >
+          {errorMessage}
+        </div>
+      )}
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input

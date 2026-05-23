@@ -1,12 +1,23 @@
+import { redirect } from 'next/navigation'
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm'
 import Logo from '@/components/branding/Logo'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
   title: 'Reset Password | BillingOS',
   description: 'Set a new password for your BillingOS account',
 }
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/forgot-password?error=otp_expired')
+  }
+
   return (
     <div className="flex h-screen w-full grow items-center justify-center">
       <div className="flex w-full max-w-md flex-col justify-between gap-16 rounded-4xl p-12">
