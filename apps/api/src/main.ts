@@ -41,6 +41,10 @@ async function bootstrap() {
     );
   }
 
+  if (process.env.NODE_ENV !== 'production') {
+    allowedOrigins.push('http://localhost:*', 'http://127.0.0.1:*');
+  }
+
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, Postman, etc.)
