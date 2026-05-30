@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getOrganizationBySlugOrNotFound } from '@/lib/organization'
+import { getOrganizationBySlug } from '@/lib/organization'
 import { getUserOrganizations } from '@/lib/user'
 import { OrganizationProvider } from '@/providers/OrganizationProvider'
 
@@ -18,8 +18,14 @@ export default async function OrganizationLayout({
 
   /* eslint-disable react-hooks/error-boundaries -- JSX in try/catch is needed for error handling with redirect in Server Components */
   try {
-    // Fetch organization by slug
-    const organization = await getOrganizationBySlugOrNotFound(orgSlug)
+    // Fetch organization by slug. A missing org in the current environment is a
+    // recoverable condition (env switch, deleted org, another account's bookmark,
+    // stale back-button) — not a hard 404. Bounce to /dashboard, which resolves a
+    // valid org for the active env (or sends to /dashboard/create).
+    const organization = await getOrganizationBySlug(orgSlug)
+    if (!organization) {
+      redirect('/dashboard')
+    }
 
     // Fetch user's organizations for switcher
     let userOrganizations = await getUserOrganizations()

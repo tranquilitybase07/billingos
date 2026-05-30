@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
 import { AlertCircleIcon, Loading03Icon, TestTube01Icon } from 'hugeicons-react'
 import {
   Select,
@@ -16,8 +15,6 @@ import { toast } from 'sonner'
 export function EnvironmentSwitcher() {
   const { environment, isSwitching, switchEnvironment } = useEnvironment()
   const [isLoading, setIsLoading] = useState(false)
-  const params = useParams<{ organization?: string }>()
-  const currentOrgSlug = params?.organization
 
   const handleSwitch = async (value: string) => {
     const newEnv = value as 'production' | 'sandbox'
@@ -28,7 +25,7 @@ export function EnvironmentSwitcher() {
       if (newEnv === 'sandbox') {
         toast.info('Setting up sandbox environment…')
       }
-      await switchEnvironment(newEnv, currentOrgSlug)
+      await switchEnvironment(newEnv)
     } catch (err: any) {
       toast.error(err.message || 'Failed to switch environment')
       setIsLoading(false)

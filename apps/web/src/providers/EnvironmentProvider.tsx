@@ -20,7 +20,7 @@ import {
 interface EnvironmentContextType {
   environment: Environment
   isSwitching: boolean
-  switchEnvironment: (env: Environment, currentOrgSlug?: string) => Promise<void>
+  switchEnvironment: (env: Environment) => Promise<void>
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType>({
@@ -72,7 +72,7 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const switchEnvironment = useCallback(
-    async (env: Environment, currentOrgSlug?: string) => {
+    async (env: Environment) => {
       if (env === environment || isSwitching) return
       setIsSwitching(true)
 
@@ -107,11 +107,10 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
         // Also set a cookie so server-side API calls can read the environment
         document.cookie = `${ENVIRONMENT_COOKIE}=${env}; path=/; max-age=31536000; SameSite=Lax`
         setEnvironment(env)
-        // Preserve the current org across the env switch when we know it; otherwise
-        // fall back to /dashboard which picks the new env's last-visited org.
-        window.location.href = currentOrgSlug
-          ? `/dashboard/${currentOrgSlug}`
-          : '/dashboard'
+        // Orgs are environment-scoped (separate DBs), so the current slug may not
+        // exist in the target env. Always land on bare /dashboard and let it pick
+        // the new env's last-visited org (or first org / create page).
+        window.location.href = '/dashboard'
       } catch (error) {
         setIsSwitching(false)
         throw error
