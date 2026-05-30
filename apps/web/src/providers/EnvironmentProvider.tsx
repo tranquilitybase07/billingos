@@ -13,6 +13,7 @@ import {
   type Environment,
   ENVIRONMENT_COOKIE,
   ENVIRONMENT_STORAGE_KEY,
+  clearEnvironmentState,
   environmentConfig,
 } from '@/lib/config/environment'
 
@@ -36,6 +37,40 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem(ENVIRONMENT_STORAGE_KEY)
     if (stored === 'sandbox') setEnvironment('sandbox')
+  }, [])
+
+  // Reset env state when the signed-in user changes. Without this, User A's
+  // sandbox preference and last-visited-org cookies survive logout and follow
+  // User B into their session, causing the dashboard to hit the wrong API.
+  useEffect(() => {
+    const supabase = createClient()
+    let lastUserId: string | null = null
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // INITIAL_SESSION fires synchronously on mount with the existing session,
+      // so lastUserId is seeded before any later SIGNED_IN — no async race.
+      if (event === 'INITIAL_SESSION') {
+        lastUserId = session?.user?.id ?? null
+        return
+      }
+      if (event === 'SIGNED_OUT') {
+        clearEnvironmentState()
+        setEnvironment('production')
+        lastUserId = null
+        return
+      }
+      if (event === 'SIGNED_IN' && session?.user) {
+        if (lastUserId && lastUserId !== session.user.id) {
+          clearEnvironmentState()
+          setEnvironment('production')
+        }
+        lastUserId = session.user.id
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const switchEnvironment = useCallback(
@@ -74,7 +109,9 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
         // Also set a cookie so server-side API calls can read the environment
         document.cookie = `${ENVIRONMENT_COOKIE}=${env}; path=/; max-age=31536000; SameSite=Lax`
         setEnvironment(env)
-        // Navigate to /dashboard so org routing re-runs with the new env's last-visited org
+        // Orgs are environment-scoped (separate DBs), so the current slug may not
+        // exist in the target env. Always land on bare /dashboard and let it pick
+        // the new env's last-visited org (or first org / create page).
         window.location.href = '/dashboard'
       } catch (error) {
         setIsSwitching(false)

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
+import { revalidateUserOrganizations } from "@/lib/actions/organizations";
 import type {
   Organization,
   CreateOrganizationDTO,
@@ -51,7 +52,12 @@ export function useCreateOrganization() {
   return useMutation({
     mutationFn: (data: CreateOrganizationDTO) =>
       api.post<Organization>("/organizations", data),
-    onSuccess: (organization) => {
+    onSuccess: async (organization) => {
+      // Best-effort server cache revalidation — a failure here must not block
+      // the client-side cache invalidation below, or the new org won't appear
+      // in the switcher.
+      await revalidateUserOrganizations().catch(() => {});
+
       // Invalidate organization list queries
       queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
 
