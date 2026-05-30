@@ -81,10 +81,38 @@ export class StripeService {
       },
     });
 
-    // Step 2: Auto-verify with Stripe's magic test values
-    // Split into two updates so a failure in one doesn't block the other.
+    // Step 2: Auto-verify with Stripe's magic test values.
+    // Split into three updates so a failure in the brittle identity step
+    // doesn't take down the business_profile that Checkout requires.
 
-    // 2a. Identity + business profile + statement descriptor + TOS
+    // 2a. Business profile + settings + TOS — MUST succeed.
+    // Checkout fails with "must set an account or business name" if business_profile.name is missing,
+    // so we let this throw rather than swallow.
+    await this.stripe.accounts.update(account.id, {
+      business_profile: {
+        mcc: '5734',
+        name: params.organizationName || 'Test Business',
+        url: 'https://example.com',
+      },
+      settings: {
+        payments: {
+          statement_descriptor: (params.organizationName || 'TEST BUSINESS')
+            .replace(/[^A-Z0-9 ]/gi, '')
+            .toUpperCase()
+            .substring(0, 22)
+            .padEnd(5, 'X'), // Must be 5-22 chars, letters/numbers/spaces only
+        },
+      },
+      tos_acceptance: {
+        date: Math.floor(Date.now() / 1000),
+        ip: '127.0.0.1',
+        user_agent: 'BillingOS Sandbox Auto-Creation',
+      },
+    });
+
+    // 2b. Identity (DOB/SSN/address magic values) — best-effort.
+    // If this fails, KYC stays pending but the account can still take payments
+    // in test mode, so we warn rather than throw.
     try {
       await this.stripe.accounts.update(account.id, {
         individual: {
@@ -102,29 +130,10 @@ export class StripeService {
           },
           ssn_last_4: '0000',
         } as Stripe.AccountUpdateParams.Individual,
-        business_profile: {
-          mcc: '5734',
-          name: params.organizationName || 'Test Business',
-          url: 'https://example.com',
-        },
-        settings: {
-          payments: {
-            statement_descriptor: (params.organizationName || 'TEST BUSINESS')
-              .replace(/[^A-Z0-9 ]/gi, '')
-              .toUpperCase()
-              .substring(0, 22)
-              .padEnd(5, 'X'), // Must be 5-22 chars, letters/numbers/spaces only
-          },
-        },
-        tos_acceptance: {
-          date: Math.floor(Date.now() / 1000),
-          ip: '127.0.0.1',
-          user_agent: 'BillingOS Sandbox Auto-Creation',
-        },
       });
     } catch (error) {
       this.logger.warn(
-        `[Sandbox] Identity/profile update failed for ${account.id}: ${(error as Error).message}`,
+        `[Sandbox] Identity update failed for ${account.id}: ${(error as Error).message}`,
       );
     }
 
