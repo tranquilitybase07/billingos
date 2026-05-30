@@ -46,13 +46,15 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     const supabase = createClient()
     let lastUserId: string | null = null
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      lastUserId = session?.user?.id ?? null
-    })
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      // INITIAL_SESSION fires synchronously on mount with the existing session,
+      // so lastUserId is seeded before any later SIGNED_IN — no async race.
+      if (event === 'INITIAL_SESSION') {
+        lastUserId = session?.user?.id ?? null
+        return
+      }
       if (event === 'SIGNED_OUT') {
         clearEnvironmentState()
         setEnvironment('production')

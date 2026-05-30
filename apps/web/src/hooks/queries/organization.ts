@@ -53,7 +53,10 @@ export function useCreateOrganization() {
     mutationFn: (data: CreateOrganizationDTO) =>
       api.post<Organization>("/organizations", data),
     onSuccess: async (organization) => {
-      await revalidateUserOrganizations();
+      // Best-effort server cache revalidation — a failure here must not block
+      // the client-side cache invalidation below, or the new org won't appear
+      // in the switcher.
+      await revalidateUserOrganizations().catch(() => {});
 
       // Invalidate organization list queries
       queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
