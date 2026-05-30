@@ -3,6 +3,28 @@ export type Environment = 'production' | 'sandbox'
 export const ENVIRONMENT_COOKIE = 'billingos-environment'
 export const ENVIRONMENT_STORAGE_KEY = 'billingos-environment'
 
+// Per-env last-visited-org cookies set by middleware.ts. Listed here so
+// clearEnvironmentState() can wipe them — they leak across users otherwise.
+const LAST_ORG_COOKIES = [
+  'billingos_last_org_production',
+  'billingos_last_org_sandbox',
+]
+
+/**
+ * Clears all client-side env-related state. Call on sign-out or when the
+ * signed-in user changes — otherwise the prior user's env preference and
+ * last-visited org slugs leak into the new session.
+ */
+export function clearEnvironmentState(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(ENVIRONMENT_STORAGE_KEY)
+  const expire = (name: string) => {
+    document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`
+  }
+  expire(ENVIRONMENT_COOKIE)
+  LAST_ORG_COOKIES.forEach(expire)
+}
+
 export const environmentConfig = {
   production: {
     apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',

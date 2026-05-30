@@ -13,13 +13,14 @@ import {
   type Environment,
   ENVIRONMENT_COOKIE,
   ENVIRONMENT_STORAGE_KEY,
+  clearEnvironmentState,
   environmentConfig,
 } from '@/lib/config/environment'
 
 interface EnvironmentContextType {
   environment: Environment
   isSwitching: boolean
-  switchEnvironment: (env: Environment) => Promise<void>
+  switchEnvironment: (env: Environment, currentOrgSlug?: string) => Promise<void>
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType>({
@@ -38,8 +39,40 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
     if (stored === 'sandbox') setEnvironment('sandbox')
   }, [])
 
+  // Reset env state when the signed-in user changes. Without this, User A's
+  // sandbox preference and last-visited-org cookies survive logout and follow
+  // User B into their session, causing the dashboard to hit the wrong API.
+  useEffect(() => {
+    const supabase = createClient()
+    let lastUserId: string | null = null
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      lastUserId = session?.user?.id ?? null
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearEnvironmentState()
+        setEnvironment('production')
+        lastUserId = null
+        return
+      }
+      if (event === 'SIGNED_IN' && session?.user) {
+        if (lastUserId && lastUserId !== session.user.id) {
+          clearEnvironmentState()
+          setEnvironment('production')
+        }
+        lastUserId = session.user.id
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
   const switchEnvironment = useCallback(
-    async (env: Environment) => {
+    async (env: Environment, currentOrgSlug?: string) => {
       if (env === environment || isSwitching) return
       setIsSwitching(true)
 
@@ -74,8 +107,11 @@ export function EnvironmentProvider({ children }: { children: ReactNode }) {
         // Also set a cookie so server-side API calls can read the environment
         document.cookie = `${ENVIRONMENT_COOKIE}=${env}; path=/; max-age=31536000; SameSite=Lax`
         setEnvironment(env)
-        // Navigate to /dashboard so org routing re-runs with the new env's last-visited org
-        window.location.href = '/dashboard'
+        // Preserve the current org across the env switch when we know it; otherwise
+        // fall back to /dashboard which picks the new env's last-visited org.
+        window.location.href = currentOrgSlug
+          ? `/dashboard/${currentOrgSlug}`
+          : '/dashboard'
       } catch (error) {
         setIsSwitching(false)
         throw error
