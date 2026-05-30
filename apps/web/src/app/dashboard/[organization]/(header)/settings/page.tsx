@@ -13,7 +13,7 @@ import { Loading03Icon, Delete02Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 import { OrgAvatarUpload } from './_components/OrgAvatarUpload'
 import { DeleteOrgDialog } from './_components/DeleteOrgDialog'
-import { revalidateUserOrganizations } from '@/app/actions/organizations'
+import { revalidateUserOrganizations } from '@/lib/actions/organizations'
 
 export default function SettingsPage() {
   const { organization } = useOrganization()
