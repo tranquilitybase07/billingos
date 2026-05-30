@@ -4,6 +4,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { OrganizationService } from '../organization/organization.service';
 import {
   EnhancedSupabaseMockBuilder,
   EnhancedMockSupabaseService,
@@ -26,6 +27,7 @@ describe('ProductsService', () => {
   let service: ProductsService;
   let supabaseService: EnhancedMockSupabaseService;
   let stripeService: MockStripeService;
+  let organizationService: { ensureSandboxStripeAccount: jest.Mock };
   let cacheManager: any;
   let supabaseMock: any;
 
@@ -40,6 +42,9 @@ describe('ProductsService', () => {
   beforeEach(async () => {
     // Create mocks
     stripeService = new MockStripeService();
+    organizationService = {
+      ensureSandboxStripeAccount: jest.fn().mockResolvedValue(null),
+    };
     cacheManager = {
       get: jest.fn(),
       set: jest.fn(),
@@ -68,6 +73,10 @@ describe('ProductsService', () => {
         {
           provide: StripeService,
           useValue: stripeService,
+        },
+        {
+          provide: OrganizationService,
+          useValue: organizationService,
         },
         {
           provide: CACHE_MANAGER,
@@ -201,6 +210,41 @@ describe('ProductsService', () => {
 
       await expect(service.create(testUser, createDto)).rejects.toThrow(
         BadRequestException,
+      );
+    });
+
+    it('should lazily provision a sandbox Stripe account when account_id is missing', async () => {
+      const orgWithoutStripe = organizationFactory.build({ account_id: null });
+      const mockProduct = productFactory.build({ organization_id: testOrg.id });
+      const mockPrice = priceFactory.build({ product_id: mockProduct.id });
+
+      organizationService.ensureSandboxStripeAccount.mockResolvedValue('acc_1');
+
+      supabaseService.setMockClient(
+        new EnhancedSupabaseMockBuilder()
+          .withTableResponse('organizations', { data: orgWithoutStripe })
+          .withTableResponse('user_organizations', { data: testMembership })
+          .withTableResponse('accounts', {
+            data: { id: 'acc_1', stripe_id: 'acct_stripe_1' },
+          })
+          .withTableResponse('products', { data: mockProduct })
+          .withTableResponse('product_prices', { data: mockPrice })
+          .withTableResponse('product_features', { data: [] })
+          .build(),
+      );
+
+      stripeService.createProduct.mockResolvedValue({ id: 'prod_stripe_1' });
+      stripeService.createPrice.mockResolvedValue({ id: 'price_stripe_1' });
+
+      await service.create(testUser, createDto);
+
+      expect(organizationService.ensureSandboxStripeAccount).toHaveBeenCalledWith(
+        testUser,
+        expect.objectContaining({ id: orgWithoutStripe.id }),
+      );
+      expect(stripeService.createProduct).toHaveBeenCalledWith(
+        expect.anything(),
+        'acct_stripe_1',
       );
     });
   });

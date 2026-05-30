@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import type { PortalCustomer } from '../hooks/usePortalData'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 
 interface SettingsTabProps {
   customer: PortalCustomer
@@ -31,6 +32,7 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 export function SettingsTab({ customer, sessionId, onUpdate }: SettingsTabProps) {
+  const apiUrl = useEmbedApiUrl()
   const [name, setName] = useState(customer.name || '')
   const [street, setStreet] = useState(customer.billingAddress?.street || '')
   const [city, setCity] = useState(customer.billingAddress?.city || '')
@@ -58,7 +60,6 @@ export function SettingsTab({ customer, sessionId, onUpdate }: SettingsTabProps)
   const handleSave = async () => {
     setIsSaving(true); setSaveError(null); setSaveSuccess(false)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/customer`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { api } from '@/lib/api/client'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 
 interface CheckoutSession {
   id: string
@@ -50,15 +50,18 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
   const [session, setSession] = useState<CheckoutSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   const fetchSession = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const response = await api.get<CheckoutSession>(
-        `/v1/checkout/${sessionId}/status`,
-      )
+      const res = await fetch(`${apiBaseUrl}/v1/checkout/${sessionId}/status`)
+      if (!res.ok) {
+        throw new Error('Failed to load checkout session')
+      }
+      const response = (await res.json()) as CheckoutSession
       // Defense in depth: the API is the source of truth for clientSecret,
       // amounts, etc. Refuse to render anything that doesn't match the
       // path-bound id (which is itself a UUID checked by the controller).

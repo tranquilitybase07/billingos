@@ -1,5 +1,7 @@
 import { Suspense } from 'react'
 import { PortalContent } from './components/PortalContent'
+import { EmbedApiProvider } from '../../EmbedApiProvider'
+import { getApiUrlForEnv, parseEnvironment } from '@/lib/config/environment'
 
 const HEX_RE = /^[0-9a-fA-F]{3,8}$/
 const LENGTH_RE = /^[\d.]+(px|rem|em)$/
@@ -21,11 +23,13 @@ export default async function PortalEmbedPage({
 }: {
   params: Promise<{ portalSessionId: string }>
   searchParams: Promise<{
+    env?: string
     tab?: string; theme?: string; accent?: string
     primary?: string; bg?: string; text?: string; radius?: string; font?: string
   }>
 }) {
   const [{ portalSessionId }, sp] = await Promise.all([params, searchParams])
+  const apiBaseUrl = getApiUrlForEnv(parseEnvironment(sp.env))
   const theme = (sp.theme === 'dark' || sp.theme === 'light' || sp.theme === 'auto') ? sp.theme : 'light'
   // Backward compat: accent param treated as alias for primary
   const primary = safeHex(sp.primary || sp.accent)
@@ -52,7 +56,9 @@ export default async function PortalEmbedPage({
     <div className="min-h-screen bg-white dark:bg-[#141415]">
       <script dangerouslySetInnerHTML={{ __html: `(function(){${varsScript}})()` }} />
       <Suspense fallback={<PortalSkeleton dark={theme === 'dark'} />}>
-        <PortalContent sessionId={portalSessionId} defaultTab={sp.tab} theme={theme} accentColor={'#' + primary} />
+        <EmbedApiProvider apiBaseUrl={apiBaseUrl}>
+          <PortalContent sessionId={portalSessionId} defaultTab={sp.tab} theme={theme} accentColor={'#' + primary} />
+        </EmbedApiProvider>
       </Suspense>
     </div>
   )
