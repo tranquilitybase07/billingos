@@ -35,7 +35,7 @@ interface CheckoutSession {
   expiresAt: string
   stripeAccountId?: string
   publishableKey?: string
-  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
+  checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade'
   uiMode?: 'hosted' | 'embedded'
   trialDays?: number
 }

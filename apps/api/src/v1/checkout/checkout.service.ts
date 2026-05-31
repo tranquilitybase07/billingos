@@ -130,7 +130,17 @@ export class CheckoutService {
     private readonly supabaseService: SupabaseService,
     private readonly billingService: BillingService,
     private readonly discountService: CheckoutDiscountService,
-  ) {}
+  ) {
+    // Misconfiguration here is invisible at runtime: the embed silently falls
+    // back to its build-time publishable key (wrong for this environment),
+    // re-introducing the exact bug getCheckoutStatus is meant to fix.
+    if (!process.env.STRIPE_PUBLISHABLE_KEY) {
+      this.logger.warn(
+        'STRIPE_PUBLISHABLE_KEY is not set — checkout responses will omit the ' +
+          'publishable key and the embed will use its build-time fallback.',
+      );
+    }
+  }
 
   /**
    * Create a checkout session — Phase A (preview).
