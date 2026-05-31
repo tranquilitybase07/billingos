@@ -11,29 +11,31 @@ import { useParentMessaging } from '../hooks/useParentMessaging'
 interface HostedCheckoutProps {
   clientSecret: string
   stripeAccountId?: string
+  publishableKey?: string
 }
 
 export function HostedCheckout({
   clientSecret,
   stripeAccountId,
+  publishableKey,
 }: HostedCheckoutProps) {
   const { sendMessage } = useParentMessaging()
   const hasSentReadyRef = useRef(false)
+  const pk = publishableKey ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
   // Warm the Stripe.js script load early so the EmbeddedCheckoutProvider
   // doesn't pay the script-fetch cost serially after mount.
   useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    if (key) void loadStripe(key)
-  }, [])
+    if (pk) void loadStripe(pk)
+  }, [pk])
 
   const stripePromise = useMemo(() => {
-    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+    const key = pk!
     if (stripeAccountId) {
-      return loadStripe(publishableKey, { stripeAccount: stripeAccountId })
+      return loadStripe(key, { stripeAccount: stripeAccountId })
     }
-    return loadStripe(publishableKey)
-  }, [stripeAccountId])
+    return loadStripe(key)
+  }, [stripeAccountId, pk])
 
   useEffect(() => {
     if (!hasSentReadyRef.current) {

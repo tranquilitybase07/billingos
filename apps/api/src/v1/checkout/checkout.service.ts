@@ -40,6 +40,7 @@ export interface CheckoutSession {
   product: CheckoutProduct;
   customer: CheckoutCustomer;
   stripeAccountId?: string;
+  publishableKey?: string;
   trialDays?: number;
   checkoutMode?:
     | 'standard'
@@ -129,7 +130,17 @@ export class CheckoutService {
     private readonly supabaseService: SupabaseService,
     private readonly billingService: BillingService,
     private readonly discountService: CheckoutDiscountService,
-  ) {}
+  ) {
+    // Misconfiguration here is invisible at runtime: the embed silently falls
+    // back to its build-time publishable key (wrong for this environment),
+    // re-introducing the exact bug getCheckoutStatus is meant to fix.
+    if (!process.env.STRIPE_PUBLISHABLE_KEY) {
+      this.logger.warn(
+        'STRIPE_PUBLISHABLE_KEY is not set — checkout responses will omit the ' +
+          'publishable key and the embed will use its build-time fallback.',
+      );
+    }
+  }
 
   /**
    * Create a checkout session — Phase A (preview).
@@ -340,6 +351,17 @@ export class CheckoutService {
   }
 
   async getCheckoutStatus(sessionId: string): Promise<CheckoutSession> {
+    const result = await this.resolveCheckoutStatus(sessionId);
+    // The publishable key is environment-specific (pk_test vs pk_live) and the
+    // embed frontend is a single shared build (app.billingos.dev) that can't
+    // know the session's environment, so we return the key that matches this
+    // session's Stripe account here.
+    return { ...result, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY };
+  }
+
+  private async resolveCheckoutStatus(
+    sessionId: string,
+  ): Promise<CheckoutSession> {
     const supabase = this.supabaseService.getClient();
 
     const { data: session, error: sessionError } = await supabase

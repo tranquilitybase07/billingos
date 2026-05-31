@@ -33,6 +33,7 @@ interface CheckoutSessionDetails {
   totalAmount: number
   stripeAccountId?: string
   checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade' | 'downgrade'
+  publishableKey?: string
   trialDays?: number
   downgradeInfo?: {
     effectiveDate?: string
@@ -651,12 +652,13 @@ export function CheckoutForm({
 
   const stripePromise = useMemo(() => {
     if (isFreeProduct) return null
-    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+    const publishableKey =
+      session.publishableKey ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
     if (session.stripeAccountId) {
       return loadStripe(publishableKey, { stripeAccount: session.stripeAccountId })
     }
     return loadStripe(publishableKey)
-  }, [session.stripeAccountId, isFreeProduct])
+  }, [session.stripeAccountId, session.publishableKey, isFreeProduct])
 
   if (isFreeProduct) {
     return (

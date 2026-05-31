@@ -85,14 +85,16 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
     (session.checkoutMode === 'adaptive' || session.checkoutMode === 'standard')
 
   const stripeAccountId = session?.stripeAccountId
+  const publishableKey =
+    session?.publishableKey ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   const stripePromise = useMemo(() => {
     if (!usesCheckoutProvider) return null
-    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+    const key = publishableKey!
     if (stripeAccountId) {
-      return loadStripe(publishableKey, { stripeAccount: stripeAccountId })
+      return loadStripe(key, { stripeAccount: stripeAccountId })
     }
-    return loadStripe(publishableKey)
-  }, [usesCheckoutProvider, stripeAccountId])
+    return loadStripe(key)
+  }, [usesCheckoutProvider, stripeAccountId, publishableKey])
 
   const handlers: PanelHandlers = useMemo(
     () => ({
@@ -145,6 +147,7 @@ export function CheckoutContent({ sessionId, theme, accentColor }: CheckoutConte
       <HostedCheckout
         clientSecret={session.clientSecret}
         stripeAccountId={session.stripeAccountId}
+        publishableKey={session.publishableKey}
       />
     )
   }
