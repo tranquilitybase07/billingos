@@ -34,6 +34,7 @@ interface CheckoutSession {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'expired'
   expiresAt: string
   stripeAccountId?: string
+  publishableKey?: string
   checkoutMode?: 'standard' | 'adaptive' | 'free' | 'trial' | 'upgrade'
   uiMode?: 'hosted' | 'embedded'
   trialDays?: number
