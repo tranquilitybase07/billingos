@@ -16,7 +16,9 @@ export class StripeErrorMapper {
       case 'StripeRateLimitError':
         return this.handleRateLimitError(error);
       case 'StripeInvalidRequestError':
-        return this.handleInvalidRequestError(error);
+        return this.handleInvalidRequestError(
+          error as Stripe.errors.StripeInvalidRequestError,
+        );
       case 'StripeAPIError':
         return this.handleAPIError(error);
       case 'StripeConnectionError':
@@ -52,13 +54,13 @@ export class StripeErrorMapper {
   }
 
   private static handleInvalidRequestError(
-    error: Stripe.errors.StripeError,
+    error: Stripe.errors.StripeInvalidRequestError,
   ): BillingOSException {
     const message = error.message.toLowerCase();
     const stripeContext = {
       originalError: message,
-      param: (error as any).param,
-      stripeCode: (error as any).code,
+      param: error.param,
+      stripeCode: error.code,
     };
 
     if (message.includes('customer')) {

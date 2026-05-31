@@ -59,7 +59,10 @@ export function useCheckoutSession(sessionId: string): UseCheckoutSessionReturn 
 
       const res = await fetch(`${apiBaseUrl}/v1/checkout/${sessionId}/status`)
       if (!res.ok) {
-        throw new Error('Failed to load checkout session')
+        const body = await res.json().catch(() => ({}))
+        throw new Error(
+          body?.message ?? `Failed to load checkout session (${res.status})`,
+        )
       }
       const response = (await res.json()) as CheckoutSession
       // Defense in depth: the API is the source of truth for clientSecret,
