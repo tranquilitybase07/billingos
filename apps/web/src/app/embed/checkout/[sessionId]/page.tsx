@@ -1,5 +1,7 @@
 import { Suspense } from 'react'
 import { CheckoutContent } from './components/CheckoutContent'
+import { EmbedApiProvider } from '../../EmbedApiProvider'
+import { getApiUrlForEnv, parseEnvironment } from '@/lib/config/environment'
 
 const HEX_RE = /^[0-9a-fA-F]{3,8}$/
 const LENGTH_RE = /^[\d.]+(px|rem|em)$/
@@ -15,11 +17,13 @@ export default async function CheckoutEmbedPage({
 }: {
   params: Promise<{ sessionId: string }>
   searchParams: Promise<{
+    env?: string
     theme?: string; accent?: string
     primary?: string; bg?: string; text?: string; radius?: string; font?: string
   }>
 }) {
   const [{ sessionId }, sp] = await Promise.all([params, searchParams])
+  const apiBaseUrl = getApiUrlForEnv(parseEnvironment(sp.env))
   const theme = (sp.theme === 'dark' || sp.theme === 'light' || sp.theme === 'auto') ? sp.theme : 'light'
   // Backward compat: accent treated as alias for primary
   const primary = safeHex(sp.primary || sp.accent)
@@ -51,7 +55,9 @@ export default async function CheckoutEmbedPage({
       <link rel="dns-prefetch" href="https://m.stripe.network" />
       <script dangerouslySetInnerHTML={{ __html: `(function(){${varsScript}})()` }} />
       <Suspense fallback={<CheckoutSkeleton />}>
-        <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + primary} />
+        <EmbedApiProvider apiBaseUrl={apiBaseUrl}>
+          <CheckoutContent sessionId={sessionId} theme={theme} accentColor={'#' + primary} />
+        </EmbedApiProvider>
       </Suspense>
     </div>
   )

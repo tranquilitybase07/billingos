@@ -48,8 +48,17 @@ export class StripeService {
   }
 
   /**
-   * Create and auto-verify a Stripe Express account using Stripe's test magic values.
+   * Create and auto-verify a Stripe Custom account using Stripe's test magic values.
    * ONLY works in sandbox mode with test keys — throws otherwise.
+   *
+   * Uses a platform-controlled account (`controller.requirement_collection:
+   * 'application'`) rather than Express. This is the only account type where the
+   * platform may accept ToS on behalf of the merchant and submit identity +
+   * external_account programmatically — Stripe forbids that for Express/Standard
+   * (`controller[requirement_collection]=stripe`). This is what makes the
+   * magic-value bypass legal and delivers instant, chargeable sandbox accounts
+   * with no hosted onboarding. Production keeps using Express via
+   * createConnectAccount.
    */
   async createTestAccountWithBypass(params: {
     email: string;
@@ -64,12 +73,17 @@ export class StripeService {
 
     const country = params.country || 'US';
 
-    // Step 1: Create Express account
+    // Step 1: Create a platform-controlled (Custom-equivalent) account
     const account = await this.stripe.accounts.create({
-      type: 'express',
       email: params.email,
       country,
       business_type: 'individual',
+      controller: {
+        fees: { payer: 'application' },
+        losses: { payments: 'application' },
+        stripe_dashboard: { type: 'none' },
+        requirement_collection: 'application',
+      },
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
@@ -92,7 +106,9 @@ export class StripeService {
       business_profile: {
         mcc: '5734',
         name: params.organizationName || 'Test Business',
-        url: 'https://example.com',
+        // Stripe rejects reserved placeholder domains like example.com with
+        // "not a valid url"; use a real, resolvable domain for sandbox accounts.
+        url: 'https://billingos.dev',
       },
       settings: {
         payments: {
@@ -137,7 +153,7 @@ export class StripeService {
       );
     }
 
-    // 2b. External bank account (separate call — Express accounts can be picky)
+    // 2c. External bank account (separate call to isolate validation failures)
     try {
       await this.stripe.accounts.update(account.id, {
         external_account: {

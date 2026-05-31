@@ -60,3 +60,24 @@ export function getEnvironment(): Environment {
 export function getApiUrl(): string {
   return environmentConfig[getEnvironment()].apiUrl
 }
+
+/**
+ * Get the API URL for an explicit environment.
+ *
+ * Used by the embed (checkout/portal) flows, where the environment comes
+ * from the session — passed in via the `env` query param by the SDK — rather
+ * than from the dashboard's localStorage preference, which doesn't exist in a
+ * customer-facing iframe.
+ */
+export function getApiUrlForEnv(env: Environment): string {
+  return environmentConfig[env].apiUrl
+}
+
+/**
+ * Normalize an env string (e.g. the SDK's `env` query param) to an Environment.
+ * Accepts the token-prefix semantics ('test') and the explicit name ('sandbox').
+ * Anything else (including undefined) falls back to 'production'.
+ */
+export function parseEnvironment(value?: string | null): Environment {
+  return value === 'sandbox' || value === 'test' ? 'sandbox' : 'production'
+}

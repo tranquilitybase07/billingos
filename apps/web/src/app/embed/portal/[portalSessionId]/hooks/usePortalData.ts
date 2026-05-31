@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 
 export interface PortalSubscription {
   id: string
@@ -104,13 +105,13 @@ export function usePortalData(sessionId: string): UsePortalDataReturn {
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const apiUrl = useEmbedApiUrl()
 
   const fetchData = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/data`)
 
       if (!response.ok) {

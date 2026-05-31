@@ -201,6 +201,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message: `Error: ${errorResponse.error.message}`,
       code: errorResponse.error.code,
       statusCode: errorResponse.statusCode,
+      details: errorResponse.error.details,
       ...context,
     };
 

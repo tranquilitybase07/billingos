@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useParentMessaging } from '../hooks/useParentMessaging'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,7 @@ export function SubscriptionTab({
   onUpdate: _onUpdate,
   onCancel,
 }: SubscriptionTabProps) {
+  const apiUrl = useEmbedApiUrl()
   const { sendMessage } = useParentMessaging()
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [subscriptionToCancel, setSubscriptionToCancel] = useState<PortalSubscription | null>(null)
@@ -136,7 +138,6 @@ export function SubscriptionTab({
     setIsCancelling(true)
     setCancelError(null)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/cancel-subscription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

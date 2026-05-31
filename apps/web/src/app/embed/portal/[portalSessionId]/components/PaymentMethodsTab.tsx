@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { useState, useEffect } from 'react'
 import type { PortalPaymentMethod } from '../hooks/usePortalData'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 
 interface PaymentMethodsTabProps {
   paymentMethods: PortalPaymentMethod[]
@@ -55,6 +56,7 @@ function StripePaymentElement({
 }
 
 export function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }: PaymentMethodsTabProps) {
+  const apiUrl = useEmbedApiUrl()
   const [showAddModal, setShowAddModal] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -73,7 +75,6 @@ export function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }
 
   const loadStripe = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/setup-intent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
       })
@@ -108,7 +109,6 @@ export function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }
   const handleRemove = async (paymentMethodId: string) => {
     setRemoveError(null); setRemovingId(paymentMethodId)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const r = await fetch(`${apiUrl}/v1/portal/${sessionId}/payment-methods/${paymentMethodId}`, { method: 'DELETE' })
       if (!r.ok) throw new Error()
       onUpdate()
@@ -119,7 +119,6 @@ export function PaymentMethodsTab({ paymentMethods, sessionId, onUpdate, onAdd }
   const handleSetDefault = async (paymentMethodId: string) => {
     setDefaultError(null); setSettingDefaultId(paymentMethodId)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       const r = await fetch(`${apiUrl}/v1/portal/${sessionId}/default-payment-method`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentMethodId }),
       })

@@ -100,9 +100,12 @@ export class OrganizationService {
       `Organization created: ${organization.id} by user ${user.id}`,
     );
 
-    // In sandbox mode, auto-create and auto-verify a Stripe test account
+    // In sandbox mode, auto-create and auto-verify a Stripe test account.
+    // Fire-and-forget to pre-warm the account; product/checkout flows lazily
+    // call ensureSandboxStripeAccount() to self-heal if this hasn't finished
+    // (or silently failed).
     if (this.configService.get<string>('NODE_ENV') === 'sandbox') {
-      this.autoCreateSandboxStripeAccount(user, organization).catch((err) => {
+      this.ensureSandboxStripeAccount(user, organization).catch((err) => {
         this.logger.error(
           `Failed to auto-create Stripe account for org ${organization.id} in sandbox:`,
           err,
@@ -114,23 +117,31 @@ export class OrganizationService {
   }
 
   /**
-   * Auto-creates a verified Stripe test account for sandbox orgs.
-   * Runs asynchronously — org creation never blocks on this.
+   * Ensures a sandbox org has a verified Stripe test account, creating one if
+   * missing, and returns its `accounts.id`. Idempotent: returns the existing
+   * account_id when already provisioned. No-op outside sandbox (returns null),
+   * letting callers surface the normal "complete onboarding" path.
+   *
+   * Used both as a fire-and-forget pre-warm at org creation and as a lazy
+   * self-heal by flows that require an account (e.g. product creation), which
+   * covers the timing window where the pre-warm hasn't finished yet.
    */
-  private async autoCreateSandboxStripeAccount(
+  async ensureSandboxStripeAccount(
     user: User,
-    organization: any,
-  ): Promise<void> {
+    organization: { id: string; name: string },
+  ): Promise<string | null> {
     const supabase = this.supabaseService.getClient();
 
-    // Check org doesn't already have an account
+    // Re-read in case the account was provisioned concurrently.
     const { data: org } = await supabase
       .from('organizations')
       .select('account_id')
       .eq('id', organization.id)
       .single();
 
-    if (org?.account_id) return;
+    if (org?.account_id) return org.account_id;
+
+    if (this.configService.get<string>('NODE_ENV') !== 'sandbox') return null;
 
     const { account: stripeAccount } =
       await this.stripeService.createConnectAccountSmart({
@@ -164,7 +175,7 @@ export class OrganizationService {
 
     if (insertError || !account) {
       this.logger.error('Failed to insert auto-created account:', insertError);
-      return;
+      return null;
     }
 
     await supabase
@@ -180,6 +191,8 @@ export class OrganizationService {
     this.logger.log(
       `Auto-created Stripe test account ${stripeAccount.id} for org ${organization.id}`,
     );
+
+    return account.id;
   }
 
   /**

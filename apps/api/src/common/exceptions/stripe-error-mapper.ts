@@ -16,7 +16,9 @@ export class StripeErrorMapper {
       case 'StripeRateLimitError':
         return this.handleRateLimitError(error);
       case 'StripeInvalidRequestError':
-        return this.handleInvalidRequestError(error);
+        return this.handleInvalidRequestError(
+          error as Stripe.errors.StripeInvalidRequestError,
+        );
       case 'StripeAPIError':
         return this.handleAPIError(error);
       case 'StripeConnectionError':
@@ -52,16 +54,21 @@ export class StripeErrorMapper {
   }
 
   private static handleInvalidRequestError(
-    error: Stripe.errors.StripeError,
+    error: Stripe.errors.StripeInvalidRequestError,
   ): BillingOSException {
     const message = error.message.toLowerCase();
+    const stripeContext = {
+      originalError: message,
+      param: error.param,
+      stripeCode: error.code,
+    };
 
     if (message.includes('customer')) {
       return new BillingOSException(
         ErrorCode.PAY_INVALID_PAYMENT_METHOD,
         'Invalid customer information',
         HttpStatus.BAD_REQUEST,
-        { originalError: message },
+        stripeContext,
       );
     }
 
@@ -70,7 +77,7 @@ export class StripeErrorMapper {
         ErrorCode.VAL_INVALID_INPUT,
         'Invalid payment amount',
         HttpStatus.BAD_REQUEST,
-        { originalError: message },
+        stripeContext,
       );
     }
 
@@ -78,7 +85,7 @@ export class StripeErrorMapper {
       ErrorCode.VAL_INVALID_INPUT,
       'Invalid payment request',
       HttpStatus.BAD_REQUEST,
-      { originalError: message },
+      stripeContext,
     );
   }
 

@@ -11,6 +11,7 @@ import { Cache } from 'cache-manager';
 import Stripe from 'stripe';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StripeService } from '../stripe/stripe.service';
+import { OrganizationService } from '../organization/organization.service';
 import { User } from '../user/entities/user.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -27,6 +28,7 @@ export class ProductsService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly organizationService: OrganizationService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
@@ -39,7 +41,7 @@ export class ProductsService {
     // Verify organization exists and user is a member
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, account_id, default_currency')
+      .select('id, name, account_id, default_currency')
       .eq('id', createDto.organization_id)
       .is('deleted_at', null)
       .single();
@@ -61,7 +63,16 @@ export class ProductsService {
       throw new ForbiddenException('You are not a member of this organization');
     }
 
-    // Get Stripe account ID
+    // Get Stripe account ID. In sandbox the account is auto-provisioned
+    // asynchronously after org creation, so account_id may not be set yet (or a
+    // prior auto-create failed silently). Lazily ensure it before failing.
+    if (!org.account_id) {
+      org.account_id = await this.organizationService.ensureSandboxStripeAccount(
+        user,
+        { id: org.id, name: org.name },
+      );
+    }
+
     if (!org.account_id) {
       throw new BadRequestException(
         'Organization must complete Stripe Connect onboarding first',

@@ -12,6 +12,7 @@ import {
   PaymentElement as CheckoutPaymentElement,
 } from '@stripe/react-stripe-js/checkout'
 import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js'
+import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 
 interface CheckoutSubscription {
   id: string
@@ -330,6 +331,7 @@ function FreeProductCheckout({
   const [isActivating, setIsActivating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   useEffect(() => {
     if (!formRef.current) return
@@ -347,7 +349,7 @@ function FreeProductCheckout({
     setError(null)
 
     try {
-      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-free`, {
+      const response = await fetch(`${apiBaseUrl}/v1/checkout/${session.id}/confirm-free`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -410,6 +412,7 @@ function UpgradeCheckout({
   const [isUpgrading, setIsUpgrading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   useEffect(() => {
     if (!formRef.current) return
@@ -427,7 +430,7 @@ function UpgradeCheckout({
     setError(null)
 
     try {
-      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-upgrade`, {
+      const response = await fetch(`${apiBaseUrl}/v1/checkout/${session.id}/confirm-upgrade`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -519,6 +522,7 @@ function DowngradeCheckout({
   const [isDowngrading, setIsDowngrading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   useEffect(() => {
     if (!formRef.current) return
@@ -536,7 +540,7 @@ function DowngradeCheckout({
     setError(null)
 
     try {
-      const response = await fetch(`/api/v1/checkout/${session.id}/confirm-downgrade`, {
+      const response = await fetch(`${apiBaseUrl}/v1/checkout/${session.id}/confirm-downgrade`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -746,6 +750,7 @@ function CheckoutFormCustom({
   const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLDivElement>(null)
   const errorBannerRef = useRef<HTMLDivElement>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   useEffect(() => {
     if (!formRef.current) return
@@ -804,7 +809,7 @@ function CheckoutFormCustom({
       const maxAttempts = 20
       const pollForSubscription = async () => {
         try {
-          const response = await fetch(`/api/v1/checkout/${session.id}/status`)
+          const response = await fetch(`${apiBaseUrl}/v1/checkout/${session.id}/status`)
           const data = await response.json()
           if (data.subscription) {
             onSuccess(data.subscription)
@@ -961,6 +966,7 @@ function CheckoutFormTrial({
   const emailPrefilled = !!session.customer?.email
   const formRef = useRef<HTMLFormElement>(null)
   const errorBannerRef = useRef<HTMLDivElement>(null)
+  const apiBaseUrl = useEmbedApiUrl()
 
   useEffect(() => {
     if (session?.customer?.email) setEmail(session.customer.email)
@@ -1041,7 +1047,7 @@ function CheckoutFormTrial({
       const maxAttempts = 20
       const pollForSubscription = async () => {
         try {
-          const response = await fetch(`/api/v1/checkout/${session.id}/status`)
+          const response = await fetch(`${apiBaseUrl}/v1/checkout/${session.id}/status`)
           const data = await response.json()
           if (data.subscription) {
             onSuccess(data.subscription)
