@@ -3,8 +3,12 @@ import './instrument';
 
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import type {
+  CorsOptions,
+  CorsOptionsDelegate,
+} from '@nestjs/common/interfaces/external/cors-options.interface';
 import { AppModule } from './app.module';
-import { json } from 'express';
+import { json, type Request } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseSanitizeInterceptor } from './common/interceptors/response-sanitize.interceptor';
@@ -19,7 +23,10 @@ async function bootstrap() {
     logger: securityConfig.logLevel as any,
   });
 
-  // Enable CORS for frontend and sample app
+  // CORS is split by route group: cookie-authed dashboard routes need a strict
+  // origin allowlist, but SDK routes (/v1/*) are called from arbitrary customer
+  // origins and authed by bearer token, so they allow any origin without
+  // credentials (the token, not the Origin header, is the security boundary).
   const allowedOrigins = [
     process.env.APP_URL || 'http://localhost:3000',
     'http://localhost:3002', // Sample app
@@ -45,7 +52,16 @@ async function bootstrap() {
     allowedOrigins.push('http://localhost:*', 'http://127.0.0.1:*');
   }
 
-  app.enableCors({
+  const corsMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+  const corsAllowedHeaders = [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'x-billingos-version',
+    'x-billingos-api-key',
+  ];
+
+  const dashboardCors: CorsOptions = {
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, Postman, etc.)
       if (!origin) {
@@ -71,15 +87,24 @@ async function bootstrap() {
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'x-billingos-version',
-      'x-billingos-api-key',
-    ],
-  });
+    methods: corsMethods,
+    allowedHeaders: corsAllowedHeaders,
+  };
+
+  const publicSdkCors: CorsOptions = {
+    origin: '*',
+    credentials: false,
+    methods: corsMethods,
+    allowedHeaders: corsAllowedHeaders,
+  };
+
+  const corsOptionsDelegate: CorsOptionsDelegate<Request> = (req, callback) => {
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    const isPublicSdkRoute = path === '/v1' || path.startsWith('/v1/');
+    callback(null, isPublicSdkRoute ? publicSdkCors : dashboardCors);
+  };
+
+  app.enableCors(corsOptionsDelegate);
 
   // Global validation pipe with standardized error format
   app.useGlobalPipes(
