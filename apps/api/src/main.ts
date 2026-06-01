@@ -71,8 +71,11 @@ async function bootstrap() {
       // Check if origin matches any allowed pattern
       const isAllowed = allowedOrigins.some((allowedOrigin) => {
         if (allowedOrigin.includes('*')) {
-          // Handle wildcard patterns
-          const pattern = allowedOrigin.replace(/\*/g, '.*');
+          // Handle wildcard patterns.
+          const pattern = allowedOrigin
+            .split('*')
+            .map((part) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&'))
+            .join('.*');
           const regex = new RegExp(`^${pattern}$`);
           return regex.test(origin);
         }
