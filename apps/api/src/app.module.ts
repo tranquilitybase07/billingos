@@ -45,7 +45,7 @@ import {
     SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env.local', '.env'],
     }),
     ThrottlerModule.forRoot({
       errorMessage: rateLimitConfig.messages.tooManyRequests,
