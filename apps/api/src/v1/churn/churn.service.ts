@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { ChurnContextService } from './churn-context.service';
 import { ChurnFlowConfig, Offer, SurveyStep } from './dto/churn-flow-config';
+import { isDiscountEligible } from './eligibility';
 import {
   ApplyOfferDto,
   ChurnCancelDto,
@@ -45,7 +46,7 @@ export class ChurnService {
       ctx.resolver.getSubscription(ctx),
       this.hasRedeemedChurnOffer(ctx),
     ]);
-    const offerEligible = this.isDiscountEligible(
+    const offerEligible = isDiscountEligible(
       subscription.hasActiveDiscount,
       redeemedBefore,
       ctx.flow?.settings?.allowRepeatDiscount ?? false,
@@ -101,7 +102,7 @@ export class ChurnService {
     }
     const redeemedBefore = await this.hasRedeemedChurnOffer(ctx);
     const allowRepeat = flow?.settings?.allowRepeatDiscount ?? false;
-    if (!this.isDiscountEligible(false, redeemedBefore, allowRepeat)) {
+    if (!isDiscountEligible(false, redeemedBefore, allowRepeat)) {
       return { subscription: view, outcome: 'not_eligible' };
     }
 
@@ -141,21 +142,6 @@ export class ChurnService {
     });
 
     return { subscription, outcome: 'canceled' };
-  }
-
-  /**
-   * Discount-offer eligibility — all BOS reads, never Stripe (rate-limit safety).
-   * Block while any discount is active; one-time by default; re-eligible after
-   * expiry only if the flow allows repeat redemption.
-   */
-  private isDiscountEligible(
-    hasActiveDiscount: boolean,
-    redeemedBefore: boolean,
-    allowRepeat: boolean,
-  ): boolean {
-    if (hasActiveDiscount) return false;
-    if (redeemedBefore && !allowRepeat) return false;
-    return true;
   }
 
   private async hasRedeemedChurnOffer(ctx: ChurnContext): Promise<boolean> {
