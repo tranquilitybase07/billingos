@@ -86,6 +86,7 @@ export function PortalContent({ sessionId, defaultTab, accentColor }: PortalCont
             customer={data.customer}
             sessionId={sessionId}
             accentColor={accentColor}
+            churnFlow={data.churnFlow}
             onUpdate={() => {
               refresh()
               sendMessage({ type: 'SUBSCRIPTION_UPDATED', payload: { subscriptions: data.subscriptions } })

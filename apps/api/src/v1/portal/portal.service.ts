@@ -211,6 +211,7 @@ export class PortalService {
         cancel_at_period_end,
         canceled_at,
         trial_end,
+        active_discount,
         product:products (
           id,
           name,
@@ -278,6 +279,16 @@ export class PortalService {
           .limit(1)
           .maybeSingle();
 
+        const activeDiscount = (
+          sub as {
+            active_discount?: {
+              percentOff?: number | null;
+              amountOff?: number | null;
+              endsAt?: string | null;
+            } | null;
+          }
+        ).active_discount;
+
         portalSubscriptions.push({
           id: sub.id,
           status: sub.status,
@@ -299,6 +310,14 @@ export class PortalService {
             intervalCount: price.recurring_interval_count || 1,
           },
           features,
+          hasActiveDiscount: activeDiscount != null,
+          discount: activeDiscount
+            ? {
+                percentOff: activeDiscount.percentOff ?? null,
+                amountOff: activeDiscount.amountOff ?? null,
+                endsAt: activeDiscount.endsAt ?? null,
+              }
+            : undefined,
           pendingDowngrade: pendingChange
             ? {
                 newProductName:
@@ -568,6 +587,26 @@ export class PortalService {
     // 7. Get organization name
     const organizationName = (customer.organizations as any)?.name || undefined;
 
+    // 8. Get the enabled churn flow (if any) so the portal renders it in place
+    // of the hardcoded cancel modal. Falls back to the modal when none exists.
+    const { data: churnFlowRow } = await supabase
+      .from('churn_flows')
+      .select('id, name, enabled, steps')
+      .eq('organization_id', customer.organization_id)
+      .eq('enabled', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const churnFlow = churnFlowRow
+      ? {
+          id: churnFlowRow.id,
+          name: churnFlowRow.name,
+          enabled: churnFlowRow.enabled,
+          steps: (churnFlowRow.steps as any) ?? [],
+        }
+      : undefined;
+
     return {
       sessionId,
       customer: portalCustomer,
@@ -576,6 +615,7 @@ export class PortalService {
       paymentMethods: portalPaymentMethods,
       usageMetrics,
       organizationName,
+      churnFlow,
     };
   }
 

@@ -665,6 +665,31 @@ export class StripeService {
   }
 
   /**
+   * Apply a coupon as a discount to an already-active subscription.
+   * Distinct from CheckoutDiscountService (checkout-session-scoped) — this is the
+   * path used by churn save-offers to discount a live subscription.
+   */
+  async applyDiscountToSubscription(
+    subscriptionId: string,
+    couponId: string,
+    stripeAccountId: string,
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Applying coupon ${couponId} to subscription ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      { discounts: [{ coupon: couponId }] },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
    * List all subscriptions on a Stripe Connect account (uses auto-pagination)
    * Used for drift detection — compares Stripe state against local DB.
    */
@@ -1070,6 +1095,19 @@ export class StripeService {
     this.logger.log(`Creating Stripe coupon for account ${stripeAccountId}`);
 
     return await this.stripe.coupons.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Retrieve a coupon from a Stripe Connect account.
+   * https://docs.stripe.com/api/coupons/retrieve
+   */
+  async retrieveCoupon(
+    couponId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Coupon> {
+    return await this.stripe.coupons.retrieve(couponId, {
       stripeAccount: stripeAccountId,
     });
   }

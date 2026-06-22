@@ -36,6 +36,7 @@ import {
   ChartBarLineIcon,
   Settings01Icon,
   Unlink02Icon,
+  ReloadIcon,
 } from 'hugeicons-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -126,13 +127,13 @@ export const DashboardSidebar = () => {
     {
       label: 'RETENTION',
       items: [
-        // {
-        //   title: 'Churn Prevention',
-        //   icon: ReloadIcon,
-        //   href: `/dashboard/${organization.slug}/churn`,
-        // },
         {
           title: 'Churn',
+          icon: ReloadIcon,
+          href: `/dashboard/${organization.slug}/churn`,
+        },
+        {
+          title: 'Cancellations',
           icon: Unlink02Icon,
           href: `/dashboard/${organization.slug}/sales/cancellations`,
         },

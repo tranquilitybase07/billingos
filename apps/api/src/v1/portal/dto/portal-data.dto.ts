@@ -1,3 +1,5 @@
+import { ChurnFlowConfig } from '../../churn/dto/churn-flow-config';
+
 export interface PortalSubscription {
   id: string;
   status: string;
@@ -31,6 +33,12 @@ export interface PortalSubscription {
     newCurrency: string;
     newInterval: string;
     scheduledFor: string;
+  };
+  hasActiveDiscount?: boolean;
+  discount?: {
+    percentOff?: number | null;
+    amountOff?: number | null;
+    endsAt?: string | null;
   };
 }
 
@@ -88,4 +96,5 @@ export interface PortalData {
   paymentMethods: PortalPaymentMethod[];
   usageMetrics: UsageMetric[];
   organizationName?: string;
+  churnFlow?: ChurnFlowConfig;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useEmbedApiUrl } from '../../../EmbedApiProvider'
+import type { ChurnFlowConfig } from '@/components/churn/types'
 
 export interface PortalSubscription {
   id: string
@@ -36,6 +37,12 @@ export interface PortalSubscription {
     newCurrency: string
     newInterval: string
     scheduledFor: string
+  }
+  hasActiveDiscount?: boolean
+  discount?: {
+    percentOff?: number | null
+    amountOff?: number | null
+    endsAt?: string | null
   }
 }
 
@@ -92,6 +99,7 @@ export interface PortalData {
   paymentMethods: PortalPaymentMethod[]
   usageMetrics: UsageMetric[]
   organizationName?: string
+  churnFlow?: ChurnFlowConfig
 }
 
 interface UsePortalDataReturn {
