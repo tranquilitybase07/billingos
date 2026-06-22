@@ -15,6 +15,17 @@ import {
   ChurnEventDto,
 } from './dto/churn-engine.dto';
 
+/**
+ * Churn engine endpoints (portal mount, Phase 1).
+ *
+ * Auth model: intentionally NO `SessionTokenAuthGuard`. Like the existing portal
+ * cancel endpoint (`POST /v1/portal/:sessionId/cancel-subscription`), the `:sessionId`
+ * path param IS the credential — `ChurnContextService.resolveFromPortalSession`
+ * validates the portal session and scopes every read/write to its org + customer.
+ * This is deliberate so the flow can mount inside the portal, which holds a portal
+ * session (not a bearer token). Phase 3 adds a token-guarded `POST /v1/churn/sessions`
+ * for the SDK embed; those calls then reuse the same session-id-path surface.
+ */
 @ApiTags('SDK - Churn')
 @Controller('v1/churn')
 export class ChurnController {

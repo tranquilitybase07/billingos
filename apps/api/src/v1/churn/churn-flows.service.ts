@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CreateChurnFlowDto, UpdateChurnFlowDto } from './dto/churn-flows.dto';
@@ -24,7 +25,7 @@ export class ChurnFlowsService {
       .order('updated_at', { ascending: false });
 
     if (error) {
-      throw new NotFoundException('Failed to load churn flows');
+      throw new InternalServerErrorException('Failed to load churn flows');
     }
     return data ?? [];
   }
@@ -67,7 +68,7 @@ export class ChurnFlowsService {
 
     if (error || !data) {
       this.logger.error(`Failed to create churn flow: ${error?.message}`);
-      throw new NotFoundException('Failed to create churn flow');
+      throw new InternalServerErrorException('Failed to create churn flow');
     }
     return data;
   }
@@ -98,7 +99,7 @@ export class ChurnFlowsService {
 
     if (error || !data) {
       this.logger.error(`Failed to update churn flow: ${error?.message}`);
-      throw new NotFoundException('Failed to update churn flow');
+      throw new InternalServerErrorException('Failed to update churn flow');
     }
     return data;
   }
@@ -114,7 +115,7 @@ export class ChurnFlowsService {
       .eq('organization_id', flow.organization_id);
 
     if (error) {
-      throw new NotFoundException('Failed to delete churn flow');
+      throw new InternalServerErrorException('Failed to delete churn flow');
     }
     return { success: true };
   }

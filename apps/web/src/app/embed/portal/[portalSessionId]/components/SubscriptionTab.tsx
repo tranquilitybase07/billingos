@@ -33,7 +33,6 @@ interface SubscriptionTabProps {
   usageMetrics: UsageMetric[]
   customer: PortalCustomer
   sessionId: string
-  accentColor?: string
   churnFlow?: ChurnFlowConfig
   onUpdate: () => void
   onCancel: () => void

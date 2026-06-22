@@ -97,6 +97,9 @@ function draftFromFlow(flow: ChurnFlow): FlowDraft {
   }
 }
 
+// TODO: the builder intentionally only emits `percentOff` discount offers in v1.
+// The backend/config model also supports `amountOff` and `contact`/`redirect`
+// offers — extend this editor when those are exposed to merchants.
 function buildSteps(draft: FlowDraft): ChurnStep[] {
   const survey: SurveyStep = {
     id: 'survey',
@@ -145,7 +148,6 @@ export default function ChurnBuilderPage({
   organizationId,
 }: {
   organizationId: string
-  organizationSlug: string
 }) {
   const { toast } = useToast()
   const { data: flows, isLoading } = useChurnFlows(organizationId)

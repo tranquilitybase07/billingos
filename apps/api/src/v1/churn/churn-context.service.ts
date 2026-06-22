@@ -8,6 +8,7 @@ import {
 import { SupabaseService } from '../../supabase/supabase.service';
 import { BosSubscriptionResolver } from './resolvers/bos-subscription.resolver';
 import { ChurnContext } from './resolvers/subscription-resolver.interface';
+import { ChurnFlowConfig, ChurnStep } from './dto/churn-flow-config';
 
 @Injectable()
 export class ChurnContextService {
@@ -60,7 +61,7 @@ export class ChurnContextService {
     }
 
     const stripeAccountId = await this.resolveStripeAccountId(organizationId);
-    const flowId = await this.findEnabledFlowId(organizationId);
+    const flow = await this.loadEnabledFlow(organizationId);
 
     return {
       organizationId,
@@ -68,7 +69,8 @@ export class ChurnContextService {
       subscriptionRef: subscription.id,
       bosSubscriptionId: subscription.id,
       customerId,
-      flowId,
+      flowId: flow?.id,
+      flow,
       source: 'portal',
       resolver: this.bosSubscriptionResolver,
     };
@@ -102,18 +104,34 @@ export class ChurnContextService {
     return account.stripe_id;
   }
 
-  async findEnabledFlowId(organizationId: string): Promise<string | undefined> {
+  /**
+   * Load the org's single enabled churn flow once, mapping JSON columns to the
+   * typed config the engine + renderer consume. Returns null when none is enabled.
+   */
+  async loadEnabledFlow(
+    organizationId: string,
+  ): Promise<ChurnFlowConfig | null> {
     const supabase = this.supabaseService.getClient();
 
     const { data: flow } = await supabase
       .from('churn_flows')
-      .select('id')
+      .select('id, name, enabled, steps, settings')
       .eq('organization_id', organizationId)
       .eq('enabled', true)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    return flow?.id ?? undefined;
+    if (!flow) {
+      return null;
+    }
+
+    return {
+      id: flow.id,
+      name: flow.name,
+      enabled: flow.enabled,
+      steps: (flow.steps as unknown as ChurnStep[]) ?? [],
+      settings: (flow.settings as unknown as ChurnFlowConfig['settings']) ?? {},
+    };
   }
 }

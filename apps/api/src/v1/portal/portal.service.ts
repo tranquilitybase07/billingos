@@ -17,6 +17,7 @@ import {
   PortalPaymentMethod,
   PortalCustomer,
 } from './dto/portal-data.dto';
+import { ChurnStep } from '../churn/dto/churn-flow-config';
 
 export interface PortalSession {
   id: string;
@@ -603,7 +604,7 @@ export class PortalService {
           id: churnFlowRow.id,
           name: churnFlowRow.name,
           enabled: churnFlowRow.enabled,
-          steps: (churnFlowRow.steps as any) ?? [],
+          steps: (churnFlowRow.steps as unknown as ChurnStep[]) ?? [],
         }
       : undefined;
 

@@ -1,12 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { ChurnContextService } from './churn-context.service';
-import {
-  ChurnFlowConfig,
-  ChurnStep,
-  Offer,
-  SurveyStep,
-} from './dto/churn-flow-config';
+import { ChurnFlowConfig, Offer, SurveyStep } from './dto/churn-flow-config';
 import {
   ApplyOfferDto,
   ChurnCancelDto,
@@ -46,17 +41,16 @@ export class ChurnService {
       sessionId,
       subscriptionId,
     );
-    const [flow, subscription, redeemedBefore] = await Promise.all([
-      this.loadEnabledFlow(ctx.organizationId),
+    const [subscription, redeemedBefore] = await Promise.all([
       ctx.resolver.getSubscription(ctx),
       this.hasRedeemedChurnOffer(ctx),
     ]);
     const offerEligible = this.isDiscountEligible(
       subscription.hasActiveDiscount,
       redeemedBefore,
-      flow?.settings?.allowRepeatDiscount ?? false,
+      ctx.flow?.settings?.allowRepeatDiscount ?? false,
     );
-    return { flow, subscription, offerEligible };
+    return { flow: ctx.flow, subscription, offerEligible };
   }
 
   async logEvent(
@@ -88,7 +82,7 @@ export class ChurnService {
       dto.subscriptionId,
     );
 
-    const flow = await this.loadEnabledFlow(ctx.organizationId);
+    const flow = ctx.flow;
     const offer = this.findOfferForReason(flow, dto.reason);
 
     if (!offer) {
@@ -150,37 +144,6 @@ export class ChurnService {
   }
 
   /**
-   * Load the single enabled churn flow for an org, mapping the JSON steps to the
-   * typed config the renderer consumes. Returns null when no flow is enabled.
-   */
-  private async loadEnabledFlow(
-    organizationId: string,
-  ): Promise<ChurnFlowConfig | null> {
-    const supabase = this.supabaseService.getClient();
-
-    const { data: flow } = await supabase
-      .from('churn_flows')
-      .select('id, name, enabled, steps, settings')
-      .eq('organization_id', organizationId)
-      .eq('enabled', true)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!flow) {
-      return null;
-    }
-
-    return {
-      id: flow.id,
-      name: flow.name,
-      enabled: flow.enabled,
-      steps: (flow.steps as unknown as ChurnStep[]) ?? [],
-      settings: (flow.settings as unknown as ChurnFlowConfig['settings']) ?? {},
-    };
-  }
-
-  /**
    * Discount-offer eligibility — all BOS reads, never Stripe (rate-limit safety).
    * Block while any discount is active; one-time by default; re-eligible after
    * expiry only if the flow allows repeat redemption.
@@ -201,6 +164,7 @@ export class ChurnService {
     const { count } = await supabase
       .from('churn_events')
       .select('id', { count: 'exact', head: true })
+      .eq('organization_id', ctx.organizationId)
       .eq('subscription_id', ctx.bosSubscriptionId)
       .eq('event_type', 'offer_accepted');
     return (count ?? 0) > 0;

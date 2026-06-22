@@ -20,10 +20,6 @@ export default async function Page({
     return <div>Organization not found</div>
   }
 
-  return (
-    <ChurnBuilderPage
-      organizationId={organization.id}
-      organizationSlug={orgSlug}
-    />
-  )
+  return <ChurnBuilderPage organizationId={organization.id} />
+
 }

@@ -51,8 +51,18 @@ export class DiscountHandler implements WebhookHandler, OnModuleInit {
       return;
     }
 
+    // Resolve the org from the webhook's connected account so the write is
+    // org-scoped (tenant-isolation rule). Skip if we can't establish it.
+    const organizationId = await this.resolveOrganizationId(ctx);
+    if (!organizationId) {
+      this.logger.warn(
+        `Could not resolve organization for account ${ctx.stripeAccountId}; skipping active_discount sync`,
+      );
+      return;
+    }
+
     if (ctx.event.type === 'customer.discount.deleted') {
-      await this.write(ctx, subscriptionId, null);
+      await this.write(ctx, organizationId, subscriptionId, null);
       this.logger.log(`Cleared active_discount for ${subscriptionId}`);
       return;
     }
@@ -88,20 +98,44 @@ export class DiscountHandler implements WebhookHandler, OnModuleInit {
         : null,
     };
 
-    await this.write(ctx, subscriptionId, activeDiscount);
+    await this.write(ctx, organizationId, subscriptionId, activeDiscount);
     this.logger.log(
       `Synced active_discount for ${subscriptionId} (${ctx.event.type})`,
     );
   }
 
+  /** Resolve organization_id from the webhook's connected Stripe account. */
+  private async resolveOrganizationId(
+    ctx: WebhookContext,
+  ): Promise<string | null> {
+    if (!ctx.stripeAccountId) return null;
+
+    const { data: account } = await ctx.supabase
+      .from('accounts')
+      .select('id')
+      .eq('stripe_id', ctx.stripeAccountId)
+      .maybeSingle();
+    if (!account) return null;
+
+    const { data: org } = await ctx.supabase
+      .from('organizations')
+      .select('id')
+      .eq('account_id', account.id)
+      .maybeSingle();
+
+    return org?.id ?? null;
+  }
+
   private async write(
     ctx: WebhookContext,
+    organizationId: string,
     stripeSubscriptionId: string,
     value: Record<string, unknown> | null,
   ): Promise<void> {
     const { error } = await ctx.supabase
       .from('subscriptions')
       .update({ active_discount: value as never })
+      .eq('organization_id', organizationId)
       .eq('stripe_subscription_id', stripeSubscriptionId);
 
     if (error) {

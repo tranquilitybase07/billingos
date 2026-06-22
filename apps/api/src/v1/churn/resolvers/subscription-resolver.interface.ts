@@ -1,4 +1,4 @@
-import { DiscountOffer } from '../dto/churn-flow-config';
+import { ChurnFlowConfig, DiscountOffer } from '../dto/churn-flow-config';
 
 export interface SubscriptionView {
   id: string;
@@ -19,6 +19,8 @@ export interface ChurnContext {
   bosSubscriptionId?: string;
   customerId?: string;
   flowId?: string;
+  /** The org's enabled churn flow, loaded once when the context is built. */
+  flow: ChurnFlowConfig | null;
   source: 'portal' | 'embed' | 'api';
   resolver: SubscriptionResolver;
 }
