@@ -22,6 +22,11 @@ import {
   ChurnRateDataPoint,
 } from './dto/churn-rate-response.dto';
 import {
+  ChurnSaveAnalyticsResponseDto,
+  ChurnSaveByReason,
+  ChurnSaveByOfferType,
+} from './dto/churn-save-analytics-response.dto';
+import {
   TopCustomersResponseDto,
   TopCustomerDto,
 } from './dto/top-customers-response.dto';
@@ -641,6 +646,156 @@ export class AnalyticsService {
     this.logger.log(
       `Churn rate for organization ${organizationId}: ${avgChurnRate.toFixed(2)}% average`,
     );
+
+    return response;
+  }
+
+  /**
+   * Save-rate analytics derived from the action-time `churn_events` log. Works
+   * even for churn-only orgs with no `subscriptions` rows. Save rate is the share
+   * of cancel-flow exits that were saved by an accepted offer.
+   */
+  async getChurnSaveAnalytics(
+    organizationId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<ChurnSaveAnalyticsResponseDto> {
+    const cacheKey = `analytics:${organizationId}:churn-saves:${startDate}:${endDate}`;
+
+    const cached =
+      await this.cacheManager.get<ChurnSaveAnalyticsResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `Churn-save analytics cache HIT for organization ${organizationId}`,
+      );
+      return cached;
+    }
+
+    this.logger.log(
+      `Churn-save analytics cache MISS for organization ${organizationId}`,
+    );
+
+    const supabase = this.supabaseService.getClient();
+
+    const { data: events, error } = await supabase
+      .from('churn_events')
+      .select('event_type, reason, offer')
+      .eq('organization_id', organizationId)
+      .gte('created_at', startDate)
+      .lte('created_at', `${endDate}T23:59:59.999Z`);
+
+    if (error) {
+      this.logger.error(
+        `Failed to fetch churn events: ${error.message}`,
+        error,
+      );
+      throw new BadRequestException('Failed to calculate save-rate analytics');
+    }
+
+    const totals = {
+      flowStarted: 0,
+      surveySubmitted: 0,
+      offerShown: 0,
+      offerAccepted: 0,
+      offerDeclined: 0,
+      canceled: 0,
+    };
+
+    const byReason = new Map<string, ChurnSaveByReason>();
+    const byOfferType = new Map<string, ChurnSaveByOfferType>();
+
+    const reasonBucket = (reason: string): ChurnSaveByReason => {
+      let b = byReason.get(reason);
+      if (!b) {
+        b = {
+          reason,
+          offerShown: 0,
+          offerAccepted: 0,
+          offerDeclined: 0,
+          canceled: 0,
+          saveRate: 0,
+        };
+        byReason.set(reason, b);
+      }
+      return b;
+    };
+
+    const offerTypeBucket = (offerType: string): ChurnSaveByOfferType => {
+      let b = byOfferType.get(offerType);
+      if (!b) {
+        b = {
+          offerType,
+          offerShown: 0,
+          offerAccepted: 0,
+          offerDeclined: 0,
+          acceptRate: 0,
+        };
+        byOfferType.set(offerType, b);
+      }
+      return b;
+    };
+
+    for (const ev of events ?? []) {
+      const reason = (ev.reason as string | null) ?? 'unknown';
+      const offerType =
+        (ev.offer as { type?: string } | null)?.type ?? 'unknown';
+
+      switch (ev.event_type) {
+        case 'flow_started':
+          totals.flowStarted++;
+          break;
+        case 'survey_submitted':
+          totals.surveySubmitted++;
+          break;
+        case 'offer_shown':
+          totals.offerShown++;
+          reasonBucket(reason).offerShown++;
+          offerTypeBucket(offerType).offerShown++;
+          break;
+        case 'offer_accepted':
+          totals.offerAccepted++;
+          reasonBucket(reason).offerAccepted++;
+          offerTypeBucket(offerType).offerAccepted++;
+          break;
+        case 'offer_declined':
+          totals.offerDeclined++;
+          reasonBucket(reason).offerDeclined++;
+          offerTypeBucket(offerType).offerDeclined++;
+          break;
+        case 'canceled':
+          totals.canceled++;
+          reasonBucket(reason).canceled++;
+          break;
+      }
+    }
+
+    const rate = (saved: number, lost: number): number =>
+      saved + lost > 0 ? Math.round((saved / (saved + lost)) * 1000) / 10 : 0;
+
+    for (const b of byReason.values()) {
+      b.saveRate = rate(b.offerAccepted, b.canceled);
+    }
+    for (const b of byOfferType.values()) {
+      b.acceptRate =
+        b.offerShown > 0
+          ? Math.round((b.offerAccepted / b.offerShown) * 1000) / 10
+          : 0;
+    }
+
+    const response: ChurnSaveAnalyticsResponseDto = {
+      ...totals,
+      saveRate: rate(totals.offerAccepted, totals.canceled),
+      byReason: Array.from(byReason.values()).sort(
+        (a, b) => b.canceled + b.offerAccepted - (a.canceled + a.offerAccepted),
+      ),
+      byOfferType: Array.from(byOfferType.values()).sort(
+        (a, b) => b.offerShown - a.offerShown,
+      ),
+      startDate,
+      endDate,
+    };
+
+    await this.cacheManager.set(cacheKey, response, 900000);
 
     return response;
   }

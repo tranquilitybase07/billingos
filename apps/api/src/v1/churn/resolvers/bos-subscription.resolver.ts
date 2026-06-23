@@ -7,7 +7,7 @@ import {
 import Stripe from 'stripe';
 import { SupabaseService } from '../../../supabase/supabase.service';
 import { StripeService } from '../../../stripe/stripe.service';
-import { DiscountOffer } from '../dto/churn-flow-config';
+import { DiscountOffer, PauseOffer } from '../dto/churn-flow-config';
 import {
   ChurnContext,
   SubscriptionResolver,
@@ -35,6 +35,7 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
         current_period_end,
         cancel_at_period_end,
         active_discount,
+        paused_at,
         product:products ( name ),
         price:product_prices (
           price_amount,
@@ -68,6 +69,7 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
       renewalDate: sub.current_period_end,
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
       hasActiveDiscount: sub.active_discount != null,
+      isPaused: sub.paused_at != null,
     };
   }
 
@@ -126,6 +128,77 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
 
     this.logger.log(
       `Applied coupon ${couponId} to subscription ${sub.id} (${sub.stripe_subscription_id})`,
+    );
+
+    return this.getSubscription(ctx);
+  }
+
+  async pause(
+    ctx: ChurnContext,
+    offer: PauseOffer,
+  ): Promise<SubscriptionView> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: sub, error } = await supabase
+      .from('subscriptions')
+      .select('id, stripe_subscription_id, status, current_period_end')
+      .eq('id', ctx.subscriptionRef)
+      .eq('organization_id', ctx.organizationId)
+      .single();
+
+    if (error || !sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+    if (!sub.stripe_subscription_id) {
+      throw new BadRequestException(
+        'Subscription does not have a Stripe subscription ID',
+      );
+    }
+    if (sub.status === 'canceled') {
+      throw new BadRequestException('Subscription is already cancelled');
+    }
+
+    const behavior = offer.behavior ?? 'void';
+    const resumesAt = this.computePauseResumesAt(offer, sub.current_period_end);
+    const resumeAtUnix = resumesAt
+      ? Math.floor(new Date(resumesAt).getTime() / 1000)
+      : undefined;
+
+    const updated = await this.stripeService.pauseSubscription(
+      sub.stripe_subscription_id,
+      ctx.stripeAccountId,
+      resumeAtUnix,
+      behavior,
+      `churn-pause-${sub.id}`,
+    );
+
+    // Write-through the pause state from Stripe's response (Stripe authoritative);
+    // webhooks reconcile. Access stays live until the period end — pause stops
+    // future invoicing, it does not revoke entitlements here.
+    const stripeResumesAt = updated.pause_collection?.resumes_at
+      ? new Date(updated.pause_collection.resumes_at * 1000).toISOString()
+      : resumesAt;
+
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        paused_at: new Date().toISOString(),
+        resumes_at: stripeResumesAt,
+        pause_behavior: updated.pause_collection?.behavior ?? behavior,
+      })
+      .eq('id', sub.id)
+      .eq('organization_id', ctx.organizationId);
+
+    if (updateError) {
+      this.logger.error(
+        `Stripe pause succeeded but BOS update failed for ${sub.id}: ${updateError.message}`,
+      );
+      throw new Error('Failed to update subscription after pause');
+    }
+
+    this.logger.log(
+      `Paused subscription ${sub.id} (${sub.stripe_subscription_id})` +
+        (resumesAt ? ` until ${resumesAt}` : ' indefinitely'),
     );
 
     return this.getSubscription(ctx);
@@ -266,5 +339,24 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
     const ends = new Date();
     ends.setMonth(ends.getMonth() + offer.durationInMonths);
     return ends.toISOString();
+  }
+
+  /**
+   * The pause window is added on TOP of the already-paid current period: billing
+   * resumes `durationInMonths` after the current period ends, not after "now".
+   * Otherwise a mid-period pause is swallowed by the period the customer already
+   * paid for and grants no free time. Falls back to now if the period end is
+   * unknown. Returns null for an indefinite pause.
+   */
+  private computePauseResumesAt(
+    offer: PauseOffer,
+    currentPeriodEnd: string | null,
+  ): string | null {
+    if (!offer.durationInMonths) {
+      return null;
+    }
+    const resumes = currentPeriodEnd ? new Date(currentPeriodEnd) : new Date();
+    resumes.setMonth(resumes.getMonth() + offer.durationInMonths);
+    return resumes.toISOString();
   }
 }

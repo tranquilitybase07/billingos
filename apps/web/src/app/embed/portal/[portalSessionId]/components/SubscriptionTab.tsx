@@ -325,24 +325,47 @@ export function SubscriptionTab({
                       </span>
                     </p>
                   )}
+                  {subscription.isPaused && (
+                    <p>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+                        ⏸ {subscription.pause?.resumesAt
+                          ? `Paused — billing resumes ${formatDate(subscription.pause.resumesAt)}`
+                          : 'Paused — billing on hold'}
+                      </span>
+                    </p>
+                  )}
                   <p className="text-gray-700 dark:text-neutral-300">
                     <span className="text-gray-500 dark:text-neutral-400">Current Period: </span>
                     <span className="font-medium">
                       {formatDate(subscription.currentPeriodStart)} – {formatDate(subscription.currentPeriodEnd)}
                     </span>
                   </p>
-                  {subscription.status !== 'canceled' && !subscription.cancelAtPeriodEnd && (
-                    <p className="text-gray-700 dark:text-neutral-300">
-                      <span className="text-gray-500 dark:text-neutral-400">Next invoice: </span>
-                      <span className="font-medium">
-                        {formatMoney(
-                          discountedAmount(subscription.price.amount, subscription.discount),
-                          subscription.price.currency,
-                        )}{' '}
-                        on {formatDate(subscription.currentPeriodEnd)}
-                      </span>
-                    </p>
-                  )}
+                  {subscription.status !== 'canceled' &&
+                    !subscription.cancelAtPeriodEnd &&
+                    !subscription.isPaused && (
+                      <p className="text-gray-700 dark:text-neutral-300">
+                        <span className="text-gray-500 dark:text-neutral-400">Next invoice: </span>
+                        <span className="font-medium">
+                          {formatMoney(
+                            discountedAmount(subscription.price.amount, subscription.discount),
+                            subscription.price.currency,
+                          )}{' '}
+                          on {formatDate(subscription.currentPeriodEnd)}
+                        </span>
+                      </p>
+                    )}
+                  {subscription.status !== 'canceled' &&
+                    !subscription.cancelAtPeriodEnd &&
+                    subscription.isPaused && (
+                      <p className="text-gray-700 dark:text-neutral-300">
+                        <span className="text-gray-500 dark:text-neutral-400">Billing: </span>
+                        <span className="font-medium">
+                          {subscription.pause?.resumesAt
+                            ? `Paused — resumes ${formatDate(subscription.pause.resumesAt)}`
+                            : 'Paused indefinitely'}
+                        </span>
+                      </p>
+                    )}
                   {subscription.trialEnd && new Date(subscription.trialEnd) > new Date() && (
                     <p className="text-blue-600 dark:text-blue-400 font-medium">
                       Trial ends {formatDate(subscription.trialEnd)}
@@ -577,6 +600,7 @@ export function SubscriptionTab({
             interval: churnSub.price.interval,
             renewalDate: churnSub.currentPeriodEnd,
             hasActiveDiscount: churnSub.hasActiveDiscount,
+            isPaused: churnSub.isPaused,
           }}
           onApplyOffer={churnApplyOffer}
           onCancel={churnCancel}
@@ -587,7 +611,7 @@ export function SubscriptionTab({
               onCancel()
               sendMessage({ type: 'SUBSCRIPTION_CANCELLED' })
             } else {
-              setToast({ message: '🎉 Discount applied — your new price is below.', variant: 'success' })
+              setToast({ message: '🎉 Offer applied — your subscription has been updated.', variant: 'success' })
               onUpdate()
               sendMessage({ type: 'SUBSCRIPTION_UPDATED', payload: { subscriptions } })
             }

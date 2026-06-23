@@ -14,7 +14,15 @@ export interface ContactOffer {
   description?: string
 }
 
-export type Offer = DiscountOffer | ContactOffer
+export interface PauseOffer {
+  type: 'pause'
+  durationInMonths?: number
+  behavior?: 'keep_as_draft' | 'mark_uncollectible' | 'void'
+  headline?: string
+  description?: string
+}
+
+export type Offer = DiscountOffer | ContactOffer | PauseOffer
 
 export interface SurveyReason {
   key: string
@@ -53,4 +61,5 @@ export interface ChurnSubscriptionView {
   interval: string
   renewalDate: string
   hasActiveDiscount?: boolean
+  isPaused?: boolean
 }

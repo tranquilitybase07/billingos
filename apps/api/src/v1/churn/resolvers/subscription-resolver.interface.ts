@@ -1,4 +1,8 @@
-import { ChurnFlowConfig, DiscountOffer } from '../dto/churn-flow-config';
+import {
+  ChurnFlowConfig,
+  DiscountOffer,
+  PauseOffer,
+} from '../dto/churn-flow-config';
 
 export interface SubscriptionView {
   id: string;
@@ -10,6 +14,7 @@ export interface SubscriptionView {
   renewalDate: string;
   cancelAtPeriodEnd: boolean;
   hasActiveDiscount: boolean;
+  isPaused: boolean;
 }
 
 export interface ChurnContext {
@@ -32,6 +37,7 @@ export interface SubscriptionResolver {
     offer: DiscountOffer,
     reasonKey: string,
   ): Promise<SubscriptionView>;
+  pause(ctx: ChurnContext, offer: PauseOffer): Promise<SubscriptionView>;
   cancel(
     ctx: ChurnContext,
     timing: 'immediate' | 'end_of_period',

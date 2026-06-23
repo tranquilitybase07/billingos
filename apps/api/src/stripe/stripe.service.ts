@@ -690,6 +690,61 @@ export class StripeService {
   }
 
   /**
+   * Pause billing on an active subscription via `pause_collection`. Used by the
+   * churn pause save-offer. `void` (default) stops invoicing while paused; the
+   * subscription stays active so feature access continues until the period end.
+   * Pass `resumeAt` (unix seconds) to auto-resume, or omit for an indefinite pause.
+   */
+  async pauseSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+    resumeAt?: number,
+    behavior: 'keep_as_draft' | 'mark_uncollectible' | 'void' = 'void',
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Pausing subscription ${subscriptionId} in account ${stripeAccountId}` +
+        (resumeAt ? ` until ${resumeAt}` : ' indefinitely'),
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      {
+        pause_collection: {
+          behavior,
+          ...(resumeAt && { resumes_at: resumeAt }),
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
+   * Clear `pause_collection`, resuming normal billing on a paused subscription.
+   */
+  async resumeSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Resuming subscription ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      { pause_collection: null },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
    * List all subscriptions on a Stripe Connect account (uses auto-pagination)
    * Used for drift detection — compares Stripe state against local DB.
    */

@@ -48,6 +48,10 @@ function formatCurrency(amount: number, currency: string): string {
   }).format(amount / 100)
 }
 
+function monthsLabel(months: number): string {
+  return `${months} month${months > 1 ? 's' : ''}`
+}
+
 function offerHeadline(offer: Offer, currency: string): string {
   if (offer.headline) return offer.headline
   if (offer.type === 'discount') {
@@ -58,9 +62,15 @@ function offerHeadline(offer: Offer, currency: string): string {
           ? `${formatCurrency(offer.amountOff, currency)} off`
           : 'a discount'
     const span = offer.durationInMonths
-      ? `for ${offer.durationInMonths} month${offer.durationInMonths > 1 ? 's' : ''}`
+      ? `for ${monthsLabel(offer.durationInMonths)}`
       : 'on your next bill'
     return `Stay and get ${amount} ${span}`
+  }
+  if (offer.type === 'pause') {
+    const span = offer.durationInMonths
+      ? `for ${monthsLabel(offer.durationInMonths)}`
+      : 'instead'
+    return `Pause your plan ${span}`
   }
   return 'We can help'
 }
@@ -228,17 +238,33 @@ export function ChurnFlowBody({
             </div>
           )}
           <p className="text-sm text-gray-600 dark:text-neutral-400">
-            Your <span className="font-medium">{subscription.planName}</span> plan stays
-            active — no interruption.
+            {currentOffer.type === 'pause' ? (
+              <>
+                Billing pauses on your{' '}
+                <span className="font-medium">{subscription.planName}</span> plan — you
+                keep access until the end of your current period.
+              </>
+            ) : (
+              <>
+                Your <span className="font-medium">{subscription.planName}</span> plan stays
+                active — no interruption.
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-col gap-2">
-          {currentOffer.type === 'discount' ? (
+          {currentOffer.type === 'discount' || currentOffer.type === 'pause' ? (
             <PrimaryButton
               disabled={state.isProcessing}
               onClick={() => machine.acceptOffer()}
             >
-              {state.isProcessing ? 'Applying…' : 'Claim offer & stay'}
+              {state.isProcessing
+                ? currentOffer.type === 'pause'
+                  ? 'Pausing…'
+                  : 'Applying…'
+                : currentOffer.type === 'pause'
+                  ? 'Pause my plan'
+                  : 'Claim offer & stay'}
             </PrimaryButton>
           ) : (
             <a

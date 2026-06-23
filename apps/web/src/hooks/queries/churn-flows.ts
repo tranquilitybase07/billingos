@@ -4,6 +4,7 @@ import type { ChurnStep } from '@/components/churn/types'
 
 export interface ChurnFlowSettings {
   allowRepeatDiscount?: boolean
+  allowRepeatPause?: boolean
 }
 
 export interface ChurnFlow {

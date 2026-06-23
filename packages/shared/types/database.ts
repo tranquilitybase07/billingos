@@ -1806,9 +1806,12 @@ export type Database = {
           id: string
           metadata: Json | null
           organization_id: string
+          pause_behavior: string | null
+          paused_at: string | null
           payment_intent_id: string | null
           price_id: string | null
           product_id: string
+          resumes_at: string | null
           status: string
           stripe_subscription_id: string | null
           trial_end: string | null
@@ -1833,9 +1836,12 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id: string
+          pause_behavior?: string | null
+          paused_at?: string | null
           payment_intent_id?: string | null
           price_id?: string | null
           product_id: string
+          resumes_at?: string | null
           status: string
           stripe_subscription_id?: string | null
           trial_end?: string | null
@@ -1860,9 +1866,12 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id?: string
+          pause_behavior?: string | null
+          paused_at?: string | null
           payment_intent_id?: string | null
           price_id?: string | null
           product_id?: string
+          resumes_at?: string | null
           status?: string
           stripe_subscription_id?: string | null
           trial_end?: string | null

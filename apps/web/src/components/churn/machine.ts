@@ -8,7 +8,11 @@ import type {
 
 export type ChurnScreen = 'survey' | 'offer' | 'confirm' | 'success'
 export type ChurnOutcome = 'saved' | 'canceled'
-export type ChurnApplyOutcome = 'saved' | 'already_discounted' | 'not_eligible'
+export type ChurnApplyOutcome =
+  | 'saved'
+  | 'already_discounted'
+  | 'already_paused'
+  | 'not_eligible'
 
 export interface ChurnMachineState {
   screen: ChurnScreen
@@ -23,7 +27,10 @@ export interface ChurnMachineState {
 
 export interface ChurnMachineContext {
   hasActiveDiscount?: boolean
+  isPaused?: boolean
 }
+
+const SERVER_OFFER_TYPES = ['discount', 'pause'] as const
 
 export type ChurnLogEvent =
   | { type: 'flow_started' }
@@ -133,13 +140,21 @@ export class ChurnMachine {
     })
 
     const offer = this.getCurrentOffer()
-    // Skip the offer step when the customer already has an active discount —
-    // re-granting would reset its duration (handled server-side too). Other
-    // ineligibility (already redeemed once) is caught reactively on accept.
+    // Skip the offer step when the customer is already in the offer's end-state —
+    // re-granting a discount resets its duration; re-pausing a paused sub is a
+    // no-op (handled server-side too). Other ineligibility (already redeemed once)
+    // is caught reactively on accept.
     if (offer?.type === 'discount' && this.context.hasActiveDiscount) {
       this.set({
         screen: 'confirm',
         notice: "You're already on a discounted plan.",
+      })
+      return
+    }
+    if (offer?.type === 'pause' && this.context.isPaused) {
+      this.set({
+        screen: 'confirm',
+        notice: 'Your subscription is already paused.',
       })
       return
     }
@@ -156,26 +171,35 @@ export class ChurnMachine {
     if (this.terminal() || this.state.screen !== 'offer') return
     const reason = this.state.selectedReason
     const offer = this.getCurrentOffer()
-    if (!reason || !offer || offer.type !== 'discount') return
+    if (
+      !reason ||
+      !offer ||
+      !SERVER_OFFER_TYPES.includes(offer.type as (typeof SERVER_OFFER_TYPES)[number])
+    )
+      return
 
     this.set({ isProcessing: true, error: null })
     try {
       // Server records `offer_accepted` authoritatively on a successful apply —
-      // the client does not log it (avoids double-counting).
+      // the client does not log it (avoids double-counting). The server resolves
+      // the offer from stored config, so a single applyOffer(reason) covers every
+      // executable offer type.
       const result = await this.handlers.applyOffer(reason)
       if (result === 'saved') {
         this.set({ screen: 'success', outcome: 'saved', isProcessing: false })
         this.handlers.onDone?.('saved')
       } else {
-        // Not eligible (already discounted / one-time already used) — fall through
-        // to confirm rather than error, with a friendly note.
+        // Not eligible (already in the end-state / one-time already used) — fall
+        // through to confirm rather than error, with a friendly note.
         this.set({
           screen: 'confirm',
           isProcessing: false,
           notice:
             result === 'already_discounted'
               ? "You're already getting this discount."
-              : "This offer isn't available again.",
+              : result === 'already_paused'
+                ? 'Your subscription is already paused.'
+                : "This offer isn't available again.",
         })
       }
     } catch (err) {

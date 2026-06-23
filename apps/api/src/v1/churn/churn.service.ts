@@ -1,7 +1,13 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { ChurnContextService } from './churn-context.service';
-import { ChurnFlowConfig, Offer, SurveyStep } from './dto/churn-flow-config';
+import {
+  ChurnFlowConfig,
+  DiscountOffer,
+  Offer,
+  PauseOffer,
+  SurveyStep,
+} from './dto/churn-flow-config';
 import { isDiscountEligible } from './eligibility';
 import {
   ApplyOfferDto,
@@ -20,6 +26,12 @@ interface ChurnEventInput {
   offer?: Record<string, unknown>;
   outcome?: string;
 }
+
+type ApplyOfferOutcome =
+  | 'saved'
+  | 'already_discounted'
+  | 'already_paused'
+  | 'not_eligible';
 
 @Injectable()
 export class ChurnService {
@@ -44,7 +56,7 @@ export class ChurnService {
     );
     const [subscription, redeemedBefore] = await Promise.all([
       ctx.resolver.getSubscription(ctx),
-      this.hasRedeemedChurnOffer(ctx),
+      this.hasRedeemedChurnOffer(ctx, 'discount'),
     ]);
     const offerEligible = isDiscountEligible(
       subscription.hasActiveDiscount,
@@ -76,41 +88,79 @@ export class ChurnService {
     dto: ApplyOfferDto,
   ): Promise<{
     subscription: SubscriptionView;
-    outcome: 'saved' | 'already_discounted' | 'not_eligible';
+    outcome: ApplyOfferOutcome;
   }> {
     const ctx = await this.churnContextService.resolveFromPortalSession(
       sessionId,
       dto.subscriptionId,
     );
 
-    const flow = ctx.flow;
-    const offer = this.findOfferForReason(flow, dto.reason);
-
+    const offer = this.findOfferForReason(ctx.flow, dto.reason);
     if (!offer) {
       throw new BadRequestException('No offer is configured for that reason');
     }
-    if (offer.type !== 'discount') {
-      throw new BadRequestException(
-        `Offer type "${offer.type}" is not executable server-side`,
-      );
-    }
 
+    switch (offer.type) {
+      case 'discount':
+        return this.applyDiscountOffer(ctx, offer, dto.reason);
+      case 'pause':
+        return this.applyPauseOffer(ctx, offer, dto.reason);
+      default:
+        throw new BadRequestException(
+          `Offer type "${offer.type}" is not executable server-side`,
+        );
+    }
+  }
+
+  private async applyDiscountOffer(
+    ctx: ChurnContext,
+    offer: DiscountOffer,
+    reason: string,
+  ): Promise<{ subscription: SubscriptionView; outcome: ApplyOfferOutcome }> {
     // Eligibility guard — BOS reads only, no Stripe call (rate-limit safety).
     const view = await ctx.resolver.getSubscription(ctx);
     if (view.hasActiveDiscount) {
       return { subscription: view, outcome: 'already_discounted' };
     }
-    const redeemedBefore = await this.hasRedeemedChurnOffer(ctx);
-    const allowRepeat = flow?.settings?.allowRepeatDiscount ?? false;
+    const redeemedBefore = await this.hasRedeemedChurnOffer(ctx, 'discount');
+    const allowRepeat = ctx.flow?.settings?.allowRepeatDiscount ?? false;
     if (!isDiscountEligible(false, redeemedBefore, allowRepeat)) {
       return { subscription: view, outcome: 'not_eligible' };
     }
 
-    const subscription = await ctx.resolver.applyDiscount(ctx, offer, dto.reason);
+    const subscription = await ctx.resolver.applyDiscount(ctx, offer, reason);
 
     await this.recordEvent(ctx, {
       eventType: 'offer_accepted',
-      reason: dto.reason,
+      reason,
+      offer: offer as unknown as Record<string, unknown>,
+      outcome: 'saved',
+    });
+
+    return { subscription, outcome: 'saved' };
+  }
+
+  private async applyPauseOffer(
+    ctx: ChurnContext,
+    offer: PauseOffer,
+    reason: string,
+  ): Promise<{ subscription: SubscriptionView; outcome: ApplyOfferOutcome }> {
+    // Eligibility guard — BOS reads only, no Stripe call (rate-limit safety).
+    const view = await ctx.resolver.getSubscription(ctx);
+    if (view.isPaused) {
+      return { subscription: view, outcome: 'already_paused' };
+    }
+    const redeemedBefore = await this.hasRedeemedChurnOffer(ctx, 'pause');
+    const allowRepeat = ctx.flow?.settings?.allowRepeatPause ?? false;
+    if (redeemedBefore && !allowRepeat) {
+      return { subscription: view, outcome: 'not_eligible' };
+    }
+
+    const subscription = await ctx.resolver.pause(ctx, offer);
+
+    await this.recordEvent(ctx, {
+      eventType: 'offer_accepted',
+      reason,
       offer: offer as unknown as Record<string, unknown>,
       outcome: 'saved',
     });
@@ -144,7 +194,10 @@ export class ChurnService {
     return { subscription, outcome: 'canceled' };
   }
 
-  private async hasRedeemedChurnOffer(ctx: ChurnContext): Promise<boolean> {
+  private async hasRedeemedChurnOffer(
+    ctx: ChurnContext,
+    offerType: 'discount' | 'pause',
+  ): Promise<boolean> {
     if (!ctx.bosSubscriptionId) return false;
     const supabase = this.supabaseService.getClient();
     const { count } = await supabase
@@ -152,7 +205,8 @@ export class ChurnService {
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', ctx.organizationId)
       .eq('subscription_id', ctx.bosSubscriptionId)
-      .eq('event_type', 'offer_accepted');
+      .eq('event_type', 'offer_accepted')
+      .eq('offer->>type', offerType);
     return (count ?? 0) > 0;
   }
 

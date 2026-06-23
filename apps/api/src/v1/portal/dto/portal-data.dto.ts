@@ -40,6 +40,10 @@ export interface PortalSubscription {
     amountOff?: number | null;
     endsAt?: string | null;
   };
+  isPaused?: boolean;
+  pause?: {
+    resumesAt?: string | null;
+  };
 }
 
 export interface PortalInvoice {

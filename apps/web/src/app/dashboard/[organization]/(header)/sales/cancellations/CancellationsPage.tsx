@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Download01Icon, FilterIcon, Layers01Icon } from 'hugeicons-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
+import { useChurnSaveAnalytics } from '@/hooks/queries/analytics'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { downloadCSV } from '@/utils/csv'
 import { useState, useMemo } from 'react'
@@ -80,6 +81,92 @@ function StatsCards({
           <span className="text-[11px] text-muted-foreground/70">{card.sub}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Save performance (churn_events analytics) ────────────────
+
+const OFFER_TYPE_LABELS: Record<string, string> = {
+  discount: 'Discount',
+  pause: 'Pause',
+  contact: 'Contact',
+  redirect: 'Redirect',
+  unknown: 'Other',
+}
+
+function SaveRateSection({ organizationId }: { organizationId: string }) {
+  const { data } = useChurnSaveAnalytics({ organization_id: organizationId })
+
+  // Hide entirely until the flow has produced events worth showing.
+  if (!data || (data.offerShown === 0 && data.canceled === 0)) return null
+
+  const cards = [
+    { label: 'Save Rate', value: `${data.saveRate}%`, sub: 'offers accepted vs cancels' },
+    { label: 'Offers Shown', value: data.offerShown.toString(), sub: 'in last 90 days' },
+    { label: 'Offers Accepted', value: data.offerAccepted.toString(), sub: 'saved subscriptions' },
+    { label: 'Offers Declined', value: data.offerDeclined.toString(), sub: 'continued to cancel' },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((card) => (
+          <div key={card.label} className="rounded-xl bg-card p-5 flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">{card.label}</span>
+            <span className="text-2xl font-semibold text-foreground leading-tight">
+              {card.value}
+            </span>
+            <span className="text-[11px] text-muted-foreground/70">{card.sub}</span>
+          </div>
+        ))}
+      </div>
+
+      {(data.byReason.length > 0 || data.byOfferType.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {data.byReason.length > 0 && (
+            <div className="rounded-xl bg-card p-5">
+              <h3 className="text-sm font-semibold mb-3">Save rate by reason</h3>
+              <div className="flex flex-col gap-2.5">
+                {data.byReason.map((r) => (
+                  <div key={r.reason} className="flex items-center gap-3">
+                    <span className="text-sm w-36 shrink-0 truncate" title={REASON_LABELS[r.reason] ?? r.reason}>
+                      {REASON_LABELS[r.reason] ?? r.reason}
+                    </span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${r.saveRate}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-28 shrink-0 text-right tabular-nums">
+                      {r.saveRate}% · {r.offerAccepted}/{r.offerAccepted + r.canceled}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.byOfferType.length > 0 && (
+            <div className="rounded-xl bg-card p-5">
+              <h3 className="text-sm font-semibold mb-3">Acceptance by offer type</h3>
+              <div className="flex flex-col gap-2.5">
+                {data.byOfferType.map((o) => (
+                  <div key={o.offerType} className="flex items-center gap-3">
+                    <span className="text-sm w-28 shrink-0 truncate">
+                      {OFFER_TYPE_LABELS[o.offerType] ?? o.offerType}
+                    </span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${o.acceptRate}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-28 shrink-0 text-right tabular-nums">
+                      {o.acceptRate}% · {o.offerAccepted}/{o.offerShown}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -473,6 +560,8 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
           topReason={stats.topReason}
           avgAmount={stats.avgAmount}
         />
+
+        <SaveRateSection organizationId={organizationId} />
 
         <FilterBar
           isOpen={isFilterOpen}

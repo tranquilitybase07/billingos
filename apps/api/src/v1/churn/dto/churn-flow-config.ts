@@ -14,7 +14,17 @@ export interface ContactOffer {
   description?: string;
 }
 
-export type Offer = DiscountOffer | ContactOffer;
+export interface PauseOffer {
+  type: 'pause';
+  /** Resume billing after N months; omit for an indefinite pause. */
+  durationInMonths?: number;
+  /** Stripe pause_collection behavior; defaults to 'void' (no invoices while paused). */
+  behavior?: 'keep_as_draft' | 'mark_uncollectible' | 'void';
+  headline?: string;
+  description?: string;
+}
+
+export type Offer = DiscountOffer | ContactOffer | PauseOffer;
 
 export interface SurveyReason {
   key: string;
@@ -41,6 +51,7 @@ export type ChurnStep = SurveyStep | ConfirmStep;
 
 export interface ChurnFlowSettings {
   allowRepeatDiscount?: boolean;
+  allowRepeatPause?: boolean;
 }
 
 export interface ChurnFlowConfig {

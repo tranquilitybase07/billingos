@@ -213,6 +213,8 @@ export class PortalService {
         canceled_at,
         trial_end,
         active_discount,
+        paused_at,
+        resumes_at,
         product:products (
           id,
           name,
@@ -290,6 +292,9 @@ export class PortalService {
           }
         ).active_discount;
 
+        const pausedAt = (sub as { paused_at?: string | null }).paused_at;
+        const resumesAt = (sub as { resumes_at?: string | null }).resumes_at;
+
         portalSubscriptions.push({
           id: sub.id,
           status: sub.status,
@@ -319,6 +324,8 @@ export class PortalService {
                 endsAt: activeDiscount.endsAt ?? null,
               }
             : undefined,
+          isPaused: pausedAt != null,
+          pause: pausedAt != null ? { resumesAt: resumesAt ?? null } : undefined,
           pendingDowngrade: pendingChange
             ? {
                 newProductName:

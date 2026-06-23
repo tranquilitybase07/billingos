@@ -30,8 +30,10 @@ import {
 
 interface OfferDraft {
   enabled: boolean
+  kind: 'discount' | 'pause'
   percentOff: number
   durationInMonths: number
+  pauseMonths: number
 }
 
 interface ReasonDraft {
@@ -50,6 +52,15 @@ interface FlowDraft {
   allowImmediate: boolean
   losses: string
   allowRepeatDiscount: boolean
+  allowRepeatPause: boolean
+}
+
+const DEFAULT_OFFER: OfferDraft = {
+  enabled: false,
+  kind: 'discount',
+  percentOff: 20,
+  durationInMonths: 3,
+  pauseMonths: 0,
 }
 
 const DEFAULT_DRAFT: FlowDraft = {
@@ -57,16 +68,17 @@ const DEFAULT_DRAFT: FlowDraft = {
   enabled: false,
   surveyTitle: 'Before you go…',
   reasons: [
-    { key: 'too_expensive', label: 'Too expensive', offer: { enabled: true, percentOff: 20, durationInMonths: 3 } },
-    { key: 'not_using', label: 'Not using it enough', offer: { enabled: false, percentOff: 20, durationInMonths: 3 } },
-    { key: 'missing_features', label: 'Missing features', offer: { enabled: false, percentOff: 20, durationInMonths: 3 } },
-    { key: 'found_alternative', label: 'Found an alternative', offer: { enabled: false, percentOff: 20, durationInMonths: 3 } },
-    { key: 'other', label: 'Other', offer: { enabled: false, percentOff: 20, durationInMonths: 3 } },
+    { key: 'too_expensive', label: 'Too expensive', offer: { ...DEFAULT_OFFER, enabled: true } },
+    { key: 'not_using', label: 'Not using it enough', offer: { ...DEFAULT_OFFER, kind: 'pause' } },
+    { key: 'missing_features', label: 'Missing features', offer: { ...DEFAULT_OFFER } },
+    { key: 'found_alternative', label: 'Found an alternative', offer: { ...DEFAULT_OFFER } },
+    { key: 'other', label: 'Other', offer: { ...DEFAULT_OFFER } },
   ],
   confirmTitle: 'Cancel subscription?',
   allowImmediate: true,
   losses: 'Your saved data\nPremium features\nPriority support',
   allowRepeatDiscount: false,
+  allowRepeatPause: false,
 }
 
 function draftFromFlow(flow: ChurnFlow): FlowDraft {
@@ -83,23 +95,27 @@ function draftFromFlow(flow: ChurnFlow): FlowDraft {
         key: r.key,
         label: r.label,
         offer: {
-          enabled: r.offer?.type === 'discount',
+          enabled: r.offer?.type === 'discount' || r.offer?.type === 'pause',
+          kind: r.offer?.type === 'pause' ? 'pause' : 'discount',
           percentOff:
             r.offer?.type === 'discount' ? (r.offer.percentOff ?? 20) : 20,
           durationInMonths:
             r.offer?.type === 'discount' ? (r.offer.durationInMonths ?? 0) : 3,
-        },
+          pauseMonths:
+            r.offer?.type === 'pause' ? (r.offer.durationInMonths ?? 0) : 0,
+        } satisfies OfferDraft,
       })) ?? DEFAULT_DRAFT.reasons,
     confirmTitle: confirm?.title ?? 'Cancel subscription?',
     allowImmediate: confirm?.allowImmediate ?? true,
     losses: (confirm?.losses ?? []).join('\n'),
     allowRepeatDiscount: flow.settings?.allowRepeatDiscount ?? false,
+    allowRepeatPause: flow.settings?.allowRepeatPause ?? false,
   }
 }
 
-// TODO: the builder intentionally only emits `percentOff` discount offers in v1.
-// The backend/config model also supports `amountOff` and `contact`/`redirect`
-// offers — extend this editor when those are exposed to merchants.
+// TODO: the builder emits `percentOff` discount and `pause` offers in v1. The
+// backend/config model also supports `amountOff` and `contact`/`redirect` offers
+// — extend this editor when those are exposed to merchants.
 function buildSteps(draft: FlowDraft): ChurnStep[] {
   const survey: SurveyStep = {
     id: 'survey',
@@ -112,13 +128,21 @@ function buildSteps(draft: FlowDraft): ChurnStep[] {
         label: r.label.trim(),
         ...(r.offer.enabled
           ? {
-            offer: {
-              type: 'discount' as const,
-              percentOff: r.offer.percentOff,
-              ...(r.offer.durationInMonths > 0
-                ? { durationInMonths: r.offer.durationInMonths }
-                : {}),
-            },
+            offer:
+              r.offer.kind === 'pause'
+                ? {
+                    type: 'pause' as const,
+                    ...(r.offer.pauseMonths > 0
+                      ? { durationInMonths: r.offer.pauseMonths }
+                      : {}),
+                  }
+                : {
+                    type: 'discount' as const,
+                    percentOff: r.offer.percentOff,
+                    ...(r.offer.durationInMonths > 0
+                      ? { durationInMonths: r.offer.durationInMonths }
+                      : {}),
+                  },
           }
           : {}),
       })),
@@ -178,7 +202,10 @@ export default function ChurnBuilderPage({
       name: draft.name.trim() || 'Cancel flow',
       enabled: draft.enabled,
       steps: buildSteps(draft),
-      settings: { allowRepeatDiscount: draft.allowRepeatDiscount },
+      settings: {
+        allowRepeatDiscount: draft.allowRepeatDiscount,
+        allowRepeatPause: draft.allowRepeatPause,
+      },
     }
     try {
       if (draft.id) {
@@ -207,7 +234,10 @@ export default function ChurnBuilderPage({
           name: draft.name.trim() || 'Cancel flow',
           enabled: v,
           steps: buildSteps(draft),
-          settings: { allowRepeatDiscount: draft.allowRepeatDiscount },
+          settings: {
+        allowRepeatDiscount: draft.allowRepeatDiscount,
+        allowRepeatPause: draft.allowRepeatPause,
+      },
         })
         setDraft((d) => ({ ...d, id: created.id }))
       }
@@ -244,7 +274,7 @@ export default function ChurnBuilderPage({
         {
           key: `reason_${d.reasons.length + 1}_${Date.now().toString(36)}`,
           label: '',
-          offer: { enabled: false, percentOff: 20, durationInMonths: 3 },
+          offer: { ...DEFAULT_OFFER },
         },
       ],
     }))
@@ -343,38 +373,86 @@ export default function ChurnBuilderPage({
                       onCheckedChange={(v) => updateOffer(i, { enabled: v })}
                     />
                     <Label htmlFor={`offer-${reason.key}`} className="cursor-pointer">
-                      Discount offer
+                      Save offer
                     </Label>
                   </div>
                   {reason.offer.enabled && (
-                    <div className="grid grid-cols-2 gap-3 pl-1">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Percent off</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={reason.offer.percentOff}
-                          onChange={(e) =>
-                            updateOffer(i, {
-                              percentOff: Number(e.target.value) || 0,
-                            })
+                    <div className="space-y-3 pl-1">
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={
+                            reason.offer.kind === 'discount' ? 'default' : 'outline'
                           }
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Months (0 = once)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={reason.offer.durationInMonths}
-                          onChange={(e) =>
-                            updateOffer(i, {
-                              durationInMonths: Number(e.target.value) || 0,
-                            })
+                          onClick={() => updateOffer(i, { kind: 'discount' })}
+                        >
+                          Discount
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={
+                            reason.offer.kind === 'pause' ? 'default' : 'outline'
                           }
-                        />
+                          onClick={() => updateOffer(i, { kind: 'pause' })}
+                        >
+                          Pause
+                        </Button>
                       </div>
+                      {reason.offer.kind === 'discount' ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Percent off</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={reason.offer.percentOff}
+                              onChange={(e) =>
+                                updateOffer(i, {
+                                  percentOff: Number(e.target.value) || 0,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Months (0 = once)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={reason.offer.durationInMonths}
+                              onChange={(e) =>
+                                updateOffer(i, {
+                                  durationInMonths: Number(e.target.value) || 0,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="space-y-1.5 max-w-[50%]">
+                            <Label className="text-xs">
+                              Resume after months (0 = indefinite)
+                            </Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={reason.offer.pauseMonths}
+                              onChange={(e) =>
+                                updateOffer(i, {
+                                  pauseMonths: Number(e.target.value) || 0,
+                                })
+                              }
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Billing pauses; the customer keeps access until the end of
+                            their current period.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -425,13 +503,14 @@ export default function ChurnBuilderPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Discount policy</CardTitle>
+              <CardTitle className="text-base">Save offer policy</CardTitle>
               <CardDescription>
-                Controls whether a customer can claim a save discount more than once.
-                A customer who currently has a discount is never re-granted one.
+                Controls whether a customer can claim a save offer more than once.
+                A customer already in the offer&apos;s end-state (discounted or
+                paused) is never re-granted it.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="flex items-start gap-3">
                 <Switch
                   id="allow-repeat-discount"
@@ -451,6 +530,25 @@ export default function ChurnBuilderPage({
                     Off (recommended): the save discount is one-time per customer.
                     On: once their discount ends they can claim it again on a future
                     cancel attempt.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Switch
+                  id="allow-repeat-pause"
+                  checked={draft.allowRepeatPause}
+                  onCheckedChange={(v) =>
+                    setDraft((d) => ({ ...d, allowRepeatPause: v }))
+                  }
+                />
+                <div>
+                  <Label htmlFor="allow-repeat-pause" className="cursor-pointer">
+                    Allow repeat pauses
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Off (recommended): the pause offer is one-time per customer.
+                    On: after resuming they can pause again on a future cancel
+                    attempt.
                   </p>
                 </div>
               </div>
