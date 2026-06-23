@@ -11,7 +11,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ChurnFlowsService } from './churn-flows.service';
-import { CreateChurnFlowDto, UpdateChurnFlowDto } from './dto/churn-flows.dto';
+import {
+  CreateChurnFlowDto,
+  ListChurnFlowsQueryDto,
+  UpdateChurnFlowDto,
+} from './dto/churn-flows.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { User } from '../../user/entities/user.entity';
@@ -23,11 +27,8 @@ export class ChurnFlowsController {
   constructor(private readonly churnFlowsService: ChurnFlowsService) {}
 
   @Get()
-  findAll(
-    @CurrentUser() user: User,
-    @Query('organization_id') organizationId: string,
-  ) {
-    return this.churnFlowsService.list(organizationId, user.id);
+  findAll(@CurrentUser() user: User, @Query() query: ListChurnFlowsQueryDto) {
+    return this.churnFlowsService.list(query.organization_id, user.id);
   }
 
   @Get(':id')

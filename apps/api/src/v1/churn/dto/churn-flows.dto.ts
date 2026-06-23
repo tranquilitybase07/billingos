@@ -6,6 +6,11 @@ import {
   IsObject,
 } from 'class-validator';
 
+export class ListChurnFlowsQueryDto {
+  @IsString()
+  organization_id: string;
+}
+
 export class CreateChurnFlowDto {
   @IsString()
   organization_id: string;

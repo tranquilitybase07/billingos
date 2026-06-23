@@ -131,18 +131,18 @@ function buildSteps(draft: FlowDraft): ChurnStep[] {
             offer:
               r.offer.kind === 'pause'
                 ? {
-                    type: 'pause' as const,
-                    ...(r.offer.pauseMonths > 0
-                      ? { durationInMonths: r.offer.pauseMonths }
-                      : {}),
-                  }
+                  type: 'pause' as const,
+                  ...(r.offer.pauseMonths > 0
+                    ? { durationInMonths: r.offer.pauseMonths }
+                    : {}),
+                }
                 : {
-                    type: 'discount' as const,
-                    percentOff: r.offer.percentOff,
-                    ...(r.offer.durationInMonths > 0
-                      ? { durationInMonths: r.offer.durationInMonths }
-                      : {}),
-                  },
+                  type: 'discount' as const,
+                  percentOff: r.offer.percentOff,
+                  ...(r.offer.durationInMonths > 0
+                    ? { durationInMonths: r.offer.durationInMonths }
+                    : {}),
+                },
           }
           : {}),
       })),
@@ -235,9 +235,9 @@ export default function ChurnBuilderPage({
           enabled: v,
           steps: buildSteps(draft),
           settings: {
-        allowRepeatDiscount: draft.allowRepeatDiscount,
-        allowRepeatPause: draft.allowRepeatPause,
-      },
+            allowRepeatDiscount: draft.allowRepeatDiscount,
+            allowRepeatPause: draft.allowRepeatPause,
+          },
         })
         setDraft((d) => ({ ...d, id: created.id }))
       }

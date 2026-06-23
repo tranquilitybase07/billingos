@@ -724,6 +724,8 @@ export class StripeService {
 
   /**
    * Clear `pause_collection`, resuming normal billing on a paused subscription.
+   * TODO: not yet wired to a portal action — fixed-duration pauses auto-resume via
+   * Stripe's `resumes_at`; expose this for customer self-serve resume if needed.
    */
   async resumeSubscription(
     subscriptionId: string,

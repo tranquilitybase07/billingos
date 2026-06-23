@@ -60,6 +60,7 @@ export interface SubscriptionUpdatedData {
     amount: number | null;
     currency: string | null;
     metadata: Record<string, unknown> | null;
+    paused_at: string | null;
   };
   /** Fresh Stripe subscription (re-fetched for authoritative state) */
   stripeSub: Stripe.Subscription;

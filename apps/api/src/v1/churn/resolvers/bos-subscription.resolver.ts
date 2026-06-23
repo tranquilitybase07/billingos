@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { SupabaseService } from '../../../supabase/supabase.service';
@@ -101,7 +102,12 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
 
     const view = await this.getSubscription(ctx);
     const couponId = this.offerCouponId(ctx.flowId, reasonKey, offer);
-    await this.ensureCoupon(couponId, offer, view.currency, ctx.stripeAccountId);
+    await this.ensureCoupon(
+      couponId,
+      offer,
+      view.currency,
+      ctx.stripeAccountId,
+    );
 
     await this.stripeService.applyDiscountToSubscription(
       sub.stripe_subscription_id,
@@ -133,10 +139,7 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
     return this.getSubscription(ctx);
   }
 
-  async pause(
-    ctx: ChurnContext,
-    offer: PauseOffer,
-  ): Promise<SubscriptionView> {
+  async pause(ctx: ChurnContext, offer: PauseOffer): Promise<SubscriptionView> {
     const supabase = this.supabaseService.getClient();
 
     const { data: sub, error } = await supabase
@@ -169,7 +172,9 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
       ctx.stripeAccountId,
       resumeAtUnix,
       behavior,
-      `churn-pause-${sub.id}`,
+      // Encode the offer terms so a repeat pause with a different duration isn't
+      // collapsed by Stripe's 24h idempotency window (when allowRepeatPause is on).
+      `churn-pause-${sub.id}-${behavior}-${resumeAtUnix ?? 0}`,
     );
 
     // Write-through the pause state from Stripe's response (Stripe authoritative);
@@ -193,7 +198,9 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
       this.logger.error(
         `Stripe pause succeeded but BOS update failed for ${sub.id}: ${updateError.message}`,
       );
-      throw new Error('Failed to update subscription after pause');
+      throw new InternalServerErrorException(
+        'Failed to update subscription after pause',
+      );
     }
 
     this.logger.log(
@@ -246,14 +253,16 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
       ...(feedback && { cancellation_feedback: feedback }),
     };
 
+    // Stripe only sets canceled_at when the subscription is actually deleted, so
+    // for an end-of-period cancel we record only the scheduling flag — writing
+    // canceled_at/status now would create a false BOS record (Stripe is truth).
     const updateData: Record<string, unknown> = {
       cancel_at_period_end: cancelAtPeriodEnd,
-      canceled_at: new Date().toISOString(),
       metadata,
+      ...(cancelAtPeriodEnd
+        ? {}
+        : { canceled_at: new Date().toISOString(), status: 'canceled' }),
     };
-    if (!cancelAtPeriodEnd) {
-      updateData.status = 'canceled';
-    }
 
     const { error: updateError } = await supabase
       .from('subscriptions')
@@ -265,7 +274,9 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
       this.logger.error(
         `Stripe cancel succeeded but BOS update failed for ${sub.id}: ${updateError.message}`,
       );
-      throw new Error('Failed to update subscription after cancellation');
+      throw new InternalServerErrorException(
+        'Failed to update subscription after cancellation',
+      );
     }
 
     this.logger.log(`Cancelled subscription ${sub.id} (${timing})`);

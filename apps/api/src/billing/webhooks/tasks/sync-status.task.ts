@@ -64,13 +64,9 @@ export class SyncStatusTask implements WebhookTask<SubscriptionUpdatedData> {
         : null;
       updateData.pause_behavior = pause.behavior;
       // Stamp paused_at only on the transition into paused, so later updates
-      // (e.g. renewals while paused) don't keep resetting it.
-      const { data: cur } = await ctx.supabase
-        .from('subscriptions')
-        .select('paused_at')
-        .eq('id', existing.id)
-        .single();
-      if (!cur?.paused_at) {
+      // (e.g. renewals while paused) don't keep resetting it. `existing` carries
+      // the pre-webhook value, so no extra query is needed.
+      if (!existing.paused_at) {
         updateData.paused_at = new Date().toISOString();
       }
     } else {
