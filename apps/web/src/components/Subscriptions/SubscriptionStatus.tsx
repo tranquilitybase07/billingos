@@ -11,6 +11,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     label: 'Cancelling',
     className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400',
   },
+  paused: {
+    label: 'Paused',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+  },
   trialing: {
     label: 'Trialing',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
@@ -33,11 +37,24 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   },
 }
 
-export const SubscriptionStatus = ({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) => {
+export const SubscriptionStatus = ({
+  status,
+  cancelAtPeriodEnd,
+  paused,
+}: {
+  status: string
+  cancelAtPeriodEnd?: boolean
+  paused?: boolean
+}) => {
+  const isLive = status === 'active' || status === 'trialing'
+  // Pause is a billing overlay on an otherwise-active sub (Stripe keeps status
+  // 'active'), so surface it as its own pill, ahead of the cancelling overlay.
   const effectiveStatus =
-    (status === 'active' || status === 'trialing') && cancelAtPeriodEnd
-      ? 'cancelling'
-      : status
+    isLive && paused
+      ? 'paused'
+      : isLive && cancelAtPeriodEnd
+        ? 'cancelling'
+        : status
   const config = statusConfig[effectiveStatus] ?? {
     label: status,
     className: 'bg-gray-100 text-gray-700',

@@ -346,7 +346,7 @@ export function CustomerDetails({ customer, organizationId, variant: _variant = 
                     ),
                     cell: ({ row: { original: sub } }) => (
                       <div className="flex items-center gap-1.5">
-                        <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} />
+                        <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} paused={!!sub.paused_at} />
                         {sub.pending_downgrade && (
                           <PendingChangeBadge
                             variant="compact"

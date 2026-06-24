@@ -36,6 +36,8 @@ export interface Subscription {
   cancel_at_period_end: boolean
   canceled_at: string | null
   ended_at: string | null
+  paused_at: string | null
+  resumes_at: string | null
   stripe_subscription_id: string | null
   metadata: Record<string, any>
   created_at: string

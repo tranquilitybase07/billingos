@@ -145,6 +145,7 @@ export function SubscriptionTab({
   const [cancelFeedback, setCancelFeedback] = useState('')
   const [confirmChecked, setConfirmChecked] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [resumingId, setResumingId] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [churnSub, setChurnSub] = useState<PortalSubscription | null>(null)
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'info' } | null>(null)
@@ -252,6 +253,25 @@ export function SubscriptionTab({
       setCancelError('Failed to cancel subscription. Please try again.')
     } finally {
       setIsCancelling(false)
+    }
+  }
+
+  const handleResume = async (subscriptionId: string) => {
+    setResumingId(subscriptionId)
+    try {
+      const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/resume-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId }),
+      })
+      if (!response.ok) throw new Error('Failed to resume subscription')
+      setToast({ message: 'Subscription resumed — billing is back on.', variant: 'success' })
+      onUpdate()
+      sendMessage({ type: 'SUBSCRIPTION_UPDATED', payload: { subscriptions } })
+    } catch {
+      setToast({ message: 'Could not resume subscription. Please try again.', variant: 'info' })
+    } finally {
+      setResumingId(null)
     }
   }
 
@@ -398,6 +418,15 @@ export function SubscriptionTab({
                     >
                       Change Plan
                     </button>
+                    {subscription.isPaused && (
+                      <button
+                        onClick={() => handleResume(subscription.id)}
+                        disabled={resumingId === subscription.id}
+                        className="px-4 py-2 text-sm font-medium rounded-xl border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all disabled:opacity-50"
+                      >
+                        {resumingId === subscription.id ? 'Resuming…' : 'Resume Subscription'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleCancelClick(subscription)}
                       className="px-4 py-2 text-sm font-medium rounded-xl border border-red-200 dark:border-red-500/30 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"

@@ -4,11 +4,13 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { StripeService } from '../../stripe/stripe.service';
 import { CreatePortalSessionDto } from './dto/create-portal-session.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { ResumeSubscriptionDto } from './dto/resume-subscription.dto';
 import { UpdateCustomerDto } from '../../customers/dto/update-customer.dto';
 import {
   PortalData,
@@ -325,7 +327,8 @@ export class PortalService {
               }
             : undefined,
           isPaused: pausedAt != null,
-          pause: pausedAt != null ? { resumesAt: resumesAt ?? null } : undefined,
+          pause:
+            pausedAt != null ? { resumesAt: resumesAt ?? null } : undefined,
           pendingDowngrade: pendingChange
             ? {
                 newProductName:
@@ -733,15 +736,15 @@ export class PortalService {
       );
 
       // 5. Update subscription in database
+      // Stripe only sets canceled_at when the subscription is actually deleted.
+      // For end-of-period cancels, let the customer.subscription.deleted webhook
+      // write the real canceled_at when the subscription ends.
       const updateData: any = {
         cancel_at_period_end: cancelAtPeriodEnd,
-        canceled_at: new Date().toISOString(),
+        ...(cancelAtPeriodEnd
+          ? {}
+          : { canceled_at: new Date().toISOString(), status: 'canceled' }),
       };
-
-      // If immediate cancellation, update status
-      if (!cancelAtPeriodEnd) {
-        updateData.status = 'canceled';
-      }
 
       // Store cancellation metadata
       const metadata: any = {};
@@ -789,6 +792,129 @@ export class PortalService {
       );
       throw new BadRequestException(
         `Failed to cancel subscription: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Resume a paused subscription — clears Stripe's `pause_collection` and the BOS
+   * pause cache. Only meaningful for an indefinite pause; fixed-duration pauses
+   * auto-resume via Stripe's `resumes_at`.
+   */
+  async resumeSubscription(sessionId: string, dto: ResumeSubscriptionDto) {
+    const supabase = this.supabaseService.getClient();
+
+    // 1. Validate session
+    const sessionStatus = await this.getPortalSessionStatus(sessionId);
+    if (!sessionStatus.isValid) {
+      throw new UnauthorizedException('Portal session is invalid or expired');
+    }
+
+    const customerId = sessionStatus.customerId!;
+
+    // 2. Get subscription and verify ownership
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('id, stripe_subscription_id, customer_id, status, paused_at')
+      .eq('id', dto.subscriptionId)
+      .eq('customer_id', customerId)
+      .single();
+
+    if (subError || !subscription) {
+      throw new NotFoundException(
+        'Subscription not found or does not belong to customer',
+      );
+    }
+
+    if (!subscription.paused_at) {
+      throw new BadRequestException('Subscription is not paused');
+    }
+
+    if (!subscription.stripe_subscription_id) {
+      throw new BadRequestException(
+        'Subscription does not have a Stripe subscription ID',
+      );
+    }
+
+    const stripeSubscriptionId = subscription.stripe_subscription_id;
+
+    // 3. Resolve the organization's Stripe account
+    const { data: customerData, error: customerErr } = await supabase
+      .from('customers')
+      .select('organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (customerErr || !customerData) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('account_id')
+      .eq('id', customerData.organization_id)
+      .single();
+
+    if (orgError || !org?.account_id) {
+      throw new NotFoundException('Organization account not found');
+    }
+
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('stripe_id')
+      .eq('id', org.account_id)
+      .single();
+
+    if (!account?.stripe_id) {
+      throw new BadRequestException(
+        'Stripe account not found for organization',
+      );
+    }
+
+    // 4. Resume in Stripe, then clear the BOS pause cache (webhook also reconciles)
+    try {
+      this.logger.log(`Resuming Stripe subscription ${stripeSubscriptionId}`);
+
+      await this.stripeService.resumeSubscription(
+        stripeSubscriptionId,
+        account.stripe_id,
+      );
+
+      const { data: updatedSub, error: updateError } = await supabase
+        .from('subscriptions')
+        .update({ paused_at: null, resumes_at: null, pause_behavior: null })
+        .eq('id', dto.subscriptionId)
+        .eq('customer_id', customerId)
+        .select()
+        .single();
+
+      if (updateError) {
+        this.logger.error(
+          `Stripe resume succeeded but BOS update failed: ${updateError.message}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to update subscription after resume',
+        );
+      }
+
+      this.logger.log(`✅ Resumed subscription ${dto.subscriptionId}`);
+
+      return {
+        success: true,
+        subscription: {
+          id: updatedSub.id,
+          status: updatedSub.status,
+          isPaused: false,
+        },
+        message: 'Subscription resumed',
+      };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) throw error;
+      this.logger.error(
+        `Failed to resume subscription in Stripe: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Failed to resume subscription: ${error.message}`,
       );
     }
   }
