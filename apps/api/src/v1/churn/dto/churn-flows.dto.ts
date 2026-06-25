@@ -4,10 +4,11 @@ import {
   IsBoolean,
   IsArray,
   IsObject,
+  IsUUID,
 } from 'class-validator';
 
 export class ListChurnFlowsQueryDto {
-  @IsString()
+  @IsUUID()
   organization_id: string;
 }
 

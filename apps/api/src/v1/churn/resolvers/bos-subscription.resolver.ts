@@ -267,7 +267,8 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
     const nowIso = new Date().toISOString();
 
     // Supersede any existing scheduled downgrade (mirrors the billing pipeline's
-    // BosPlanExecutor.handleScheduledDowngrade).
+    // BosPlanExecutor.handleScheduledDowngrade). Scope to change_type 'downgrade'
+    // so we never cancel a different kind of scheduled change for this sub.
     await supabase
       .from('subscription_changes')
       .update({
@@ -276,6 +277,7 @@ export class BosSubscriptionResolver implements SubscriptionResolver {
         updated_at: nowIso,
       })
       .eq('subscription_id', sub.id)
+      .eq('change_type', 'downgrade')
       .eq('status', 'scheduled')
       .eq('organization_id', ctx.organizationId);
 

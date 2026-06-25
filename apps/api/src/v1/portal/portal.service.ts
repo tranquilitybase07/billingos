@@ -812,11 +812,26 @@ export class PortalService {
 
     const customerId = sessionStatus.customerId!;
 
-    // 2. Get subscription and verify ownership
+    // 2. Resolve the customer's organization up front so every tenant query below
+    // is scoped by organization_id (hard rule), not customer_id alone.
+    const { data: customerData, error: customerErr } = await supabase
+      .from('customers')
+      .select('organization_id')
+      .eq('id', customerId)
+      .single();
+
+    if (customerErr || !customerData) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const organizationId = customerData.organization_id;
+
+    // 3. Get subscription and verify ownership (scoped by org + customer)
     const { data: subscription, error: subError } = await supabase
       .from('subscriptions')
       .select('id, stripe_subscription_id, customer_id, status, paused_at')
       .eq('id', dto.subscriptionId)
+      .eq('organization_id', organizationId)
       .eq('customer_id', customerId)
       .single();
 
@@ -838,21 +853,11 @@ export class PortalService {
 
     const stripeSubscriptionId = subscription.stripe_subscription_id;
 
-    // 3. Resolve the organization's Stripe account
-    const { data: customerData, error: customerErr } = await supabase
-      .from('customers')
-      .select('organization_id')
-      .eq('id', customerId)
-      .single();
-
-    if (customerErr || !customerData) {
-      throw new NotFoundException('Customer not found');
-    }
-
+    // 4. Resolve the organization's Stripe account
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('account_id')
-      .eq('id', customerData.organization_id)
+      .eq('id', organizationId)
       .single();
 
     if (orgError || !org?.account_id) {
@@ -884,6 +889,7 @@ export class PortalService {
         .from('subscriptions')
         .update({ paused_at: null, resumes_at: null, pause_behavior: null })
         .eq('id', dto.subscriptionId)
+        .eq('organization_id', organizationId)
         .eq('customer_id', customerId)
         .select()
         .single();
