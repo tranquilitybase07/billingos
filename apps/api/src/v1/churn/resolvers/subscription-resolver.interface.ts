@@ -1,6 +1,7 @@
 import {
   ChurnFlowConfig,
   DiscountOffer,
+  DowngradeOffer,
   PauseOffer,
 } from '../dto/churn-flow-config';
 
@@ -15,6 +16,16 @@ export interface SubscriptionView {
   cancelAtPeriodEnd: boolean;
   hasActiveDiscount: boolean;
   isPaused: boolean;
+}
+
+export interface DowngradeTargetView {
+  priceId: string;
+  productId: string;
+  stripePriceId: string | null;
+  planName: string;
+  amount: number;
+  currency: string;
+  interval: string;
 }
 
 export interface ChurnContext {
@@ -38,6 +49,19 @@ export interface SubscriptionResolver {
     reasonKey: string,
   ): Promise<SubscriptionView>;
   pause(ctx: ChurnContext, offer: PauseOffer): Promise<SubscriptionView>;
+  downgrade(
+    ctx: ChurnContext,
+    offer: DowngradeOffer,
+  ): Promise<SubscriptionView>;
+  /**
+   * Resolve the effective downgrade target for an offer (pinned price or the
+   * auto-picked next-cheaper plan). BOS reads only. Returns null when no valid
+   * cheaper target exists — used both to enrich the served config and to schedule.
+   */
+  resolveDowngradeTarget(
+    ctx: ChurnContext,
+    offer: DowngradeOffer,
+  ): Promise<DowngradeTargetView | null>;
   cancel(
     ctx: ChurnContext,
     timing: 'immediate' | 'end_of_period',

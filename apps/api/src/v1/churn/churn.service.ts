@@ -4,6 +4,7 @@ import { ChurnContextService } from './churn-context.service';
 import {
   ChurnFlowConfig,
   DiscountOffer,
+  DowngradeOffer,
   Offer,
   PauseOffer,
   SurveyStep,
@@ -31,6 +32,7 @@ type ApplyOfferOutcome =
   | 'saved'
   | 'already_discounted'
   | 'already_paused'
+  | 'already_downgraded'
   | 'not_eligible';
 
 @Injectable()
@@ -63,6 +65,7 @@ export class ChurnService {
       redeemedBefore,
       ctx.flow?.settings?.allowRepeatDiscount ?? false,
     );
+    await this.enrichDowngradeOffers(ctx);
     return { flow: ctx.flow, subscription, offerEligible };
   }
 
@@ -105,6 +108,8 @@ export class ChurnService {
         return this.applyDiscountOffer(ctx, offer, dto.reason);
       case 'pause':
         return this.applyPauseOffer(ctx, offer, dto.reason);
+      case 'downgrade':
+        return this.applyDowngradeOffer(ctx, offer, dto.reason);
       default:
         throw new BadRequestException(
           `Offer type "${offer.type}" is not executable server-side`,
@@ -168,6 +173,34 @@ export class ChurnService {
     return { subscription, outcome: 'saved' };
   }
 
+  private async applyDowngradeOffer(
+    ctx: ChurnContext,
+    offer: DowngradeOffer,
+    reason: string,
+  ): Promise<{ subscription: SubscriptionView; outcome: ApplyOfferOutcome }> {
+    // Eligibility guard — BOS reads only, no Stripe call (rate-limit safety).
+    const view = await ctx.resolver.getSubscription(ctx);
+    if (await this.hasPendingDowngrade(ctx)) {
+      return { subscription: view, outcome: 'already_downgraded' };
+    }
+    const redeemedBefore = await this.hasRedeemedChurnOffer(ctx, 'downgrade');
+    const allowRepeat = ctx.flow?.settings?.allowRepeatDowngrade ?? false;
+    if (redeemedBefore && !allowRepeat) {
+      return { subscription: view, outcome: 'not_eligible' };
+    }
+
+    const subscription = await ctx.resolver.downgrade(ctx, offer);
+
+    await this.recordEvent(ctx, {
+      eventType: 'offer_accepted',
+      reason,
+      offer: offer as unknown as Record<string, unknown>,
+      outcome: 'saved',
+    });
+
+    return { subscription, outcome: 'saved' };
+  }
+
   async cancel(
     sessionId: string,
     dto: ChurnCancelDto,
@@ -196,7 +229,7 @@ export class ChurnService {
 
   private async hasRedeemedChurnOffer(
     ctx: ChurnContext,
-    offerType: 'discount' | 'pause',
+    offerType: 'discount' | 'pause' | 'downgrade',
   ): Promise<boolean> {
     if (!ctx.bosSubscriptionId) return false;
     const supabase = this.supabaseService.getClient();
@@ -208,6 +241,61 @@ export class ChurnService {
       .eq('event_type', 'offer_accepted')
       .eq('offer->>type', offerType);
     return (count ?? 0) > 0;
+  }
+
+  /**
+   * Live-state guard for downgrades (analogous to the discount/pause `already_*`
+   * checks): a scheduled downgrade already pending on this subscription. BOS read
+   * only — Stripe is reconciled by the scheduler, not consulted here.
+   */
+  private async hasPendingDowngrade(ctx: ChurnContext): Promise<boolean> {
+    const supabase = this.supabaseService.getClient();
+    const { count } = await supabase
+      .from('subscription_changes')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', ctx.organizationId)
+      .eq('subscription_id', ctx.subscriptionRef)
+      .eq('change_type', 'downgrade')
+      .eq('status', 'scheduled');
+    return (count ?? 0) > 0;
+  }
+
+  /**
+   * Populate `targetPreview` on each downgrade offer in the served flow so the
+   * renderer can show the real plan name + price (the persisted config only holds
+   * an opaque `targetPriceId`, or nothing for an auto target). Offers with no
+   * resolvable cheaper target are left unenriched — the renderer falls back to the
+   * merchant's headline.
+   */
+  private async enrichDowngradeOffers(ctx: ChurnContext): Promise<void> {
+    const survey = ctx.flow?.steps.find(
+      (s): s is SurveyStep => s.type === 'survey',
+    );
+    if (!survey) return;
+
+    await Promise.all(
+      survey.reasons.map(async (reason) => {
+        if (reason.offer?.type !== 'downgrade') return;
+        const target = await ctx.resolver.resolveDowngradeTarget(
+          ctx,
+          reason.offer,
+        );
+        if (target) {
+          reason.offer.targetPreview = {
+            planName: target.planName,
+            amount: target.amount,
+            currency: target.currency,
+            interval: target.interval,
+          };
+        } else {
+          // No resolvable cheaper plan (already cheapest, or a pin broken by
+          // versioning with no auto fallback). Drop the offer so the reason falls
+          // straight through to the cancel confirm instead of showing — then
+          // failing on — a downgrade the customer can't actually take.
+          reason.offer = undefined;
+        }
+      }),
+    );
   }
 
   private findOfferForReason(

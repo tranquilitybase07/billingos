@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -72,6 +72,9 @@ function offerHeadline(offer: Offer, currency: string): string {
       : 'instead'
     return `Pause your plan ${span}`
   }
+  if (offer.type === 'downgrade') {
+    return 'Switch to a cheaper plan & stay'
+  }
   return 'We can help'
 }
 
@@ -124,6 +127,63 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   )
 }
 
+function DowngradePlanCard({
+  currentPlanName,
+  currentAmount,
+  target,
+}: {
+  currentPlanName: string
+  currentAmount: number
+  target: { planName: string; amount: number; currency: string; interval: string }
+}) {
+  const savings = currentAmount - target.amount
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-[#2e2e30] overflow-hidden">
+      <div className="flex items-stretch">
+        <div className="flex-1 p-4 opacity-60">
+          <p className="text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1">
+            Current
+          </p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+            {currentPlanName}
+          </p>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 line-through">
+            {formatCurrency(currentAmount, target.currency)}/{target.interval}
+          </p>
+        </div>
+        <div className="flex items-center px-2 text-gray-400 dark:text-neutral-500">
+          →
+        </div>
+        <div className="flex-1 p-4 bg-[var(--portal-accent,#3b82f6)]/5 border-l border-gray-200 dark:border-[#2e2e30]">
+          <p className="text-xs font-medium text-[var(--portal-accent,#3b82f6)] mb-1">
+            New plan
+          </p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+            {target.planName}
+          </p>
+          <p className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+            {formatCurrency(target.amount, target.currency)}/{target.interval}
+          </p>
+        </div>
+      </div>
+      <div className="px-4 py-2.5 bg-gray-50 dark:bg-white/5 border-t border-gray-200 dark:border-[#2e2e30] flex items-center justify-between">
+        {savings > 0 ? (
+          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            Save {formatCurrency(savings, target.currency)}/{target.interval}
+          </span>
+        ) : (
+          <span className="text-sm text-gray-500 dark:text-neutral-400">
+            Switch plans
+          </span>
+        )}
+        <span className="text-xs text-gray-500 dark:text-neutral-400">
+          Changes at your renewal date
+        </span>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Renderer body, resolver-agnostic. Uses plain semantic elements (not Dialog
  * primitives) so it renders both inside the portal modal and inline in the
@@ -142,25 +202,28 @@ export function ChurnFlowBody({
   subscription: ChurnSubscriptionView
   onClose: () => void
 }) {
-  const handlersRef = useRef({ onApplyOffer, onCancel, onLog, onDone, onClose })
-  handlersRef.current = { onApplyOffer, onCancel, onLog, onDone, onClose }
-
+  // Recreate the machine only when the flow config or discount state changes —
+  // not when handler identities change every render.
   const machine = useMemo(
     () =>
-      new ChurnMachine(
-        config,
-        {
-          applyOffer: (reason) => handlersRef.current.onApplyOffer(reason),
-          cancel: (timing, reason, feedback) =>
-            handlersRef.current.onCancel(timing, reason, feedback),
-          onLog: (event) => handlersRef.current.onLog?.(event),
-          onDone: (outcome) => handlersRef.current.onDone?.(outcome),
-          onClose: () => handlersRef.current.onClose(),
-        },
-        { hasActiveDiscount: subscription.hasActiveDiscount },
-      ),
+      new ChurnMachine(config, {
+        hasActiveDiscount: subscription.hasActiveDiscount,
+      }),
     [config, subscription.hasActiveDiscount],
   )
+
+  // Push the latest handlers into the machine each render (in an effect, so no ref
+  // is read during render). Declared before the start effect, so flow_started
+  // logging reaches the live onLog.
+  useEffect(() => {
+    machine.setHandlers({
+      applyOffer: onApplyOffer,
+      cancel: onCancel,
+      onLog,
+      onDone,
+      onClose,
+    })
+  }, [machine, onApplyOffer, onCancel, onLog, onDone, onClose])
 
   useEffect(() => {
     machine.start()
@@ -237,23 +300,40 @@ export function ChurnFlowBody({
               {state.error}
             </div>
           )}
-          <p className="text-sm text-gray-600 dark:text-neutral-400">
-            {currentOffer.type === 'pause' ? (
-              <>
-                Billing pauses on your{' '}
-                <span className="font-medium">{subscription.planName}</span> plan — you
-                keep access until the end of your current period.
-              </>
-            ) : (
-              <>
-                Your <span className="font-medium">{subscription.planName}</span> plan stays
-                active — no interruption.
-              </>
-            )}
-          </p>
+          {currentOffer.type === 'downgrade' && currentOffer.targetPreview ? (
+            <DowngradePlanCard
+              currentPlanName={subscription.planName}
+              currentAmount={subscription.amount}
+              target={currentOffer.targetPreview}
+            />
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-neutral-400">
+              {currentOffer.type === 'pause' ? (
+                <>
+                  Billing pauses on your{' '}
+                  <span className="font-medium">{subscription.planName}</span> plan — you
+                  keep access until the end of your current period.
+                </>
+              ) : currentOffer.type === 'downgrade' ? (
+                <>
+                  You keep your{' '}
+                  <span className="font-medium">{subscription.planName}</span> plan and
+                  features until your renewal date, then move to a lower-priced plan.
+                  No interruption.
+                </>
+              ) : (
+                <>
+                  Your <span className="font-medium">{subscription.planName}</span> plan stays
+                  active — no interruption.
+                </>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-2">
-          {currentOffer.type === 'discount' || currentOffer.type === 'pause' ? (
+          {currentOffer.type === 'discount' ||
+            currentOffer.type === 'pause' ||
+            currentOffer.type === 'downgrade' ? (
             <PrimaryButton
               disabled={state.isProcessing}
               onClick={() => machine.acceptOffer()}
@@ -261,10 +341,14 @@ export function ChurnFlowBody({
               {state.isProcessing
                 ? currentOffer.type === 'pause'
                   ? 'Pausing…'
-                  : 'Applying…'
+                  : currentOffer.type === 'downgrade'
+                    ? 'Switching…'
+                    : 'Applying…'
                 : currentOffer.type === 'pause'
                   ? 'Pause my plan'
-                  : 'Claim offer & stay'}
+                  : currentOffer.type === 'downgrade'
+                    ? 'Switch & stay'
+                    : 'Claim offer & stay'}
             </PrimaryButton>
           ) : (
             <a

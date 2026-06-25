@@ -148,6 +148,9 @@ export function SubscriptionTab({
   const [resumingId, setResumingId] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [churnSub, setChurnSub] = useState<PortalSubscription | null>(null)
+  // Per-subscription enriched flow (downgrade `targetPreview`, etc.) from the churn
+  // config endpoint. The org-level `churnFlow` prop can't carry per-sub data.
+  const [churnConfig, setChurnConfig] = useState<ChurnFlowConfig | null>(null)
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'info' } | null>(null)
 
   useEffect(() => {
@@ -169,6 +172,21 @@ export function SubscriptionTab({
     // through it instead of the hardcoded modal (modal remains the fallback).
     if (churnFlow) {
       setChurnSub(subscription)
+      // Fetch the per-subscription enriched config (resolves downgrade targets to a
+      // concrete plan + price for the offer card). Fall back to the org-level flow
+      // so the flow still opens if the request fails.
+      setChurnConfig(null)
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${apiUrl}/v1/churn/${sessionId}/config?subscriptionId=${subscription.id}`,
+          )
+          const data = res.ok ? await res.json() : null
+          setChurnConfig((data?.flow as ChurnFlowConfig) ?? churnFlow)
+        } catch {
+          setChurnConfig(churnFlow)
+        }
+      })()
       return
     }
     setSubscriptionToCancel(subscription)
@@ -227,7 +245,7 @@ export function SubscriptionTab({
         feedback,
         offer,
       }),
-    }).catch(() => {})
+    }).catch(() => { })
   }
 
   const handleCancelSubmit = async () => {
@@ -288,9 +306,8 @@ export function SubscriptionTab({
     <>
       {toast && (
         <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-white ${
-            toast.variant === 'success' ? 'bg-green-600' : 'bg-neutral-800'
-          }`}
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-white ${toast.variant === 'success' ? 'bg-green-600' : 'bg-neutral-800'
+            }`}
         >
           {toast.message}
         </div>
@@ -502,15 +519,13 @@ export function SubscriptionTab({
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-gray-100 dark:bg-[#0f0f11] rounded-full overflow-hidden">
                         <div
-                          className={`h-full transition-all ${
-                            metric.percentage >= 90 ? 'bg-red-500' : metric.percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
+                          className={`h-full transition-all ${metric.percentage >= 90 ? 'bg-red-500' : metric.percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
                           style={{ width: `${Math.min(metric.percentage, 100)}%` }}
                         />
                       </div>
-                      <span className={`text-xs font-medium w-9 text-right ${
-                        metric.percentage >= 90 ? 'text-red-500 dark:text-red-400' : metric.percentage >= 70 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
-                      }`}>
+                      <span className={`text-xs font-medium w-9 text-right ${metric.percentage >= 90 ? 'text-red-500 dark:text-red-400' : metric.percentage >= 70 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
+                        }`}>
                         {metric.percentage}%
                       </span>
                     </div>
@@ -615,13 +630,16 @@ export function SubscriptionTab({
         </DialogContent>
       </Dialog>
 
-      {churnFlow && churnSub && (
+      {churnSub && churnConfig && (
         <ChurnFlow
           open={!!churnSub}
           onOpenChange={(open) => {
-            if (!open) setChurnSub(null)
+            if (!open) {
+              setChurnSub(null)
+              setChurnConfig(null)
+            }
           }}
-          config={churnFlow}
+          config={churnConfig}
           subscription={{
             planName: churnSub.product.name,
             amount: churnSub.price.amount,

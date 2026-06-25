@@ -24,7 +24,29 @@ export interface PauseOffer {
   description?: string;
 }
 
-export type Offer = DiscountOffer | ContactOffer | PauseOffer;
+export interface DowngradeOffer {
+  type: 'downgrade';
+  /**
+   * Pinned target price to downgrade to. If omitted, the engine auto-picks the
+   * next-cheaper active paid price in the org ("smart" target).
+   */
+  targetPriceId?: string;
+  headline?: string;
+  description?: string;
+  /**
+   * Server-resolved preview of the effective target, populated when serving the
+   * flow config so the renderer can show the real plan name + price. Never set by
+   * the builder; not persisted.
+   */
+  targetPreview?: {
+    planName: string;
+    amount: number;
+    currency: string;
+    interval: string;
+  };
+}
+
+export type Offer = DiscountOffer | ContactOffer | PauseOffer | DowngradeOffer;
 
 export interface SurveyReason {
   key: string;
@@ -52,6 +74,7 @@ export type ChurnStep = SurveyStep | ConfirmStep;
 export interface ChurnFlowSettings {
   allowRepeatDiscount?: boolean;
   allowRepeatPause?: boolean;
+  allowRepeatDowngrade?: boolean;
 }
 
 export interface ChurnFlowConfig {

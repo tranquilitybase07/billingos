@@ -13,6 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { ChurnFlowBody } from '@/components/churn/ChurnFlow'
 import type {
@@ -27,13 +34,24 @@ import {
   useUpdateChurnFlow,
   type ChurnFlow,
 } from '@/hooks/queries/churn-flows'
+import { useProducts } from '@/hooks/queries/products'
 
 interface OfferDraft {
   enabled: boolean
-  kind: 'discount' | 'pause'
+  kind: 'discount' | 'pause' | 'downgrade'
   percentOff: number
   durationInMonths: number
   pauseMonths: number
+  /** Pinned downgrade target price id; '' = auto (next-cheaper plan). */
+  downgradeTargetPriceId: string
+}
+
+interface AvailablePlan {
+  priceId: string
+  productName: string
+  amount: number
+  currency: string
+  interval: string
 }
 
 interface ReasonDraft {
@@ -53,6 +71,7 @@ interface FlowDraft {
   losses: string
   allowRepeatDiscount: boolean
   allowRepeatPause: boolean
+  allowRepeatDowngrade: boolean
 }
 
 const DEFAULT_OFFER: OfferDraft = {
@@ -61,6 +80,7 @@ const DEFAULT_OFFER: OfferDraft = {
   percentOff: 20,
   durationInMonths: 3,
   pauseMonths: 0,
+  downgradeTargetPriceId: '',
 }
 
 const DEFAULT_DRAFT: FlowDraft = {
@@ -79,6 +99,7 @@ const DEFAULT_DRAFT: FlowDraft = {
   losses: 'Your saved data\nPremium features\nPriority support',
   allowRepeatDiscount: false,
   allowRepeatPause: false,
+  allowRepeatDowngrade: false,
 }
 
 function draftFromFlow(flow: ChurnFlow): FlowDraft {
@@ -95,14 +116,24 @@ function draftFromFlow(flow: ChurnFlow): FlowDraft {
         key: r.key,
         label: r.label,
         offer: {
-          enabled: r.offer?.type === 'discount' || r.offer?.type === 'pause',
-          kind: r.offer?.type === 'pause' ? 'pause' : 'discount',
+          enabled:
+            r.offer?.type === 'discount' ||
+            r.offer?.type === 'pause' ||
+            r.offer?.type === 'downgrade',
+          kind:
+            r.offer?.type === 'pause'
+              ? 'pause'
+              : r.offer?.type === 'downgrade'
+                ? 'downgrade'
+                : 'discount',
           percentOff:
             r.offer?.type === 'discount' ? (r.offer.percentOff ?? 20) : 20,
           durationInMonths:
             r.offer?.type === 'discount' ? (r.offer.durationInMonths ?? 0) : 3,
           pauseMonths:
             r.offer?.type === 'pause' ? (r.offer.durationInMonths ?? 0) : 0,
+          downgradeTargetPriceId:
+            r.offer?.type === 'downgrade' ? (r.offer.targetPriceId ?? '') : '',
         } satisfies OfferDraft,
       })) ?? DEFAULT_DRAFT.reasons,
     confirmTitle: confirm?.title ?? 'Cancel subscription?',
@@ -110,12 +141,13 @@ function draftFromFlow(flow: ChurnFlow): FlowDraft {
     losses: (confirm?.losses ?? []).join('\n'),
     allowRepeatDiscount: flow.settings?.allowRepeatDiscount ?? false,
     allowRepeatPause: flow.settings?.allowRepeatPause ?? false,
+    allowRepeatDowngrade: flow.settings?.allowRepeatDowngrade ?? false,
   }
 }
 
-// TODO: the builder emits `percentOff` discount and `pause` offers in v1. The
-// backend/config model also supports `amountOff` and `contact`/`redirect` offers
-// — extend this editor when those are exposed to merchants.
+// TODO: the builder emits `percentOff` discount, `pause`, and `downgrade` offers
+// in v1. The backend/config model also supports `amountOff` and `contact`/`redirect`
+// offers — extend this editor when those are exposed to merchants.
 function buildSteps(draft: FlowDraft): ChurnStep[] {
   const survey: SurveyStep = {
     id: 'survey',
@@ -136,13 +168,20 @@ function buildSteps(draft: FlowDraft): ChurnStep[] {
                     ? { durationInMonths: r.offer.pauseMonths }
                     : {}),
                 }
-                : {
-                  type: 'discount' as const,
-                  percentOff: r.offer.percentOff,
-                  ...(r.offer.durationInMonths > 0
-                    ? { durationInMonths: r.offer.durationInMonths }
-                    : {}),
-                },
+                : r.offer.kind === 'downgrade'
+                  ? {
+                    type: 'downgrade' as const,
+                    ...(r.offer.downgradeTargetPriceId
+                      ? { targetPriceId: r.offer.downgradeTargetPriceId }
+                      : {}),
+                  }
+                  : {
+                    type: 'discount' as const,
+                    percentOff: r.offer.percentOff,
+                    ...(r.offer.durationInMonths > 0
+                      ? { durationInMonths: r.offer.durationInMonths }
+                      : {}),
+                  },
           }
           : {}),
       })),
@@ -158,6 +197,14 @@ function buildSteps(draft: FlowDraft): ChurnStep[] {
       .filter(Boolean),
   }
   return [survey, confirm]
+}
+
+function formatMoney(amount: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+  }).format(amount / 100)
 }
 
 const PREVIEW_SUBSCRIPTION = {
@@ -177,6 +224,40 @@ export default function ChurnBuilderPage({
   const { data: flows, isLoading } = useChurnFlows(organizationId)
   const createFlow = useCreateChurnFlow(organizationId)
   const updateFlow = useUpdateChurnFlow(organizationId)
+  const { data: productsData } = useProducts(organizationId, {
+    includePrices: true,
+    is_archived: false,
+    limit: 100,
+  })
+
+  const availablePlans = useMemo<AvailablePlan[]>(() => {
+    const products = productsData?.items ?? []
+    const plans: AvailablePlan[] = []
+    for (const product of products) {
+      if (product.is_archived) continue
+      // Skip superseded versions — pinning one breaks as soon as it's archived,
+      // and it shows up as a confusing duplicate of the current-version plan.
+      if (product.version_status === 'superseded') continue
+      for (const price of product.prices ?? []) {
+        if (
+          price.amount_type !== 'fixed' ||
+          !price.recurring_interval ||
+          !price.stripe_price_id ||
+          !price.price_amount ||
+          price.price_amount <= 0
+        )
+          continue
+        plans.push({
+          priceId: price.id,
+          productName: product.name,
+          amount: price.price_amount,
+          currency: price.price_currency ?? 'usd',
+          interval: price.recurring_interval,
+        })
+      }
+    }
+    return plans.sort((a, b) => a.amount - b.amount)
+  }, [productsData])
 
   const [draft, setDraft] = useState<FlowDraft>(DEFAULT_DRAFT)
   const [hydrated, setHydrated] = useState(false)
@@ -188,7 +269,38 @@ export default function ChurnBuilderPage({
     }
   }, [flows, hydrated])
 
-  const previewSteps = useMemo(() => buildSteps(draft), [draft])
+  // Mirror the server's getConfig enrichment locally so the live preview shows the
+  // real target plan + price for a pinned downgrade. Auto targets stay generic (the
+  // server picks the next-cheaper plan relative to the live subscription).
+  const previewSteps = useMemo<ChurnStep[]>(() => {
+    const steps = buildSteps(draft)
+    return steps.map((step) => {
+      if (step.type !== 'survey') return step
+      return {
+        ...step,
+        reasons: step.reasons.map((reason) => {
+          const offer = reason.offer
+          if (offer?.type !== 'downgrade' || !offer.targetPriceId) return reason
+          const plan = availablePlans.find(
+            (p) => p.priceId === offer.targetPriceId,
+          )
+          if (!plan) return reason
+          return {
+            ...reason,
+            offer: {
+              ...offer,
+              targetPreview: {
+                planName: plan.productName,
+                amount: plan.amount,
+                currency: plan.currency,
+                interval: plan.interval,
+              },
+            },
+          }
+        }),
+      }
+    })
+  }, [draft, availablePlans])
   const previewKey = useMemo(() => JSON.stringify(previewSteps), [previewSteps])
   const previewConfig: ChurnFlowConfig = useMemo(
     () => ({ id: 'preview', name: draft.name, enabled: true, steps: previewSteps }),
@@ -205,6 +317,7 @@ export default function ChurnBuilderPage({
       settings: {
         allowRepeatDiscount: draft.allowRepeatDiscount,
         allowRepeatPause: draft.allowRepeatPause,
+        allowRepeatDowngrade: draft.allowRepeatDowngrade,
       },
     }
     try {
@@ -399,6 +512,18 @@ export default function ChurnBuilderPage({
                         >
                           Pause
                         </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={
+                            reason.offer.kind === 'downgrade'
+                              ? 'default'
+                              : 'outline'
+                          }
+                          onClick={() => updateOffer(i, { kind: 'downgrade' })}
+                        >
+                          Downgrade
+                        </Button>
                       </div>
                       {reason.offer.kind === 'discount' ? (
                         <div className="grid grid-cols-2 gap-3">
@@ -430,7 +555,7 @@ export default function ChurnBuilderPage({
                             />
                           </div>
                         </div>
-                      ) : (
+                      ) : reason.offer.kind === 'pause' ? (
                         <div className="space-y-2">
                           <div className="space-y-1.5 max-w-[50%]">
                             <Label className="text-xs">
@@ -450,6 +575,44 @@ export default function ChurnBuilderPage({
                           <p className="text-xs text-muted-foreground">
                             Billing pauses; the customer keeps access until the end of
                             their current period.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Downgrade to</Label>
+                            <Select
+                              value={reason.offer.downgradeTargetPriceId || 'auto'}
+                              onValueChange={(v) =>
+                                updateOffer(i, {
+                                  downgradeTargetPriceId: v === 'auto' ? '' : v,
+                                })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">
+                                  Auto — next cheaper plan
+                                </SelectItem>
+                                {availablePlans.map((plan) => (
+                                  <SelectItem
+                                    key={plan.priceId}
+                                    value={plan.priceId}
+                                  >
+                                    {plan.productName} ·{' '}
+                                    {formatMoney(plan.amount, plan.currency)}/
+                                    {plan.interval}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            The plan changes at the customer&apos;s renewal date —
+                            they keep their current plan &amp; features until then.
+                            Auto picks the next-cheaper paid plan.
                           </p>
                         </div>
                       )}
@@ -549,6 +712,28 @@ export default function ChurnBuilderPage({
                     Off (recommended): the pause offer is one-time per customer.
                     On: after resuming they can pause again on a future cancel
                     attempt.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Switch
+                  id="allow-repeat-downgrade"
+                  checked={draft.allowRepeatDowngrade}
+                  onCheckedChange={(v) =>
+                    setDraft((d) => ({ ...d, allowRepeatDowngrade: v }))
+                  }
+                />
+                <div>
+                  <Label
+                    htmlFor="allow-repeat-downgrade"
+                    className="cursor-pointer"
+                  >
+                    Allow repeat downgrades
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Off (recommended): the downgrade offer is one-time per
+                    customer. On: they can be offered a downgrade again on a
+                    future cancel attempt.
                   </p>
                 </div>
               </div>

@@ -12,6 +12,7 @@ export type ChurnApplyOutcome =
   | 'saved'
   | 'already_discounted'
   | 'already_paused'
+  | 'already_downgraded'
   | 'not_eligible'
 
 export interface ChurnMachineState {
@@ -30,7 +31,7 @@ export interface ChurnMachineContext {
   isPaused?: boolean
 }
 
-const SERVER_OFFER_TYPES = ['discount', 'pause'] as const
+const SERVER_OFFER_TYPES = ['discount', 'pause', 'downgrade'] as const
 
 export type ChurnLogEvent =
   | { type: 'flow_started' }
@@ -65,10 +66,16 @@ export interface ChurnHandlers {
 export class ChurnMachine {
   private state: ChurnMachineState
   private readonly listeners = new Set<() => void>()
+  // Handlers are injected post-construction via setHandlers so the React renderer
+  // can keep them fresh (in an effect) without recreating the machine — and
+  // without reading a ref during render. Default to inert no-ops.
+  private handlers: ChurnHandlers = {
+    applyOffer: async () => 'not_eligible',
+    cancel: async () => {},
+  }
 
   constructor(
     private readonly config: ChurnFlowConfig,
-    private readonly handlers: ChurnHandlers,
     private readonly context: ChurnMachineContext = {},
   ) {
     this.state = {
@@ -81,6 +88,10 @@ export class ChurnMachine {
       error: null,
       notice: null,
     }
+  }
+
+  setHandlers = (handlers: ChurnHandlers): void => {
+    this.handlers = handlers
   }
 
   subscribe = (cb: () => void): (() => void) => {
@@ -199,7 +210,9 @@ export class ChurnMachine {
               ? "You're already getting this discount."
               : result === 'already_paused'
                 ? 'Your subscription is already paused.'
-                : "This offer isn't available again.",
+                : result === 'already_downgraded'
+                  ? 'A plan change is already scheduled.'
+                  : "This offer isn't available again.",
         })
       }
     } catch (err) {
