@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Card,
+  CardFlat,
   CardContent,
   CardDescription,
   CardHeader,
@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PillTabs, PillTabsList, PillTabsTrigger } from '@/components/atoms/PillTabs'
 import { useToast } from '@/hooks/use-toast'
 import { ChurnFlowBody } from '@/components/churn/ChurnFlow'
 import type {
@@ -217,8 +218,10 @@ const PREVIEW_SUBSCRIPTION = {
 
 export default function ChurnBuilderPage({
   organizationId,
+  embedded = false,
 }: {
   organizationId: string
+  embedded?: boolean
 }) {
   const { toast } = useToast()
   const { data: flows, isLoading } = useChurnFlows(organizationId)
@@ -396,15 +399,19 @@ export default function ChurnBuilderPage({
     setDraft((d) => ({ ...d, reasons: d.reasons.filter((_, idx) => idx !== i) }))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Churn flow</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Build the cancellation save flow your customers see in the portal. Survey →
-            targeted save offer → cancel.
-          </p>
-        </div>
+    <div className={embedded ? '' : 'p-6 max-w-7xl mx-auto'}>
+      <div
+        className={`flex items-start mb-6 ${embedded ? 'justify-end' : 'justify-between'}`}
+      >
+        {!embedded && (
+          <div>
+            <h1 className="text-2xl font-bold">Churn flow</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Build the cancellation save flow your customers see in the portal. Survey →
+              targeted save offer → cancel.
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Switch
@@ -426,7 +433,7 @@ export default function ChurnBuilderPage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Editor */}
         <div className="space-y-5">
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Flow settings</CardTitle>
             </CardHeader>
@@ -448,9 +455,9 @@ export default function ChurnBuilderPage({
                 />
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Cancellation reasons & offers</CardTitle>
               <CardDescription>
@@ -491,40 +498,23 @@ export default function ChurnBuilderPage({
                   </div>
                   {reason.offer.enabled && (
                     <div className="space-y-3 pl-1">
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'discount' ? 'default' : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'discount' })}
-                        >
-                          Discount
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'pause' ? 'default' : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'pause' })}
-                        >
-                          Pause
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'downgrade'
-                              ? 'default'
-                              : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'downgrade' })}
-                        >
-                          Downgrade
-                        </Button>
-                      </div>
+                      <PillTabs
+                        layoutId={`offer-kind-${reason.key}`}
+                        value={reason.offer.kind}
+                        onValueChange={(v) =>
+                          updateOffer(i, { kind: v as OfferDraft['kind'] })
+                        }
+                      >
+                        <PillTabsList>
+                          <PillTabsTrigger value="discount">
+                            Discount
+                          </PillTabsTrigger>
+                          <PillTabsTrigger value="pause">Pause</PillTabsTrigger>
+                          <PillTabsTrigger value="downgrade">
+                            Downgrade
+                          </PillTabsTrigger>
+                        </PillTabsList>
+                      </PillTabs>
                       {reason.offer.kind === 'discount' ? (
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
@@ -624,9 +614,9 @@ export default function ChurnBuilderPage({
                 Add reason
               </Button>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Confirm step</CardTitle>
             </CardHeader>
@@ -662,9 +652,9 @@ export default function ChurnBuilderPage({
                 </Label>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Save offer policy</CardTitle>
               <CardDescription>
@@ -738,12 +728,12 @@ export default function ChurnBuilderPage({
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
         </div>
 
         {/* Live preview */}
         <div className="lg:sticky lg:top-6 h-fit">
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Live preview</CardTitle>
               <CardDescription>
@@ -762,7 +752,7 @@ export default function ChurnBuilderPage({
                 />
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
         </div>
       </div>
     </div>
