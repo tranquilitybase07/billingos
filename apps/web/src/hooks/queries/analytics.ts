@@ -7,6 +7,7 @@ import type {
   RevenueTrendResponse,
   SubscriptionGrowthResponse,
   ChurnRateResponse,
+  ChurnSaveAnalyticsResponse,
   AnalyticsQueryParams,
   UsageOverviewResponse,
   UsageByFeatureResponse,
@@ -36,6 +37,8 @@ export const analyticsKeys = {
     [...analyticsKeys.all, "subscription-growth", params] as const,
   churnRate: (params: AnalyticsQueryParams) =>
     [...analyticsKeys.all, "churn-rate", params] as const,
+  churnSaves: (params: AnalyticsQueryParams) =>
+    [...analyticsKeys.all, "churn-saves", params] as const,
   usageOverview: (orgId: string) =>
     [...analyticsKeys.all, "usage-overview", orgId] as const,
   usageByFeature: (orgId: string) =>
@@ -98,6 +101,21 @@ export function useChurnRate(params: AnalyticsQueryParams) {
   return useQuery({
     queryKey: analyticsKeys.churnRate(params),
     queryFn: () => api.get<ChurnRateResponse>(url),
+    enabled: !!organization_id,
+    staleTime: 15 * 60 * 1000, // matches backend Redis TTL
+  });
+}
+
+export function useChurnSaveAnalytics(params: AnalyticsQueryParams) {
+  const { organization_id, start_date, end_date } = params;
+
+  let url = `/analytics/churn-saves?organization_id=${organization_id}`;
+  if (start_date) url += `&start_date=${start_date}`;
+  if (end_date) url += `&end_date=${end_date}`;
+
+  return useQuery({
+    queryKey: analyticsKeys.churnSaves(params),
+    queryFn: () => api.get<ChurnSaveAnalyticsResponse>(url),
     enabled: !!organization_id,
     staleTime: 15 * 60 * 1000, // matches backend Redis TTL
   });

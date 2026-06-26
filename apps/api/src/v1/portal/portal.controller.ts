@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PortalService } from './portal.service';
 import { CreatePortalSessionDto } from './dto/create-portal-session.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { ResumeSubscriptionDto } from './dto/resume-subscription.dto';
 import { UpdateCustomerDto } from '../../customers/dto/update-customer.dto';
 import { SessionTokenAuthGuard } from '../../auth/guards/session-token-auth.guard';
 import {
@@ -87,6 +88,24 @@ export class PortalController {
       `Cancelling subscription ${dto.subscriptionId} for session: ${sessionId}`,
     );
     return this.portalService.cancelSubscription(sessionId, dto);
+  }
+
+  @Post(':sessionId/resume-subscription')
+  @ApiOperation({ summary: 'Resume a paused customer subscription' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription resumed successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Session invalid or expired' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async resumeSubscription(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: ResumeSubscriptionDto,
+  ) {
+    this.logger.log(
+      `Resuming subscription ${dto.subscriptionId} for session: ${sessionId}`,
+    );
+    return this.portalService.resumeSubscription(sessionId, dto);
   }
 
   @Patch(':sessionId/customer')

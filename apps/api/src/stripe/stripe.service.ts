@@ -665,6 +665,88 @@ export class StripeService {
   }
 
   /**
+   * Apply a coupon as a discount to an already-active subscription.
+   * Distinct from CheckoutDiscountService (checkout-session-scoped) — this is the
+   * path used by churn save-offers to discount a live subscription.
+   */
+  async applyDiscountToSubscription(
+    subscriptionId: string,
+    couponId: string,
+    stripeAccountId: string,
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Applying coupon ${couponId} to subscription ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      { discounts: [{ coupon: couponId }] },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
+   * Pause billing on an active subscription via `pause_collection`. Used by the
+   * churn pause save-offer. `void` (default) stops invoicing while paused; the
+   * subscription stays active so feature access continues until the period end.
+   * Pass `resumeAt` (unix seconds) to auto-resume, or omit for an indefinite pause.
+   */
+  async pauseSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+    resumeAt?: number,
+    behavior: 'keep_as_draft' | 'mark_uncollectible' | 'void' = 'void',
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Pausing subscription ${subscriptionId} in account ${stripeAccountId}` +
+        (resumeAt ? ` until ${resumeAt}` : ' indefinitely'),
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      {
+        pause_collection: {
+          behavior,
+          ...(resumeAt && { resumes_at: resumeAt }),
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
+   * Clear `pause_collection`, resuming normal billing on a paused subscription.
+   * Wired to the portal `resume-subscription` action for customer self-serve;
+   * fixed-duration pauses still auto-resume via Stripe's `resumes_at`.
+   */
+  async resumeSubscription(
+    subscriptionId: string,
+    stripeAccountId: string,
+    idempotencyKey?: string,
+  ): Promise<Stripe.Subscription> {
+    this.logger.log(
+      `Resuming subscription ${subscriptionId} in account ${stripeAccountId}`,
+    );
+
+    return await this.stripe.subscriptions.update(
+      subscriptionId,
+      { pause_collection: null },
+      {
+        stripeAccount: stripeAccountId,
+        ...(idempotencyKey && { idempotencyKey }),
+      },
+    );
+  }
+
+  /**
    * List all subscriptions on a Stripe Connect account (uses auto-pagination)
    * Used for drift detection — compares Stripe state against local DB.
    */
@@ -1070,6 +1152,19 @@ export class StripeService {
     this.logger.log(`Creating Stripe coupon for account ${stripeAccountId}`);
 
     return await this.stripe.coupons.create(params, {
+      stripeAccount: stripeAccountId,
+    });
+  }
+
+  /**
+   * Retrieve a coupon from a Stripe Connect account.
+   * https://docs.stripe.com/api/coupons/retrieve
+   */
+  async retrieveCoupon(
+    couponId: string,
+    stripeAccountId: string,
+  ): Promise<Stripe.Coupon> {
+    return await this.stripe.coupons.retrieve(couponId, {
       stripeAccount: stripeAccountId,
     });
   }

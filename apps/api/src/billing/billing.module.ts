@@ -24,6 +24,7 @@ import { CustomerHandler } from './webhooks/handlers/customer.handler';
 import { ChargeRefundedHandler } from './webhooks/handlers/charge-refunded.handler';
 import { DisputeHandler } from './webhooks/handlers/dispute.handler';
 import { EntitlementHandler } from './webhooks/handlers/entitlement.handler';
+import { DiscountHandler } from './webhooks/handlers/discount.handler';
 
 // Pipeline components
 import { BillingService } from './billing.service';
@@ -66,6 +67,7 @@ const webhookHandlers = [
   ChargeRefundedHandler,
   DisputeHandler,
   EntitlementHandler,
+  DiscountHandler,
 ];
 
 @Module({

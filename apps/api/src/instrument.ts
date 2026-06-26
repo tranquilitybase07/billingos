@@ -1,5 +1,9 @@
-// Load .env before anything else — this runs before NestJS ConfigModule
-import 'dotenv/config';
+// Load env before anything else — this runs before NestJS ConfigModule.
+// Mirror app.module's envFilePath order: .env.local takes precedence over .env.
+// dotenv does NOT override already-set vars, so load .env.local FIRST.
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 import * as Sentry from '@sentry/nestjs';
 
 if (!process.env.SENTRY_DSN) {

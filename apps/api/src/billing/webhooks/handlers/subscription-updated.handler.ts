@@ -85,7 +85,7 @@ export class SubscriptionUpdatedHandler
       const { data: existing, error: fetchError } = await ctx.supabase
         .from('subscriptions')
         .select(
-          'id, customer_id, current_period_start, current_period_end, status, metadata',
+          'id, customer_id, current_period_start, current_period_end, status, metadata, paused_at',
         )
         .eq('stripe_subscription_id', subscription.id)
         .single();
@@ -208,6 +208,8 @@ export class SubscriptionUpdatedHandler
           amount: null,
           currency: null,
           metadata: existing.metadata as Record<string, unknown> | null,
+          paused_at:
+            (existing as { paused_at?: string | null }).paused_at ?? null,
         },
         stripeSub: authoritativeSubscription,
         stripeAccountId,

@@ -14,6 +14,7 @@ import { ActiveSubscriptionsResponseDto } from './dto/active-subscriptions-respo
 import { RevenueTrendResponseDto } from './dto/revenue-trend-response.dto';
 import { SubscriptionGrowthResponseDto } from './dto/subscription-growth-response.dto';
 import { ChurnRateResponseDto } from './dto/churn-rate-response.dto';
+import { ChurnSaveAnalyticsResponseDto } from './dto/churn-save-analytics-response.dto';
 import { TopCustomersResponseDto } from './dto/top-customers-response.dto';
 import { ARPUResponseDto } from './dto/arpu-response.dto';
 import { UsageOverviewResponseDto } from './dto/usage-overview-response.dto';
@@ -152,6 +153,29 @@ export class AnalyticsController {
       startDate,
       endDate,
       query.granularity || Granularity.MONTH,
+    );
+  }
+
+  /**
+   * Save-rate analytics from the churn_events log
+   * GET /analytics/churn-saves?organization_id=xxx&start_date=2026-01-01&end_date=2026-02-07
+   */
+  @Get('churn-saves')
+  async getChurnSaveAnalytics(
+    @CurrentUser() user: User,
+    @Query() query: AnalyticsQueryDto,
+  ): Promise<ChurnSaveAnalyticsResponseDto> {
+    const endDate = query.end_date || new Date().toISOString().split('T')[0];
+    const startDate =
+      query.start_date ||
+      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+    return this.analyticsService.getChurnSaveAnalytics(
+      query.organization_id,
+      startDate,
+      endDate,
     );
   }
 

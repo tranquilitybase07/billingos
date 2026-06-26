@@ -54,6 +54,27 @@ export class SyncStatusTask implements WebhookTask<SubscriptionUpdatedData> {
       ).toISOString();
     }
 
+    // Reconcile pause_collection into the BOS pause cache (read source for the
+    // churn re-pause guard; Stripe is authoritative). Handles both pause and
+    // resume — when Stripe clears pause_collection the cache is cleared.
+    const pause = stripeSub.pause_collection;
+    if (pause) {
+      updateData.resumes_at = pause.resumes_at
+        ? new Date(pause.resumes_at * 1000).toISOString()
+        : null;
+      updateData.pause_behavior = pause.behavior;
+      // Stamp paused_at only on the transition into paused, so later updates
+      // (e.g. renewals while paused) don't keep resetting it. `existing` carries
+      // the pre-webhook value, so no extra query is needed.
+      if (!existing.paused_at) {
+        updateData.paused_at = new Date().toISOString();
+      }
+    } else {
+      updateData.paused_at = null;
+      updateData.resumes_at = null;
+      updateData.pause_behavior = null;
+    }
+
     const { error: updateError } = await ctx.supabase
       .from('subscriptions')
       .update(updateData)

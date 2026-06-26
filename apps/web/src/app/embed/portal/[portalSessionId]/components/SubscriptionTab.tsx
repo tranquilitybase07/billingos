@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParentMessaging } from '../hooks/useParentMessaging'
 import { useEmbedApiUrl } from '../../../EmbedApiProvider'
 import {
@@ -24,13 +24,16 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { PortalSubscription, UsageMetric, PortalCustomer } from '../hooks/usePortalData'
+import { ChurnFlow } from '@/components/churn/ChurnFlow'
+import type { ChurnFlowConfig } from '@/components/churn/types'
+import type { ChurnApplyOutcome, ChurnLogEvent } from '@/components/churn/machine'
 
 interface SubscriptionTabProps {
   subscriptions: PortalSubscription[]
   usageMetrics: UsageMetric[]
   customer: PortalCustomer
   sessionId: string
-  accentColor?: string
+  churnFlow?: ChurnFlowConfig
   onUpdate: () => void
   onCancel: () => void
 }
@@ -83,17 +86,45 @@ function StatusBadge({ status, cancelAtPeriodEnd }: { status: string; cancelAtPe
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'numeric', day: 'numeric', year: 'numeric',
+    month: 'short', day: 'numeric', year: 'numeric',
   })
 }
 
-function formatPrice(amount: number, currency: string, interval: string) {
-  const formatted = new Intl.NumberFormat('en-US', {
+function formatMoney(amount: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),
     minimumFractionDigits: 2,
   }).format(amount / 100)
-  return `${formatted} / ${interval}`
+}
+
+function formatPrice(amount: number, currency: string, interval: string) {
+  return `${formatMoney(amount, currency)} / ${interval}`
+}
+
+function discountedAmount(
+  amount: number,
+  discount?: { percentOff?: number | null; amountOff?: number | null },
+) {
+  if (!discount) return amount
+  if (discount.percentOff)
+    return Math.round(amount * (1 - discount.percentOff / 100))
+  if (discount.amountOff) return Math.max(0, amount - discount.amountOff)
+  return amount
+}
+
+function discountLabel(discount: {
+  percentOff?: number | null
+  amountOff?: number | null
+  endsAt?: string | null
+}) {
+  const off =
+    discount.percentOff != null
+      ? `${discount.percentOff}% off`
+      : discount.amountOff != null
+        ? `discount applied`
+        : 'discount'
+  return discount.endsAt ? `${off} until ${formatDate(discount.endsAt)}` : off
 }
 
 export function SubscriptionTab({
@@ -101,7 +132,8 @@ export function SubscriptionTab({
   usageMetrics,
   customer,
   sessionId,
-  onUpdate: _onUpdate,
+  churnFlow,
+  onUpdate,
   onCancel,
 }: SubscriptionTabProps) {
   const apiUrl = useEmbedApiUrl()
@@ -113,7 +145,19 @@ export function SubscriptionTab({
   const [cancelFeedback, setCancelFeedback] = useState('')
   const [confirmChecked, setConfirmChecked] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [resumingId, setResumingId] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [churnSub, setChurnSub] = useState<PortalSubscription | null>(null)
+  // Per-subscription enriched flow (downgrade `targetPreview`, etc.) from the churn
+  // config endpoint. The org-level `churnFlow` prop can't carry per-sub data.
+  const [churnConfig, setChurnConfig] = useState<ChurnFlowConfig | null>(null)
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'info' } | null>(null)
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4500)
+    return () => clearTimeout(t)
+  }, [toast])
 
   if (subscriptions.length === 0) {
     return (
@@ -124,6 +168,27 @@ export function SubscriptionTab({
   }
 
   const handleCancelClick = (subscription: PortalSubscription) => {
+    // When the merchant has configured a churn flow, route the Cancel button
+    // through it instead of the hardcoded modal (modal remains the fallback).
+    if (churnFlow) {
+      setChurnSub(subscription)
+      // Fetch the per-subscription enriched config (resolves downgrade targets to a
+      // concrete plan + price for the offer card). Fall back to the org-level flow
+      // so the flow still opens if the request fails.
+      setChurnConfig(null)
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${apiUrl}/v1/churn/${sessionId}/config?subscriptionId=${subscription.id}`,
+          )
+          const data = res.ok ? await res.json() : null
+          setChurnConfig((data?.flow as ChurnFlowConfig) ?? churnFlow)
+        } catch {
+          setChurnConfig(churnFlow)
+        }
+      })()
+      return
+    }
     setSubscriptionToCancel(subscription)
     setShowCancelModal(true)
     setCancelTiming('end_of_period')
@@ -131,6 +196,56 @@ export function SubscriptionTab({
     setCancelFeedback('')
     setConfirmChecked(false)
     setCancelError(null)
+  }
+
+  const churnApplyOffer = async (reason: string): Promise<ChurnApplyOutcome> => {
+    if (!churnSub) return 'not_eligible'
+    const res = await fetch(`${apiUrl}/v1/churn/${sessionId}/apply-offer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscriptionId: churnSub.id, reason }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to apply offer')
+    }
+    const data = await res.json().catch(() => ({}))
+    return (data.outcome as ChurnApplyOutcome) ?? 'saved'
+  }
+
+  const churnCancel = async (
+    timing: 'immediate' | 'end_of_period',
+    reason?: string,
+    feedback?: string,
+  ) => {
+    if (!churnSub) return
+    const res = await fetch(`${apiUrl}/v1/churn/${sessionId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscriptionId: churnSub.id, timing, reason, feedback }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to cancel subscription')
+    }
+  }
+
+  const churnLog = (event: ChurnLogEvent) => {
+    if (!churnSub) return
+    const offer = 'offer' in event ? event.offer : undefined
+    const reason = 'reason' in event ? event.reason : undefined
+    const feedback = 'feedback' in event ? event.feedback : undefined
+    void fetch(`${apiUrl}/v1/churn/${sessionId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscriptionId: churnSub.id,
+        eventType: event.type,
+        reason,
+        feedback,
+        offer,
+      }),
+    }).catch(() => { })
   }
 
   const handleCancelSubmit = async () => {
@@ -159,6 +274,25 @@ export function SubscriptionTab({
     }
   }
 
+  const handleResume = async (subscriptionId: string) => {
+    setResumingId(subscriptionId)
+    try {
+      const response = await fetch(`${apiUrl}/v1/portal/${sessionId}/resume-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId }),
+      })
+      if (!response.ok) throw new Error('Failed to resume subscription')
+      setToast({ message: 'Subscription resumed — billing is back on.', variant: 'success' })
+      onUpdate()
+      sendMessage({ type: 'SUBSCRIPTION_UPDATED', payload: { subscriptions } })
+    } catch {
+      setToast({ message: 'Could not resume subscription. Please try again.', variant: 'info' })
+    } finally {
+      setResumingId(null)
+    }
+  }
+
   const openPricingTable = (subscriptionId?: string) =>
     sendMessage({
       type: 'OPEN_PRICING_TABLE',
@@ -170,6 +304,14 @@ export function SubscriptionTab({
 
   return (
     <>
+      {toast && (
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-white ${toast.variant === 'success' ? 'bg-green-600' : 'bg-neutral-800'
+            }`}
+        >
+          {toast.message}
+        </div>
+      )}
       <div className="space-y-3 mt-4">
         {subscriptions.map((subscription) => (
           <React.Fragment key={subscription.id}>
@@ -196,16 +338,71 @@ export function SubscriptionTab({
                 <div className="space-y-1.5 text-sm">
                   <p className="text-gray-700 dark:text-neutral-300">
                     <span className="text-gray-500 dark:text-neutral-400">Price: </span>
-                    <span className="font-medium">
-                      {formatPrice(subscription.price.amount, subscription.price.currency, subscription.price.interval)}
-                    </span>
+                    {subscription.discount ? (
+                      <span className="font-medium">
+                        <span className="line-through text-gray-400 dark:text-neutral-500">
+                          {formatMoney(subscription.price.amount, subscription.price.currency)}
+                        </span>{' '}
+                        {formatPrice(
+                          discountedAmount(subscription.price.amount, subscription.discount),
+                          subscription.price.currency,
+                          subscription.price.interval,
+                        )}
+                      </span>
+                    ) : (
+                      <span className="font-medium">
+                        {formatPrice(subscription.price.amount, subscription.price.currency, subscription.price.interval)}
+                      </span>
+                    )}
                   </p>
+                  {subscription.discount && (
+                    <p>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/20">
+                        🎉 {discountLabel(subscription.discount)}
+                      </span>
+                    </p>
+                  )}
+                  {subscription.isPaused && (
+                    <p>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+                        ⏸ {subscription.pause?.resumesAt
+                          ? `Paused — billing resumes ${formatDate(subscription.pause.resumesAt)}`
+                          : 'Paused — billing on hold'}
+                      </span>
+                    </p>
+                  )}
                   <p className="text-gray-700 dark:text-neutral-300">
                     <span className="text-gray-500 dark:text-neutral-400">Current Period: </span>
                     <span className="font-medium">
                       {formatDate(subscription.currentPeriodStart)} – {formatDate(subscription.currentPeriodEnd)}
                     </span>
                   </p>
+                  {subscription.status !== 'canceled' &&
+                    !subscription.cancelAtPeriodEnd &&
+                    !subscription.isPaused && (
+                      <p className="text-gray-700 dark:text-neutral-300">
+                        <span className="text-gray-500 dark:text-neutral-400">Next invoice: </span>
+                        <span className="font-medium">
+                          {formatMoney(
+                            discountedAmount(subscription.price.amount, subscription.discount),
+                            subscription.price.currency,
+                          )}{' '}
+                          on {formatDate(subscription.currentPeriodEnd)}
+                        </span>
+                      </p>
+                    )}
+                  {subscription.status !== 'canceled' &&
+                    !subscription.cancelAtPeriodEnd &&
+                    subscription.isPaused && (
+                      <p className="text-gray-700 dark:text-neutral-300">
+                        <span className="text-gray-500 dark:text-neutral-400">Billing: </span>
+                        <span className="font-medium">
+                          {subscription.pause?.resumesAt
+                            ? `Paused — resumes ${formatDate(subscription.pause.resumesAt)}`
+                            : 'Paused indefinitely'}
+                        </span>
+                      </p>
+                    )}
                   {subscription.trialEnd && new Date(subscription.trialEnd) > new Date() && (
                     <p className="text-blue-600 dark:text-blue-400 font-medium">
                       Trial ends {formatDate(subscription.trialEnd)}
@@ -238,6 +435,15 @@ export function SubscriptionTab({
                     >
                       Change Plan
                     </button>
+                    {subscription.isPaused && (
+                      <button
+                        onClick={() => handleResume(subscription.id)}
+                        disabled={resumingId === subscription.id}
+                        className="px-4 py-2 text-sm font-medium rounded-xl border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all disabled:opacity-50"
+                      >
+                        {resumingId === subscription.id ? 'Resuming…' : 'Resume Subscription'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleCancelClick(subscription)}
                       className="px-4 py-2 text-sm font-medium rounded-xl border border-red-200 dark:border-red-500/30 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
@@ -313,15 +519,13 @@ export function SubscriptionTab({
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-gray-100 dark:bg-[#0f0f11] rounded-full overflow-hidden">
                         <div
-                          className={`h-full transition-all ${
-                            metric.percentage >= 90 ? 'bg-red-500' : metric.percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
+                          className={`h-full transition-all ${metric.percentage >= 90 ? 'bg-red-500' : metric.percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
                           style={{ width: `${Math.min(metric.percentage, 100)}%` }}
                         />
                       </div>
-                      <span className={`text-xs font-medium w-9 text-right ${
-                        metric.percentage >= 90 ? 'text-red-500 dark:text-red-400' : metric.percentage >= 70 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
-                      }`}>
+                      <span className={`text-xs font-medium w-9 text-right ${metric.percentage >= 90 ? 'text-red-500 dark:text-red-400' : metric.percentage >= 70 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
+                        }`}>
                         {metric.percentage}%
                       </span>
                     </div>
@@ -425,6 +629,42 @@ export function SubscriptionTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {churnSub && churnConfig && (
+        <ChurnFlow
+          open={!!churnSub}
+          onOpenChange={(open) => {
+            if (!open) {
+              setChurnSub(null)
+              setChurnConfig(null)
+            }
+          }}
+          config={churnConfig}
+          subscription={{
+            planName: churnSub.product.name,
+            amount: churnSub.price.amount,
+            currency: churnSub.price.currency,
+            interval: churnSub.price.interval,
+            renewalDate: churnSub.currentPeriodEnd,
+            hasActiveDiscount: churnSub.hasActiveDiscount,
+            isPaused: churnSub.isPaused,
+          }}
+          onApplyOffer={churnApplyOffer}
+          onCancel={churnCancel}
+          onLog={churnLog}
+          onDone={(outcome) => {
+            if (outcome === 'canceled') {
+              setToast({ message: 'Your subscription has been cancelled.', variant: 'info' })
+              onCancel()
+              sendMessage({ type: 'SUBSCRIPTION_CANCELLED' })
+            } else {
+              setToast({ message: '🎉 Offer applied — your subscription has been updated.', variant: 'success' })
+              onUpdate()
+              sendMessage({ type: 'SUBSCRIPTION_UPDATED', payload: { subscriptions } })
+            }
+          }}
+        />
+      )}
     </>
   )
 }

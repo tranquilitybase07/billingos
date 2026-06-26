@@ -98,8 +98,8 @@ export default function SubscriptionsPage({
   const counts = useMemo(() => {
     const all = subscriptions ?? []
     return {
-      All:      all.length,
-      Active:   all.filter((s) => s.status === 'active').length,
+      All: all.length,
+      Active: all.filter((s) => s.status === 'active').length,
       Trialing: all.filter((s) => s.status === 'trialing').length,
       Canceled: all.filter((s) => s.status === 'canceled').length,
     }
@@ -162,20 +162,20 @@ export default function SubscriptionsPage({
     })
 
     result = [...result].sort((a, b) => {
-        if (sortOrder === 'Newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        if (sortOrder === 'Oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        if (sortOrder === 'Renewal soonest') {
-          const aEnd = a.current_period_end ? new Date(a.current_period_end).getTime() : Infinity
-          const bEnd = b.current_period_end ? new Date(b.current_period_end).getTime() : Infinity
-          return aEnd - bEnd
-        }
-        if (sortOrder === 'A-Z') {
-          const nameA = a.customer?.name || a.customer?.email || ''
-          const nameB = b.customer?.name || b.customer?.email || ''
-          return nameA.localeCompare(nameB)
-        }
-        return 0
-      })
+      if (sortOrder === 'Newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      if (sortOrder === 'Oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      if (sortOrder === 'Renewal soonest') {
+        const aEnd = a.current_period_end ? new Date(a.current_period_end).getTime() : Infinity
+        const bEnd = b.current_period_end ? new Date(b.current_period_end).getTime() : Infinity
+        return aEnd - bEnd
+      }
+      if (sortOrder === 'A-Z') {
+        const nameA = a.customer?.name || a.customer?.email || ''
+        const nameB = b.customer?.name || b.customer?.email || ''
+        return nameA.localeCompare(nameB)
+      }
+      return 0
+    })
 
     return result
   }, [subscriptions, statusTab, selectedProducts, search, sortOrder])
@@ -348,7 +348,7 @@ export default function SubscriptionsPage({
 
                     {/* Status */}
                     <div className="flex items-center gap-1.5">
-                      <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} />
+                      <SubscriptionStatus status={sub.status} cancelAtPeriodEnd={sub.cancel_at_period_end} paused={!!sub.paused_at} />
                       {sub.pending_downgrade && (
                         <PendingChangeBadge
                           variant="compact"

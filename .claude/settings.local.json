@@ -82,7 +82,14 @@
       "Bash(git:*)",
       "Bash(node:*)",
       "WebFetch(domain:ui.bklit.com)",
-      "Bash(nvm use:*)"
+      "Bash(nvm use:*)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(xxd)",
+      "Bash(npm list *)",
+      "Bash(npx jest *)",
+      "Read(//private/tmp/**)",
+      "Bash(bash -n scripts/dev.sh)"
     ],
     "deny": [],
     "ask": []

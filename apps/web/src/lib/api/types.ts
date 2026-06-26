@@ -271,6 +271,37 @@ export interface ChurnRateResponse {
   granularity: Granularity
 }
 
+export interface ChurnSaveByReason {
+  reason: string
+  offerShown: number
+  offerAccepted: number
+  offerDeclined: number
+  canceled: number
+  saveRate: number
+}
+
+export interface ChurnSaveByOfferType {
+  offerType: string
+  offerShown: number
+  offerAccepted: number
+  offerDeclined: number
+  acceptRate: number
+}
+
+export interface ChurnSaveAnalyticsResponse {
+  flowStarted: number
+  surveySubmitted: number
+  offerShown: number
+  offerAccepted: number
+  offerDeclined: number
+  canceled: number
+  saveRate: number
+  byReason: ChurnSaveByReason[]
+  byOfferType: ChurnSaveByOfferType[]
+  startDate: string
+  endDate: string
+}
+
 export type Granularity = 'day' | 'week' | 'month'
 
 export interface AnalyticsQueryParams {

@@ -217,6 +217,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
         primarySubscriptionId: primarySub?.id ?? null,
         subscriptions: customerSubs,
         cancelAtPeriodEnd: primarySub?.cancel_at_period_end ?? false,
+        paused: !!primarySub?.paused_at,
         pendingDowngrade,
       };
     });
@@ -353,7 +354,7 @@ export default function CustomersPage({ params }: CustomersPageProps) {
           if (!status) return <span className="text-sm text-muted-foreground">—</span>;
           return (
             <div className="flex items-center gap-1.5">
-              <SubscriptionStatus status={status} cancelAtPeriodEnd={c.cancelAtPeriodEnd} />
+              <SubscriptionStatus status={status} cancelAtPeriodEnd={c.cancelAtPeriodEnd} paused={c.paused} />
               {c.pendingDowngrade && (
                 <PendingChangeBadge
                   variant="compact"

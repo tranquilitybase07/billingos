@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -107,7 +127,7 @@ export type Database = {
           admin_user_id: string | null
           created_at: string
           id: string
-          ip_address: unknown
+          ip_address: unknown | null
           payload: Json | null
           resource_id: string | null
           resource_type: string | null
@@ -120,7 +140,7 @@ export type Database = {
           admin_user_id?: string | null
           created_at?: string
           id?: string
-          ip_address?: unknown
+          ip_address?: unknown | null
           payload?: Json | null
           resource_id?: string | null
           resource_type?: string | null
@@ -133,7 +153,7 @@ export type Database = {
           admin_user_id?: string | null
           created_at?: string
           id?: string
-          ip_address?: unknown
+          ip_address?: unknown | null
           payload?: Json | null
           resource_id?: string | null
           resource_type?: string | null
@@ -493,12 +513,130 @@ export type Database = {
           },
         ]
       }
+      churn_events: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          event_type: string
+          feedback: string | null
+          flow_id: string | null
+          id: string
+          offer: Json | null
+          organization_id: string
+          outcome: string | null
+          reason: string | null
+          source: string
+          subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          event_type: string
+          feedback?: string | null
+          flow_id?: string | null
+          id?: string
+          offer?: Json | null
+          organization_id: string
+          outcome?: string | null
+          reason?: string | null
+          source?: string
+          subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          event_type?: string
+          feedback?: string | null
+          flow_id?: string | null
+          id?: string
+          offer?: Json | null
+          organization_id?: string
+          outcome?: string | null
+          reason?: string | null
+          source?: string
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "churn_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "churn_events_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "churn_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "churn_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "churn_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      churn_flows: {
+        Row: {
+          created_at: string | null
+          enabled: boolean
+          id: string
+          name: string
+          organization_id: string
+          settings: Json
+          steps: Json
+          targeting: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean
+          id?: string
+          name: string
+          organization_id: string
+          settings?: Json
+          steps?: Json
+          targeting?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean
+          id?: string
+          name?: string
+          organization_id?: string
+          settings?: Json
+          steps?: Json
+          targeting?: Json
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "churn_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           billing_address: Json | null
           created_at: string | null
           deleted_at: string | null
-          email: string | null
+          email: string
           email_verified: boolean
           external_id: string | null
           id: string
@@ -512,7 +650,7 @@ export type Database = {
           billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email?: string | null
+          email: string
           email_verified?: boolean
           external_id?: string | null
           id?: string
@@ -526,7 +664,7 @@ export type Database = {
           billing_address?: Json | null
           created_at?: string | null
           deleted_at?: string | null
-          email?: string | null
+          email?: string
           email_verified?: boolean
           external_id?: string | null
           id?: string
@@ -818,123 +956,6 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      migration_jobs: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          error_message: string | null
-          id: string
-          organization_id: string
-          pending_binding_count: number
-          progress: Json
-          status: string
-          stuck_customers: Json
-          totals: Json
-          updated_at: string
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          organization_id: string
-          pending_binding_count?: number
-          progress?: Json
-          status?: string
-          stuck_customers?: Json
-          totals?: Json
-          updated_at?: string
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          organization_id?: string
-          pending_binding_count?: number
-          progress?: Json
-          status?: string
-          stuck_customers?: Json
-          totals?: Json
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "migration_jobs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organization_invitations: {
-        Row: {
-          accepted_at: string | null
-          accepted_by: string | null
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          invited_by: string
-          organization_id: string
-          role: string
-          status: string
-          token_hash: string
-          updated_at: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          email: string
-          expires_at?: string
-          id?: string
-          invited_by: string
-          organization_id: string
-          role?: string
-          status?: string
-          token_hash: string
-          updated_at?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          invited_by?: string
-          organization_id?: string
-          role?: string
-          status?: string
-          token_hash?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_invitations_accepted_by_fkey"
-            columns: ["accepted_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_invitations_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "organization_invitations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1556,7 +1577,6 @@ export type Database = {
           api_key_id: string
           created_at: string
           expires_at: string
-          external_email: string | null
           external_organization_id: string | null
           external_user_id: string
           id: string
@@ -1571,7 +1591,6 @@ export type Database = {
           api_key_id: string
           created_at?: string
           expires_at: string
-          external_email?: string | null
           external_organization_id?: string | null
           external_user_id: string
           id?: string
@@ -1586,7 +1605,6 @@ export type Database = {
           api_key_id?: string
           created_at?: string
           expires_at?: string
-          external_email?: string | null
           external_organization_id?: string | null
           external_user_id?: string
           id?: string
@@ -1606,55 +1624,6 @@ export type Database = {
           },
           {
             foreignKeyName: "session_tokens_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      stripe_product_mappings: {
-        Row: {
-          bos_product_id: string
-          created_at: string
-          id: string
-          organization_id: string
-          stripe_product_id: string
-          updated_at: string
-        }
-        Insert: {
-          bos_product_id: string
-          created_at?: string
-          id?: string
-          organization_id: string
-          stripe_product_id: string
-          updated_at?: string
-        }
-        Update: {
-          bos_product_id?: string
-          created_at?: string
-          id?: string
-          organization_id?: string
-          stripe_product_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_product_mappings_bos_product_id_fkey"
-            columns: ["bos_product_id"]
-            isOneToOne: false
-            referencedRelation: "product_version_analytics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_product_mappings_bos_product_id_fkey"
-            columns: ["bos_product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_product_mappings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1821,6 +1790,7 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          active_discount: Json | null
           amount: number
           cancel_at_period_end: boolean | null
           canceled_at: string | null
@@ -1836,9 +1806,12 @@ export type Database = {
           id: string
           metadata: Json | null
           organization_id: string
+          pause_behavior: string | null
+          paused_at: string | null
           payment_intent_id: string | null
           price_id: string | null
           product_id: string
+          resumes_at: string | null
           status: string
           stripe_subscription_id: string | null
           trial_end: string | null
@@ -1847,6 +1820,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          active_discount?: Json | null
           amount: number
           cancel_at_period_end?: boolean | null
           canceled_at?: string | null
@@ -1862,9 +1836,12 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id: string
+          pause_behavior?: string | null
+          paused_at?: string | null
           payment_intent_id?: string | null
           price_id?: string | null
           product_id: string
+          resumes_at?: string | null
           status: string
           stripe_subscription_id?: string | null
           trial_end?: string | null
@@ -1873,6 +1850,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          active_discount?: Json | null
           amount?: number
           cancel_at_period_end?: boolean | null
           canceled_at?: string | null
@@ -1888,9 +1866,12 @@ export type Database = {
           id?: string
           metadata?: Json | null
           organization_id?: string
+          pause_behavior?: string | null
+          paused_at?: string | null
           payment_intent_id?: string | null
           price_id?: string | null
           product_id?: string
+          resumes_at?: string | null
           status?: string
           stripe_subscription_id?: string | null
           trial_end?: string | null
@@ -2418,165 +2399,230 @@ export type Database = {
     }
     Functions: {
       can_reactivate_subscription: {
-        Args: { p_customer_id: string; p_product_id: string }
+        Args: {
+          p_customer_id: string
+          p_product_id: string
+        }
         Returns: {
           can_reactivate: boolean
-          reason: string
           subscription_id: string
+          reason: string
         }[]
       }
       check_trial_eligibility: {
-        Args: { p_customer_id: string; p_product_id: string }
-        Returns: boolean
-      }
-      cleanup_expired_checkout_metadata: { Args: never; Returns: number }
-      cleanup_expired_portal_sessions: { Args: never; Returns: number }
-      cleanup_expired_session_tokens: { Args: never; Returns: undefined }
-      create_subscription_atomic: {
         Args: {
           p_customer_id: string
-          p_features: Json[]
-          p_organization_id: string
           p_product_id: string
+        }
+        Returns: boolean
+      }
+      cleanup_expired_checkout_metadata: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      cleanup_expired_portal_sessions: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      cleanup_expired_session_tokens: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      create_subscription_atomic: {
+        Args: {
           p_subscription: Json
+          p_features: Json[]
+          p_customer_id: string
+          p_product_id: string
+          p_organization_id: string
         }
         Returns: Json
       }
       get_latest_product_version: {
-        Args: { p_organization_id: string; p_product_name: string }
+        Args: {
+          p_organization_id: string
+          p_product_name: string
+        }
         Returns: number
       }
       get_product_versions: {
-        Args: { p_organization_id: string; p_product_name: string }
+        Args: {
+          p_organization_id: string
+          p_product_name: string
+        }
         Returns: {
-          active_subscription_count: number
-          created_at: string
           id: string
-          subscription_count: number
-          total_mrr: number
           version: number
-          version_created_reason: string
           version_status: string
+          subscription_count: number
+          active_subscription_count: number
+          total_mrr: number
+          created_at: string
+          version_created_reason: string
         }[]
       }
       increment_discount_redemptions: {
-        Args: { p_discount_id: string }
+        Args: {
+          p_discount_id: string
+        }
         Returns: number
       }
-      is_admin_user: { Args: never; Returns: boolean }
+      is_admin_user: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       is_organization_admin: {
-        Args: { org_id: string; user_id: string }
+        Args: {
+          org_id: string
+          user_id: string
+        }
         Returns: boolean
       }
       is_organization_member: {
-        Args: { org_id: string; user_id: string }
+        Args: {
+          org_id: string
+          user_id: string
+        }
         Returns: boolean
       }
       log_stripe_sync_event: {
         Args: {
-          p_entity_id: string
-          p_entity_type: string
-          p_error_message?: string
-          p_operation: string
           p_organization_id: string
-          p_status: string
+          p_entity_type: string
+          p_entity_id: string
           p_stripe_object_id: string
+          p_operation: string
+          p_status: string
+          p_error_message?: string
           p_triggered_by?: string
         }
         Returns: string
       }
       mark_feature_grant_synced: {
-        Args: { p_grant_id: string; p_stripe_entitlement_id: string }
+        Args: {
+          p_grant_id: string
+          p_stripe_entitlement_id: string
+        }
         Returns: undefined
       }
       mark_feature_synced: {
-        Args: { p_feature_id: string; p_stripe_feature_id: string }
+        Args: {
+          p_feature_id: string
+          p_stripe_feature_id: string
+        }
         Returns: undefined
       }
       mark_trial_converted: {
-        Args: { p_customer_id: string; p_product_id: string }
+        Args: {
+          p_customer_id: string
+          p_product_id: string
+        }
         Returns: undefined
       }
       pgmq_archive: {
-        Args: { p_msg_id: number; p_queue_name: string }
+        Args: {
+          p_queue_name: string
+          p_msg_id: number
+        }
         Returns: boolean
       }
       pgmq_delete: {
-        Args: { p_msg_id: number; p_queue_name: string }
+        Args: {
+          p_queue_name: string
+          p_msg_id: number
+        }
         Returns: boolean
       }
       pgmq_list_archived: {
-        Args: { p_limit?: number; p_queue_name: string }
+        Args: {
+          p_queue_name: string
+          p_limit?: number
+        }
         Returns: {
-          archived_at: string
-          enqueued_at: string
-          message: Json
           msg_id: number
           read_ct: number
+          enqueued_at: string
+          archived_at: string
+          message: Json
         }[]
       }
       pgmq_list_messages: {
-        Args: { p_limit?: number; p_queue_name: string }
+        Args: {
+          p_queue_name: string
+          p_limit?: number
+        }
         Returns: {
-          enqueued_at: string
-          message: Json
           msg_id: number
           read_ct: number
+          enqueued_at: string
           vt: string
+          message: Json
         }[]
       }
       pgmq_metrics: {
-        Args: { p_queue_name: string }
+        Args: {
+          p_queue_name: string
+        }
         Returns: {
+          queue_name: string
+          queue_length: number
           newest_msg_age_sec: number
           oldest_msg_age_sec: number
-          queue_length: number
-          queue_name: string
-          scrape_time: string
           total_messages: number
+          scrape_time: string
         }[]
       }
       pgmq_metrics_all: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
+          queue_name: string
+          queue_length: number
           newest_msg_age_sec: number
           oldest_msg_age_sec: number
-          queue_length: number
-          queue_name: string
-          scrape_time: string
           total_messages: number
+          scrape_time: string
         }[]
       }
       pgmq_read: {
-        Args: { p_qty: number; p_queue_name: string; p_vt: number }
+        Args: {
+          p_queue_name: string
+          p_vt: number
+          p_qty: number
+        }
         Returns: {
-          enqueued_at: string
-          message: Json
           msg_id: number
           read_ct: number
+          enqueued_at: string
           vt: string
+          message: Json
         }[]
       }
       pgmq_send: {
-        Args: { p_delay?: number; p_message: Json; p_queue_name: string }
+        Args: {
+          p_queue_name: string
+          p_message: Json
+          p_delay?: number
+        }
         Returns: number
       }
       process_reconciliation_queue: {
-        Args: { p_limit?: number }
+        Args: {
+          p_limit?: number
+        }
         Returns: {
-          failed_count: number
           processed_count: number
+          failed_count: number
         }[]
       }
       record_trial_usage: {
         Args: {
           p_customer_id: string
-          p_organization_id: string
           p_product_id: string
+          p_organization_id: string
           p_subscription_id: string
           p_trial_days: number
-          p_trial_end: string
           p_trial_start: string
+          p_trial_end: string
         }
         Returns: string
       }
@@ -2584,29 +2630,29 @@ export type Database = {
         Args: {
           p_customer_id: string
           p_feature_id: string
-          p_limit_units: number
-          p_period_end: string
-          p_period_start: string
           p_subscription_id: string
+          p_period_start: string
+          p_period_end: string
           p_units: number
+          p_limit_units: number
         }
         Returns: {
-          out_consumed_units: number
-          out_exceeded: boolean
           out_id: string
+          out_consumed_units: number
           out_limit_units: number
-          out_period_end: string
           out_period_start: string
+          out_period_end: string
+          out_exceeded: boolean
         }[]
       }
       upsert_customer_atomic: {
         Args: {
+          p_organization_id: string
           p_email: string
           p_external_id?: string
-          p_metadata?: Json
           p_name?: string
-          p_organization_id: string
           p_stripe_customer_id?: string
+          p_metadata?: Json
         }
         Returns: Json
       }
@@ -2629,25 +2675,21 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -2665,16 +2707,14 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -2690,16 +2730,14 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -2715,16 +2753,14 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -2732,21 +2768,22 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       checkout_session_status: [
@@ -2763,3 +2800,4 @@ export const Constants = {
     },
   },
 } as const
+
