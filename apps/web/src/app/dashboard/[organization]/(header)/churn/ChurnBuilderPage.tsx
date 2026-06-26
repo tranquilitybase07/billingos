@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Card,
+  CardFlat,
   CardContent,
   CardDescription,
   CardHeader,
@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PillTabs, PillTabsList, PillTabsTrigger } from '@/components/atoms/PillTabs'
+import { Add01Icon, Delete02Icon } from 'hugeicons-react'
 import { useToast } from '@/hooks/use-toast'
 import { ChurnFlowBody } from '@/components/churn/ChurnFlow'
 import type {
@@ -217,8 +219,10 @@ const PREVIEW_SUBSCRIPTION = {
 
 export default function ChurnBuilderPage({
   organizationId,
+  embedded = false,
 }: {
   organizationId: string
+  embedded?: boolean
 }) {
   const { toast } = useToast()
   const { data: flows, isLoading } = useChurnFlows(organizationId)
@@ -396,15 +400,19 @@ export default function ChurnBuilderPage({
     setDraft((d) => ({ ...d, reasons: d.reasons.filter((_, idx) => idx !== i) }))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Churn flow</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Build the cancellation save flow your customers see in the portal. Survey →
-            targeted save offer → cancel.
-          </p>
-        </div>
+    <div className={embedded ? '' : 'p-6 max-w-7xl mx-auto'}>
+      <div
+        className={`flex items-start mb-6 ${embedded ? 'justify-end' : 'justify-between'}`}
+      >
+        {!embedded && (
+          <div>
+            <h1 className="text-2xl font-bold">Churn flow</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Build the cancellation save flow your customers see in the portal. Survey →
+              targeted save offer → cancel.
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Switch
@@ -426,7 +434,7 @@ export default function ChurnBuilderPage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Editor */}
         <div className="space-y-5">
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Flow settings</CardTitle>
             </CardHeader>
@@ -448,9 +456,9 @@ export default function ChurnBuilderPage({
                 />
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Cancellation reasons & offers</CardTitle>
               <CardDescription>
@@ -459,174 +467,185 @@ export default function ChurnBuilderPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {draft.reasons.map((reason, i) => (
-                <div
-                  key={reason.key}
-                  className="rounded-lg border p-3 space-y-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={reason.label}
-                      placeholder="Reason label"
-                      onChange={(e) => updateReason(i, { label: e.target.value })}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeReason(i)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id={`offer-${reason.key}`}
-                      checked={reason.offer.enabled}
-                      onCheckedChange={(v) => updateOffer(i, { enabled: v })}
-                    />
-                    <Label htmlFor={`offer-${reason.key}`} className="cursor-pointer">
-                      Save offer
-                    </Label>
-                  </div>
-                  {reason.offer.enabled && (
-                    <div className="space-y-3 pl-1">
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'discount' ? 'default' : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'discount' })}
-                        >
-                          Discount
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'pause' ? 'default' : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'pause' })}
-                        >
-                          Pause
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            reason.offer.kind === 'downgrade'
-                              ? 'default'
-                              : 'outline'
-                          }
-                          onClick={() => updateOffer(i, { kind: 'downgrade' })}
-                        >
-                          Downgrade
-                        </Button>
-                      </div>
-                      {reason.offer.kind === 'discount' ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Percent off</Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={100}
-                              value={reason.offer.percentOff}
-                              onChange={(e) =>
-                                updateOffer(i, {
-                                  percentOff: Number(e.target.value) || 0,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Months (0 = once)</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={reason.offer.durationInMonths}
-                              onChange={(e) =>
-                                updateOffer(i, {
-                                  durationInMonths: Number(e.target.value) || 0,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-                      ) : reason.offer.kind === 'pause' ? (
-                        <div className="space-y-2">
-                          <div className="space-y-1.5 max-w-[50%]">
-                            <Label className="text-xs">
-                              Resume after months (0 = indefinite)
-                            </Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={reason.offer.pauseMonths}
-                              onChange={(e) =>
-                                updateOffer(i, {
-                                  pauseMonths: Number(e.target.value) || 0,
-                                })
-                              }
-                            />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Billing pauses; the customer keeps access until the end of
-                            their current period.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Downgrade to</Label>
-                            <Select
-                              value={reason.offer.downgradeTargetPriceId || 'auto'}
-                              onValueChange={(v) =>
-                                updateOffer(i, {
-                                  downgradeTargetPriceId: v === 'auto' ? '' : v,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="auto">
-                                  Auto — next cheaper plan
-                                </SelectItem>
-                                {availablePlans.map((plan) => (
-                                  <SelectItem
-                                    key={plan.priceId}
-                                    value={plan.priceId}
-                                  >
-                                    {plan.productName} ·{' '}
-                                    {formatMoney(plan.amount, plan.currency)}/
-                                    {plan.interval}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            The plan changes at the customer&apos;s renewal date —
-                            they keep their current plan &amp; features until then.
-                            Auto picks the next-cheaper paid plan.
-                          </p>
-                        </div>
-                      )}
+              <div className="divide-y divide-border/60">
+                {draft.reasons.map((reason, i) => (
+                  <div
+                    key={reason.key}
+                    className="group space-y-3 py-4 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={reason.label}
+                        placeholder="Reason label"
+                        className="flex-1"
+                        onChange={(e) => updateReason(i, { label: e.target.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove reason"
+                        className="h-9 w-9 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => removeReason(i)}
+                      >
+                        <Delete02Icon size={16} />
+                      </Button>
                     </div>
-                  )}
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addReason}>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={`offer-${reason.key}`}
+                        checked={reason.offer.enabled}
+                        onCheckedChange={(v) => updateOffer(i, { enabled: v })}
+                      />
+                      <Label htmlFor={`offer-${reason.key}`} className="cursor-pointer">
+                        Save offer
+                      </Label>
+                    </div>
+                    {reason.offer.enabled && (
+                      <div className="space-y-3 rounded-lg bg-muted/40 p-3 dark:bg-white/[0.02]">
+                        <PillTabs
+                          layoutId={`offer-kind-${reason.key}`}
+                          value={reason.offer.kind}
+                          onValueChange={(v) =>
+                            updateOffer(i, { kind: v as OfferDraft['kind'] })
+                          }
+                        >
+                          <PillTabsList>
+                            <PillTabsTrigger value="discount">
+                              Discount
+                            </PillTabsTrigger>
+                            <PillTabsTrigger value="pause">Pause</PillTabsTrigger>
+                            <PillTabsTrigger value="downgrade">
+                              Downgrade
+                            </PillTabsTrigger>
+                          </PillTabsList>
+                        </PillTabs>
+                        {reason.offer.kind === 'discount' ? (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Percent off</Label>
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={100}
+                                  className="pr-8"
+                                  value={reason.offer.percentOff}
+                                  onChange={(e) =>
+                                    updateOffer(i, {
+                                      percentOff: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Duration</Label>
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="pr-10"
+                                  value={reason.offer.durationInMonths}
+                                  onChange={(e) =>
+                                    updateOffer(i, {
+                                      durationInMonths: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  mo
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                0 = one-time
+                              </p>
+                            </div>
+                          </div>
+                        ) : reason.offer.kind === 'pause' ? (
+                          <div className="space-y-2">
+                            <div className="max-w-[55%] space-y-1.5">
+                              <Label className="text-xs">Resume after</Label>
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="pr-10"
+                                  value={reason.offer.pauseMonths}
+                                  onChange={(e) =>
+                                    updateOffer(i, {
+                                      pauseMonths: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  mo
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              0 = until they resume manually. Billing pauses; the customer
+                              keeps access until the end of their current period.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Downgrade to</Label>
+                              <Select
+                                value={reason.offer.downgradeTargetPriceId || 'auto'}
+                                onValueChange={(v) =>
+                                  updateOffer(i, {
+                                    downgradeTargetPriceId: v === 'auto' ? '' : v,
+                                  })
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="auto">
+                                    Auto — next cheaper plan
+                                  </SelectItem>
+                                  {availablePlans.map((plan) => (
+                                    <SelectItem key={plan.priceId} value={plan.priceId}>
+                                      {plan.productName} ·{' '}
+                                      {formatMoney(plan.amount, plan.currency)}/
+                                      {plan.interval}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              The plan changes at the customer&apos;s renewal date — they
+                              keep their current plan &amp; features until then. Auto picks
+                              the next-cheaper paid plan.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4 gap-1.5"
+                onClick={addReason}
+              >
+                <Add01Icon size={15} />
                 Add reason
               </Button>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Confirm step</CardTitle>
             </CardHeader>
@@ -662,9 +681,9 @@ export default function ChurnBuilderPage({
                 </Label>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
 
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Save offer policy</CardTitle>
               <CardDescription>
@@ -738,12 +757,12 @@ export default function ChurnBuilderPage({
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
         </div>
 
         {/* Live preview */}
         <div className="lg:sticky lg:top-6 h-fit">
-          <Card>
+          <CardFlat>
             <CardHeader>
               <CardTitle className="text-base">Live preview</CardTitle>
               <CardDescription>
@@ -762,7 +781,7 @@ export default function ChurnBuilderPage({
                 />
               </div>
             </CardContent>
-          </Card>
+          </CardFlat>
         </div>
       </div>
     </div>

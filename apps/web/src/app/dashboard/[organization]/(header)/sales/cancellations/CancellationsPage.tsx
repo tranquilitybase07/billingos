@@ -10,7 +10,7 @@ import { useOrganizationSubscriptions } from '@/hooks/queries/subscriptions'
 import { useChurnSaveAnalytics } from '@/hooks/queries/analytics'
 import { useOrganization } from '@/providers/OrganizationProvider'
 import { downloadCSV } from '@/utils/csv'
-import { useState, useMemo } from 'react'
+import { Fragment, useState, useMemo } from 'react'
 import type { SortingState } from '@tanstack/react-table'
 import { FocusModePanel } from './FocusModePanel'
 import { CustomerDrawer, type EnrichedCustomer } from '@/components/Customers/CustomerDrawer'
@@ -335,9 +335,10 @@ function FilterBar({
 interface CancellationsPageProps {
   organizationId: string
   organizationSlug: string
+  embedded?: boolean
 }
 
-export default function CancellationsPage({ organizationId, organizationSlug }: CancellationsPageProps) {
+export default function CancellationsPage({ organizationId, organizationSlug, embedded = false }: CancellationsPageProps) {
   const { organization } = useOrganization()
   const defaultCurrency = organization.default_currency || 'usd'
 
@@ -506,19 +507,27 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
     }
   }, [selectedRow, allSubscriptions])
 
+  const Wrapper = embedded ? Fragment : DashboardBody
+
   return (
-    <DashboardBody>
+    <Wrapper>
       <div className="flex flex-col gap-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
-          <div>
-            <h1 className="text-2xl font-semibold">Churn</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Track why customers cancel and identify churn patterns
-            </p>
-          </div>
+        <div
+          className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+            embedded ? '' : 'pb-4 border-b border-border'
+          }`}
+        >
+          {!embedded && (
+            <div>
+              <h1 className="text-2xl font-semibold">Churn</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Track why customers cancel and identify churn patterns
+              </p>
+            </div>
+          )}
 
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 ${embedded ? 'md:ml-auto' : ''}`}>
             {/* Filters button */}
             <button
               onClick={() => setIsFilterOpen((v) => !v)}
@@ -714,6 +723,6 @@ export default function CancellationsPage({ organizationId, organizationSlug }: 
         open={!!selectedRow}
         onClose={() => setSelectedRow(null)}
       />
-    </DashboardBody>
+    </Wrapper>
   )
 }

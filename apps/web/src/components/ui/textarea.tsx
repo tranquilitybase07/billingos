@@ -10,7 +10,7 @@ const Textarea = ({
   return (
     <textarea
       className={cn(
-        'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-base text-foreground focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-transparent dark:border-[oklch(0.32_0.018_264)] dark:placeholder:text-[oklch(0.48_0.014_264)] dark:focus-visible:border-blue-500/50',
+        'flex min-h-20 w-full rounded-md border border-border/60 bg-transparent px-3 py-2 text-base text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:border-white/[0.08] dark:placeholder:text-[oklch(0.48_0.014_264)] dark:focus-visible:border-blue-500/60',
         className,
       )}
       ref={ref}
