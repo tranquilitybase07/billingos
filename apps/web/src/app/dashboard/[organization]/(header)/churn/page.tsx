@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import { getOrganizationBySlug } from '@/lib/organization'
-import ChurnBuilderPage from './ChurnBuilderPage'
+import ChurnSection from './ChurnSection'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -20,6 +20,10 @@ export default async function Page({
     return <div>Organization not found</div>
   }
 
-  return <ChurnBuilderPage organizationId={organization.id} />
-
+  return (
+    <ChurnSection
+      organizationId={organization.id}
+      organizationSlug={orgSlug}
+    />
+  )
 }

@@ -1,0 +1,18 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+dist
+build
+out
+coverage
+
+# Deno-managed edge functions (formatted via the Deno toolchain, see .vscode/settings.json)
+supabase/functions
+
+# Generated files
+packages/shared/types/database.ts
+
+# Lockfiles
+pnpm-lock.yaml

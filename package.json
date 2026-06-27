@@ -20,6 +20,9 @@
     "build:web": "pnpm --filter web build",
     "build:api": "pnpm --filter api build",
     "lint": "pnpm --recursive lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:web": "prettier --write \"apps/web/**/*.{ts,tsx,css}\"",
     "db:types": "echo 'Generate types with: supabase gen types typescript --local > packages/shared/types/database.ts'",
     "clean": "pnpm --recursive exec rm -rf node_modules .next dist",
     "redis:start": "docker-compose up -d redis",
@@ -28,7 +31,8 @@
   },
   "devDependencies": {
     "typescript": "^5",
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "prettier": "^3.7.4"
   },
   "engines": {
     "node": ">=21",

@@ -48,7 +48,26 @@ export interface SurveyStep {
   id: string;
   type: "survey";
   title?: string;
+  subheading?: string;
   reasons: SurveyReason[];
+}
+
+export interface LossAversionStep {
+  id: string;
+  type: "lossAversion";
+  enabled?: boolean;
+  title?: string;
+  features: string[];
+}
+
+export interface FeedbackStep {
+  id: string;
+  type: "feedback";
+  enabled?: boolean;
+  title?: string;
+  placeholder?: string;
+  required?: boolean;
+  minChars?: number;
 }
 
 export interface ConfirmStep {
@@ -56,16 +75,34 @@ export interface ConfirmStep {
   type: "confirm";
   title?: string;
   allowImmediate?: boolean;
+  /** Legacy: features shown on the confirm screen. Superseded by LossAversionStep. */
   losses?: string[];
+  savedHeading?: string;
+  savedMessage?: string;
+  cancelledHeading?: string;
+  cancelledMessage?: string;
 }
 
-export type ChurnStep = SurveyStep | ConfirmStep;
+export type ChurnStep =
+  | SurveyStep
+  | LossAversionStep
+  | FeedbackStep
+  | ConfirmStep;
+
+export interface ChurnFlowSettings {
+  allowRepeatDiscount?: boolean;
+  allowRepeatPause?: boolean;
+  allowRepeatDowngrade?: boolean;
+  /** Master toggle for the per-reason offer step; defaults to on when unset. */
+  offerEnabled?: boolean;
+}
 
 export interface ChurnFlowConfig {
   id: string;
   name: string;
   enabled: boolean;
   steps: ChurnStep[];
+  settings?: ChurnFlowSettings;
 }
 
 export interface ChurnSubscriptionView {
