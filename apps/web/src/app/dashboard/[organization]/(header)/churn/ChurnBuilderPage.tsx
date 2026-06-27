@@ -812,7 +812,9 @@ export default function ChurnBuilderPage({
                                   type="number"
                                   min={1}
                                   max={100}
-                                  value={reason.offer.percentOff}
+                                  // Show empty (not 0) while clearing; buildSteps
+                                  // clamps to 1–100 on save, so 0 never persists.
+                                  value={reason.offer.percentOff || ''}
                                   onChange={(e) =>
                                     updateOffer(i, {
                                       percentOff: Number(e.target.value) || 0,
