@@ -25,57 +25,58 @@ export default function ChurnSection({
   const isLive = flow?.enabled ?? false
 
   return (
-    <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 p-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Churn</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            See why customers leave and win them back with targeted save offers.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {hasFlow && (
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                isLive
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                  : 'border-border bg-muted text-muted-foreground'
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isLive ? 'bg-emerald-500' : 'bg-muted-foreground/50'
-                }`}
-              />
-              {isLive ? 'Live' : 'Off'}
-            </span>
-          )}
-          {tab === 'overview' && (
-            <Button onClick={() => setTab('flow')} className="gap-1.5">
-              {hasFlow ? (
-                'Edit save flow'
-              ) : (
-                <>
-                  <Add01Icon size={16} />
-                  Create save flow
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-
+    <div className="mx-auto flex h-screen w-full max-w-screen-2xl flex-col overflow-hidden p-6">
       <PillTabs
         layoutId="churn-tab-indicator"
         value={tab}
         onValueChange={(v) => setTab(v as Tab)}
+        className="flex min-h-0 flex-1 flex-col gap-4"
       >
-        <PillTabsList>
-          <PillTabsTrigger value="overview">Overview</PillTabsTrigger>
-          <PillTabsTrigger value="flow">Save flow</PillTabsTrigger>
-        </PillTabsList>
+        <div className="flex flex-col gap-3 border-b border-border pb-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">Churn</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              See why customers leave and win them back with targeted save offers.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <PillTabsList>
+              <PillTabsTrigger value="overview">Overview</PillTabsTrigger>
+              <PillTabsTrigger value="flow">Save flow</PillTabsTrigger>
+            </PillTabsList>
+            {hasFlow && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${isLive
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'border-border bg-muted text-muted-foreground'
+                  }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-muted-foreground/50'
+                    }`}
+                />
+                {isLive ? 'Live' : 'Off'}
+              </span>
+            )}
+            {tab === 'overview' && (
+              <Button onClick={() => setTab('flow')} className="gap-1.5">
+                {hasFlow ? (
+                  'Edit save flow'
+                ) : (
+                  <>
+                    <Add01Icon size={16} />
+                    Create save flow
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
 
-        <TabsContent value="overview" className="mt-6">
+        <TabsContent
+          value="overview"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto"
+        >
           {!isLoading && !hasFlow ? (
             <EmptyState onCreate={() => setTab('flow')} />
           ) : (
@@ -110,7 +111,7 @@ export default function ChurnSection({
           )}
         </TabsContent>
 
-        <TabsContent value="flow" className="mt-6">
+        <TabsContent value="flow" className="mt-0 min-h-0 flex-1">
           <ChurnBuilderPage organizationId={organizationId} embedded />
         </TabsContent>
       </PillTabs>

@@ -15,6 +15,7 @@ import {
   type ChurnApplyOutcome,
   type ChurnLogEvent,
   type ChurnOutcome,
+  type ChurnScreen,
 } from './machine'
 import type {
   ChurnFlowConfig,
@@ -197,10 +198,15 @@ export function ChurnFlowBody({
   onLog,
   onDone,
   onClose,
+  previewScreen,
+  previewOutcome,
 }: ChurnFlowHandlers & {
   config: ChurnFlowConfig
   subscription: ChurnSubscriptionView
   onClose: () => void
+  /** Builder-only: pin the preview to a specific screen. */
+  previewScreen?: ChurnScreen
+  previewOutcome?: ChurnOutcome
 }) {
   // Recreate the machine only when the flow config or discount state changes —
   // not when handler identities change every render.
@@ -229,6 +235,12 @@ export function ChurnFlowBody({
     machine.start()
   }, [machine])
 
+  // Builder preview: jump to the screen the merchant is editing. Declared after
+  // start() so it wins; never set by the live portal flow.
+  useEffect(() => {
+    if (previewScreen) machine.previewGoTo(previewScreen, previewOutcome)
+  }, [machine, previewScreen, previewOutcome])
+
   const state = useSyncExternalStore(
     machine.subscribe,
     machine.getState,
@@ -237,6 +249,8 @@ export function ChurnFlowBody({
 
   const survey = machine.getSurveyStep()
   const confirm = machine.getConfirmStep()
+  const lossAversion = machine.getLossAversionStep()
+  const feedbackStep = machine.getFeedbackStep()
   const currentOffer = machine.getCurrentOffer()
 
   if (state.screen === 'survey' && survey) {
@@ -244,7 +258,7 @@ export function ChurnFlowBody({
       <div className="space-y-4">
         <Header
           title={survey.title || 'Before you go…'}
-          description="Help us understand why you're leaving."
+          description={survey.subheading || "Help us understand why you're leaving."}
         />
         <div className="space-y-4">
           <RadioGroup
@@ -263,16 +277,19 @@ export function ChurnFlowBody({
               </div>
             ))}
           </RadioGroup>
-          <div className="space-y-2">
-            <Label>Anything else? (optional)</Label>
-            <Textarea
-              placeholder="Tell us more..."
-              value={state.feedback}
-              onChange={(e) => machine.setFeedback(e.target.value)}
-              rows={3}
-              className="resize-none"
-            />
-          </div>
+          {/* Back-compat: keep inline feedback only when there's no dedicated step. */}
+          {!feedbackStep && (
+            <div className="space-y-2">
+              <Label>Anything else? (optional)</Label>
+              <Textarea
+                placeholder="Tell us more..."
+                value={state.feedback}
+                onChange={(e) => machine.setFeedback(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-3">
           <GhostButton onClick={() => machine.close()}>Keep subscription</GhostButton>
@@ -372,6 +389,81 @@ export function ChurnFlowBody({
     )
   }
 
+  if (state.screen === 'lossAversion' && lossAversion) {
+    return (
+      <div className="space-y-4">
+        <Header
+          title={lossAversion.title || 'Are you sure?'}
+          description="If you cancel, you'll immediately lose access to:"
+        />
+        <ul className="space-y-1.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-[#2e2e30] p-4">
+          {lossAversion.features.map((feature, i) => (
+            <li
+              key={i}
+              className="text-sm text-gray-700 dark:text-neutral-300 flex items-start gap-2"
+            >
+              <span className="text-red-400">✕</span>
+              {feature}
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-col gap-2">
+          <PrimaryButton onClick={() => machine.close()}>
+            Keep my plan
+          </PrimaryButton>
+          <GhostButton onClick={() => machine.continueFromLossAversion()}>
+            Continue to cancel
+          </GhostButton>
+        </div>
+      </div>
+    )
+  }
+
+  if (state.screen === 'feedback' && feedbackStep) {
+    const length = state.feedback.trim().length
+    const minChars = feedbackStep.required ? (feedbackStep.minChars ?? 0) : 0
+    const canContinue = !feedbackStep.required || length >= minChars
+    return (
+      <div className="space-y-4">
+        <Header
+          title={feedbackStep.title || 'Any final thoughts?'}
+          description={
+            feedbackStep.required
+              ? `Please share a bit more before you go${minChars ? ` (at least ${minChars} characters)` : ''}.`
+              : 'Is there anything we could have done better? (Optional)'
+          }
+        />
+        <Textarea
+          value={state.feedback}
+          onChange={(e) => machine.setFeedback(e.target.value)}
+          placeholder={feedbackStep.placeholder || 'Tell us about your experience...'}
+          rows={4}
+          className="resize-none"
+        />
+        {feedbackStep.required && (
+          <div className="flex justify-end -mt-2">
+            <span
+              className={`text-xs ${canContinue ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}
+            >
+              {length}/{minChars}
+            </span>
+          </div>
+        )}
+        <div className="flex justify-end gap-3">
+          <GhostButton onClick={() => machine.close()}>
+            Keep subscription
+          </GhostButton>
+          <PrimaryButton
+            disabled={!canContinue}
+            onClick={() => machine.continueFromFeedback()}
+          >
+            Continue
+          </PrimaryButton>
+        </div>
+      </div>
+    )
+  }
+
   if (state.screen === 'confirm' && confirm) {
     return (
       <div className="space-y-4">
@@ -390,7 +482,7 @@ export function ChurnFlowBody({
               {state.error}
             </div>
           )}
-          {confirm.losses && confirm.losses.length > 0 && (
+          {!lossAversion && confirm.losses && confirm.losses.length > 0 && (
             <div className="rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-[#2e2e30] p-4">
               <p className="text-xs font-semibold tracking-wide text-gray-500 dark:text-neutral-400 uppercase mb-2">
                 You'll lose access to
@@ -453,13 +545,19 @@ export function ChurnFlowBody({
     return (
       <div className="space-y-4">
         <Header
-          title={saved ? "You're all set" : 'Subscription cancelled'}
+          title={
+            saved
+              ? confirm?.savedHeading || "You're all set"
+              : confirm?.cancelledHeading || 'Subscription cancelled'
+          }
           description={
             saved
-              ? `Your offer has been applied to your ${subscription.planName} plan.`
-              : state.timing === 'immediate'
+              ? confirm?.savedMessage ||
+              `Your offer has been applied to your ${subscription.planName} plan.`
+              : confirm?.cancelledMessage ||
+              (state.timing === 'immediate'
                 ? 'Your subscription has been cancelled and access has ended.'
-                : 'Your subscription will end at the close of the current billing period.'
+                : 'Your subscription will end at the close of the current billing period.')
           }
         />
         <div className="flex justify-end">

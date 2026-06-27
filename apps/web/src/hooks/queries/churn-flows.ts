@@ -1,12 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
-import type { ChurnStep } from "@/components/churn/types";
+import type { ChurnFlowSettings, ChurnStep } from "@/components/churn/types";
 
-export interface ChurnFlowSettings {
-  allowRepeatDiscount?: boolean;
-  allowRepeatPause?: boolean;
-  allowRepeatDowngrade?: boolean;
-}
+export type { ChurnFlowSettings };
 
 export interface ChurnFlow {
   id: string;
