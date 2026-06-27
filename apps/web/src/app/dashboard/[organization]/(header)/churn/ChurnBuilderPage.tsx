@@ -241,7 +241,8 @@ function buildSteps(draft: FlowDraft): ChurnStep[] {
                   }
                   : {
                     type: 'discount' as const,
-                    percentOff: r.offer.percentOff,
+                    // Clamp to a sane 1–100 range; the input is client-side only.
+                    percentOff: Math.min(100, Math.max(1, r.offer.percentOff)),
                     ...(r.offer.durationInMonths > 0
                       ? { durationInMonths: r.offer.durationInMonths }
                       : {}),
@@ -446,10 +447,9 @@ export default function ChurnBuilderPage({
     }),
     [draft.name, draft.offerEnabled, previewSteps],
   )
-  const previewKey = useMemo(
-    () => `${activeStep}:${confirmPreview}:${JSON.stringify(previewSteps)}`,
-    [activeStep, confirmPreview, previewSteps],
-  )
+  // Remount only when switching which screen is previewed — config edits flow in
+  // via the `config` prop and `previewGoTo`, so typing doesn't reset the preview.
+  const previewKey = `${activeStep}:${confirmPreview}`
 
   const { previewScreen, previewOutcome } = useMemo<{
     previewScreen: ChurnScreen

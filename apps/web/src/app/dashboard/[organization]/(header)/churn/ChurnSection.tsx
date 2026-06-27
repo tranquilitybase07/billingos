@@ -25,7 +25,7 @@ export default function ChurnSection({
   const isLive = flow?.enabled ?? false
 
   return (
-    <div className="mx-auto flex h-screen w-full max-w-screen-2xl flex-col overflow-hidden p-6">
+    <div className="mx-auto flex h-full w-full max-w-screen-2xl flex-col overflow-hidden p-6">
       <PillTabs
         layoutId="churn-tab-indicator"
         value={tab}

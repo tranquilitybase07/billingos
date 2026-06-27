@@ -68,10 +68,9 @@ function offerHeadline(offer: Offer, currency: string): string {
     return `Stay and get ${amount} ${span}`
   }
   if (offer.type === 'pause') {
-    const span = offer.durationInMonths
-      ? `for ${monthsLabel(offer.durationInMonths)}`
-      : 'instead'
-    return `Pause your plan ${span}`
+    return offer.durationInMonths
+      ? `Pause your plan for ${monthsLabel(offer.durationInMonths)}`
+      : 'Pause your subscription'
   }
   if (offer.type === 'downgrade') {
     return 'Switch to a cheaper plan & stay'
@@ -214,8 +213,9 @@ export function ChurnFlowBody({
     () =>
       new ChurnMachine(config, {
         hasActiveDiscount: subscription.hasActiveDiscount,
+        isPaused: subscription.isPaused,
       }),
-    [config, subscription.hasActiveDiscount],
+    [config, subscription.hasActiveDiscount, subscription.isPaused],
   )
 
   // Push the latest handlers into the machine each render (in an effect, so no ref
